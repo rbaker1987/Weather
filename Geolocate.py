@@ -1,0 +1,44 @@
+from geopy.geocoders import Nominatim
+import time
+from pprint import pprint
+
+
+class Geolocate:
+    def __init__(self):
+        # instantiate a new Nominatim client
+        self.app = Nominatim(user_agent="weather")
+
+    def get_lat_lon(self, location: str):
+        time.sleep(1)
+        try:
+            location_raw = self.app.geocode(location).raw
+            location_lat = location_raw['lat']
+            location_lon = location_raw['lon']
+            location_lat_lon = ','.join([location_lat, location_lon])
+            return float(location_lat), float(location_lon)
+        except:
+            return self.get_lat_lon(location)
+
+    def get_address(self, latitude: str, longitude: str, language: str = "en"):
+        """This function returns an location as raw from a location
+        will repeat until success"""
+        # build coordinates string to pass to reverse() function
+        coordinates = f"{latitude}, {longitude}"
+        # sleep for a second to respect Usage Policy
+        time.sleep(1)
+        try:
+            return self.app.reverse(coordinates, language=language).raw
+        except:
+            return self.get_address(latitude, longitude)
+
+
+if __name__ == '__main__':
+    location = input('Location to convert to lat/lon: ')
+    lat_lon = input('Lat, Lon to get address for: ')
+    lat_lon_split = lat_lon.split(',')
+    lat = float(lat_lon_split[0].strip())
+    lon = float(lat_lon_split[1].strip())
+
+    geo = Geolocate()
+    geo.get_lat_lon(location)
+    geo.get_address(str(lat), str(lon))
