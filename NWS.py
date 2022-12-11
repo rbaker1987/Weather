@@ -4,7 +4,7 @@ from NWSDateParser import nws_date_parser
 
 
 class NWS:
-    def __init__(self, location: str):
+    def __init__(self, location):
         self.location = location
         self.nws = NOAA()
         self.geo = Geolocate()
@@ -30,24 +30,21 @@ class NWS:
 
     def observations(self):
         obs_raw = self.nws.get_observations(self.location, 'US')
-        # observations = {'location': obs_raw[0]['station'].split('/')[-1]}
-        for o in obs_raw:
-            for prop in o:
-                if 'value' in o[prop]:
-                    for x in obs_raw['properties'][property]['values']:
-                        valid_raw = x['validTime']
-                        valid = nws_date_parser(valid_raw)
-                        value_raw = x['value']
-                        if valid not in forecast:
-                            forecast[valid] = {property: value_raw}
-                        else:
-                            forecast[valid][property] = value_raw
-        return forecast
+        obs_list = [x for x in obs_raw]
+        stations = list(set([x['station'].split('/')[-1] for x in obs_list]))
+        observations = {'station': stations[0]}
+        for obs_row in obs_list:
+            timestamp = obs_row['timestamp']
+            observations[timestamp] = {}
+            for prop in obs_row:
+                if isinstance(obs_row[prop], dict) and 'value' in obs_row[prop]:
+                    observations[timestamp][prop] = obs_row[prop]['value']
+        return observations
 
 
 if __name__ == '__main__':
-    location = input('Address to get forecast for: ')
-    # location = '13851 CR 4200 Lindale, TX'
+    # location = input('Address to get forecast for: ')
+    location = 75771
 
     nws = NWS(location)
     f = nws.forecasts()
