@@ -2,9 +2,20 @@ from noaa_sdk import NOAA
 from Geolocate import Geolocate
 from NWSDateParser import nws_date_parser
 from uszipcode import SearchEngine
-import datetime
+from datetime import datetime, date, timedelta
 
-today = datetime.date.today()
+today = date.today()
+
+def hour_to_time(hour):
+    if hour == 0:
+        time = f'12AM'
+    elif hour < 12:
+        time = f'{hour}AM'
+    elif hour == 12:
+        time = f'{hour}PM'
+    else:
+        time = f'{hour - 12}PM'
+    return time
 
 
 class NWS:
@@ -34,19 +45,21 @@ class NWS:
         forecast_dict = {}
         forecast = []
         for d in range(8):
-            d_str = str(today + datetime.timedelta(days=d))
+            d_str = str(today + timedelta(days=d))
             forecast_dict[d_str] = {}
             for h in range(24):
                 forecast_dict[d_str][h] = {}
         for row in forecast_raw:
             date = row['startTime'][:10]
+            day = datetime.strptime(date, '%Y-%m-%d').strftime('%a'),
             hour = int(row['startTime'][11:13])
-            temperature = row['temperature']
+            time = hour_to_time(hour)
+            temperature = str(row['temperature']) + 'F'
             wind_speed = row['windSpeed']
             wind_dir = row['windDirection']
             wind = f'{wind_speed} {wind_dir}'
             weather = row['shortForecast']
-            forecast.append((date, hour, temperature, wind, weather))
+            forecast.append((date, day, time, temperature, wind, weather))
         return forecast
 
     def detailed(self):
@@ -98,7 +111,7 @@ if __name__ == '__main__':
 
     nws = NWS(location)
     f = nws.standard()
-    f_keys = list(f[0].keys())
+    # f_keys = list(f[0].keys())
     o = nws.observations()
-    o_keys = list(f[0].keys())
+    # o_keys = list(f[0].keys())
     quit()
