@@ -86,7 +86,7 @@ while True:
         with open(values['save_as'], 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['Date', 'AM Temp', 'PM Temp', 'Weather'])
-            writer.writerows(create_forecast)
+            writer.writerows(forecast_text)
     elif event == 'Export TXT':
         with open(values['save_as'], 'w', newline='') as file:
             file.write(forecast_text)
