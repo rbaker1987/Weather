@@ -83,12 +83,20 @@ while True:
         forecast_text = create_text_output(forecast_table)
         window['output_text'].update(forecast_text)
     elif event == 'Export CSV':
-        with open(values['save_as'], 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['Date', 'AM Temp', 'PM Temp', 'Weather'])
-            writer.writerows(forecast_text)
+        file_path = values['save_as']
+        if file_path:
+            with open(values['save_as'], 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(['Date', 'AM Temp', 'PM Temp', 'Weather'])
+                writer.writerows(forecast_text)
+        else:
+            sg.popup_error('Please provide a valid file name for saving.')
     elif event == 'Export TXT':
-        with open(values['save_as'], 'w', newline='') as file:
-            file.write(forecast_text)
+        file_path = values['save_as']
+        if file_path:
+            with open(file_path, 'w') as file:
+                file.write(forecast_text)
+        else:
+            sg.popup_error('Please provide a valid file name for saving.')
 event, values = window.read()
 window.close()

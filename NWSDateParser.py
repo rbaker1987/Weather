@@ -1,6 +1,7 @@
 from datetime import datetime
 from tzlocal import get_localzone
 
+
 def nws_date_parser(nws_date):
     split = nws_date.split('/')
     date = split[0].split('T')[0]
@@ -17,7 +18,19 @@ def nws_date_parser(nws_date):
     local_dt = utc_dt.astimezone(get_localzone()).isoformat()
     return local_dt
 
+def list_times(data):
+    times = []
+    for i, item in enumerate(data[0]):
+        for x, slot in enumerate(item):
+            slot_time = slot[0]
+            parsed_time = parse_times(slot_time)
+            times.append(parsed_time)
+            pass
+    times_unique = list(set(times))
+    times_unique.sort()
+    return times_unique
+
 
 if __name__ == '__main__':
     date = input('Date: ')
-    nws_date_parser(date)
+    parse_times(date)

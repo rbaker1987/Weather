@@ -1,117 +1,161 @@
 from noaa_sdk import NOAA
-from Geolocate import Geolocate
-from NWSDateParser import nws_date_parser
-from uszipcode import SearchEngine
-from datetime import datetime, date, timedelta
+from FindZip import find_zip
+from FindLL import find_lat_lon
+from ParseDate import parse_date, parse_hour, parse_date_hour, parse_time
+from datetime import date, timedelta
+from GetResponse import get_response
 
+noaa = NOAA()
 today = date.today()
 
-def hour_to_time(hour):
-    if hour == 0:
-        time = f'12AM'
-    elif hour < 12:
-        time = f'{hour}AM'
-    elif hour == 12:
-        time = f'{hour}PM'
-    else:
-        time = f'{hour - 12}PM'
-    return time
+
+def get_zones():
+    url = f'https://api.weather.gov/zones/land'
+    zones_raw = get_response(url)
+    zones_dict = {}
+    for zone in zones_raw:
+        cwa = zone['properties']['cwa']
+        offices = [x.split('/')[-1] for x in zone['properties']['forecastOffices']]
+        state = zone['properties']['state']
+        name = zone['properties']['name']
+        id = zone['properties']['id']
+        stations = [x.split('/')[-1] for x in zone['properties']['observationStations']]
+        if state not in zones_dict:
+            zones_dict[state] = {}
+        zones_dict[state][name] = {'id': id, 'cwa': cwa, 'offices': offices, 'stations': stations}
+    return zones_dict
 
 
-class NWS:
-    def __init__(self, location):
-        self.location = location
-        self.nws = NOAA()
-        self.geo = Geolocate()
-        self.geoloc = self.geo.get_lat_lon(location)
-        self.lat = self.geoloc[0]
-        self.lon = self.geoloc[1]
+def get_stations():
+    url = f'https://api.weather.gov/stations'
+    stations_raw = get_response(url)
+    stations_dict = {}
+    for station in stations_raw:
+        elevation_ft = int(station['properties']['elevation']['value'] * 3.28084)
+        zone = station['properties']['forecast'].split('/')[-1]
+        name = station['properties']['name']
+        id = station['properties']['stationIdentifier']
+        latitude = station['geometry']['coordinates'][1]
+        longitude = station['geometry']['coordinates'][0]
+        stations_dict[name] = {'id': id, 'zone': zone, 'elevation_ft': elevation_ft, 'latitude': latitude,
+                               'longitude': longitude}
+    return stations_dict
 
-    def get_zip(self):
-        zip_search = SearchEngine()
-        city = self.location.split(',')[0].strip()
-        state = self.location.split(',')[1].strip()
-        try:
-            return zip_search.by_city_and_state(city, state)[0].zipcode
-        except Exception as e:
-            return e
 
-    def standard(self):
-        if isinstance(self.location, str):
-            zip = self.get_zip()
+def alerts(location: str):
+    try:
+        lat, lon = find_lat_lon(location)
+    except Exception as e:
+        return 'Failed to locate'
+    url = f'https://api.weather.gov/alerts/active?point={lat},{lon}'
+    response = get_response(url)
+    # if isinstance(response, str)
+    alerts = []
+    try:
+        if len(response) != 0:
+            for a in response:
+                a_dict = {'event': a['properties']['event'], 'headline': a['properties']['headline'],
+                          'description': a['properties']['description'], 'start': a['properties']['onset'],
+                          'end': a['properties']['ends']}
+                alerts.append(a_dict)
         else:
-            zip = self.location
-        forecast_raw = self.nws.get_forecasts(zip, 'US', type='forecastHourly')
-        forecast_dict = {}
-        forecast = []
-        for d in range(8):
-            d_str = str(today + timedelta(days=d))
-            forecast_dict[d_str] = {}
-            for h in range(24):
-                forecast_dict[d_str][h] = {}
-        for row in forecast_raw:
-            date = row['startTime'][:10]
-            day = datetime.strptime(date, '%Y-%m-%d').strftime('%a'),
-            hour = int(row['startTime'][11:13])
-            time = hour_to_time(hour)
-            temperature = str(row['temperature']) + 'F'
-            wind_speed = row['windSpeed']
-            wind_dir = row['windDirection']
-            wind = f'{wind_speed} {wind_dir}'
-            weather = row['shortForecast']
-            forecast.append((date, day, time, temperature, wind, weather))
-        return forecast
+            alerts = []
+    except:
+        alerts = []
+    return alerts
 
-    def detailed(self):
-        forecast_raw = self.nws.points_forecast(self.lat, self.lon, type='forecastGridData')
-        forecast_dict = {}
-        for property in forecast_raw['properties']:
-            if 'values' in forecast_raw['properties'][property]:
-                for x in forecast_raw['properties'][property]['values']:
-                    valid_raw = x['validTime']
-                    valid = nws_date_parser(valid_raw)
-                    value_raw = x['value']
-                    if valid not in forecast_dict:
-                        forecast_dict[valid] = {'f_location': self.geoloc,
-                                                'f_update_time': forecast_raw['properties']['updateTime'],
-                                                'f_valid_time': forecast_raw['properties']['validTimes'],
-                                                property: value_raw}
+
+def forecast_detailed(location):
+    lat, lon = find_lat_lon(location)
+    if lat == None:
+        return f'Failed to locate'
+    try:
+        forecast_detailed = noaa.points_forecast(lat, lon, type='forecastGridData')
+    except Exception as e:
+        return f'Failed to retrieve forecast'
+
+    forecast_dict = {}
+    for n1 in range(8):
+        d = str(today + timedelta(days=n1))
+        forecast_dict[d] = {}
+        for n2 in range(24):
+            forecast_dict[d][n2] = {}
+    for property in forecast_detailed['properties']:
+        if 'values' in forecast_detailed['properties'][property]:
+            for row in forecast_detailed['properties'][property]['values']:
+                date = parse_date(row['validTime'])
+                hour = parse_hour(row['validTime'])
+                time = parse_time(row['validTime'])
+                value_raw = row['value']
+                if date in forecast_dict:
+                    if property == 'weather':
+                        for prop, val in forecast_detailed['properties']['weather']['values']:
+                            forecast_dict[date][hour][prop] = val
+                    elif property in ['temperature', 'dewpoint', 'minTemperature', 'apparentTemperature', 'heatIndex',
+                                      'windChill', 'maxTemperature']:
+                        if value_raw != None:
+                            forecast_dict[date][hour][property] = float(value_raw) * 1.8 + 32
                     else:
-                        forecast_dict[valid][property] = value_raw
-        forecast = []
-        for k, v in forecast_dict.items():
-            f_dict = v
-            f_dict['valid'] = k
-            forecast.append(f_dict)
-        return forecast
+                        forecast_dict[date][hour][property] = value_raw
+    return forecast_dict
 
-    def observations(self):
-        obs_raw = self.nws.get_observations(self.location, 'US')
-        obs_list = [x for x in obs_raw]
-        observations_dict = {}
-        for obs_row in obs_list:
-            timestamp = obs_row['timestamp']
-            observations_dict[timestamp] = {}
-            for prop in obs_row:
-                if prop == 'station':
-                    observations_dict[timestamp][prop] = obs_row[prop].split('/')[-1]
-                if isinstance(obs_row[prop], dict) and 'value' in obs_row[prop]:
-                    observations_dict[timestamp][prop] = obs_row[prop]['value']
-        observations = []
-        for k, v in observations_dict.items():
-            o_dict = v
-            o_dict['valid'] = k
-            observations.append(o_dict)
-        return observations
+
+def forecast(location):
+    if ',' in location:
+        zip = find_zip(location)
+        try:
+            if len(zip) != 5:
+                return zip
+        except Exception as e:
+            return f"Failed to locate"
+    else:
+        zip = location
+    try:
+        forecast_result = noaa.get_forecasts(str(zip), 'US')
+    except Exception as e:
+        return f"Failed to retrieve forecast"
+
+    forecast_dict = {}
+    for n1 in range(8):
+        d = str(today + timedelta(days=n1))
+        forecast_dict[d] = {}
+        for n2 in range(24):
+            forecast_dict[d][n2] = {}
+    for forecast_row in forecast_result:
+        date, hour = parse_date_hour(forecast_row['startTime'])
+        temperature = forecast_row['temperature']
+        wind_speed = forecast_row['windSpeed'].split(' ')[0]
+        wind_dir = forecast_row['windDirection']
+        weather = forecast_row['shortForecast']
+        values = {'temperature': temperature, 'windSpeed': wind_speed, 'windDirection': wind_dir,
+                  'shortForecast': weather}
+        if date in forecast_dict:
+            forecast_dict[date][hour] = values
+
+    return forecast_dict
+
+
+def multi_city_forecasts(location_list: list, type: str = 'standard'):
+    forecasts = {}
+    missing = []
+    for loc in location_list:
+        print(f'{loc}: {type}')
+        if type == 'detailed':
+            forecasts[loc] = forecast_detailed(loc)
+        elif type == 'standard':
+            forecasts[loc] = forecast(loc)
+        elif type == 'alerts':
+            forecasts[loc] = alerts(loc)
+        if isinstance(forecasts[loc], str):
+            missing.append((loc, forecasts[loc]))
+    return forecasts, missing
 
 
 if __name__ == '__main__':
-    # location = input('Address to get forecast for: ')
-    location = 75771
-
-    nws = NWS(location)
-    f = nws.standard()
-    # f_keys = list(f[0].keys())
-    o = nws.observations()
-    # o_keys = list(f[0].keys())
-    quit()
+    locations = ['Lindale, TX', 'Dallas, TX', 'Norman, OK']
+    # forecasts = multi_city_forecasts(locations, 'standard')
+    # detailed = multi_city_forecasts(locations, 'detailed')
+    alerts = multi_city_forecasts(locations, 'alerts')
+    # zones = get_zones()
+    # stations = get_stations()
+    print()

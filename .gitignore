@@ -1,0 +1,14 @@
+/secrets.json
+# Application Keys
+appkeys.json
+
+# Distribution / packaging
+.Python
+build/
+dist/
+downloads/
+vflask/
+venv/
+s/
+~/
+.vscode/
