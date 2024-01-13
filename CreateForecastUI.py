@@ -1,6 +1,6 @@
 import csv
 import datetime
-from NWS import NWS
+from NWS import forecast
 import PySimpleGUI as sg
 from CreateTextOutput import create_text_output
 
@@ -54,8 +54,8 @@ while True:
     if event == sg.WIN_CLOSED or event == 'Cancel':
         break
     elif event == 'Load Forecast':
-        nws = NWS(values['location'])
-        forecast = nws.standard()
+        # nws = nws(values['location'])
+        forecast = forecast(values['location'])
         window['nws'].update(values=forecast)
     elif event == 'Add Day':
         window.extend_layout(window['column'], new_layout(i))
