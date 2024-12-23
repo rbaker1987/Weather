@@ -1,10 +1,21 @@
-from uszipcode import SearchEngine
+from pyzipcode import ZipCodeDatabase
 
 def find_zip(location):
-    zip_search = SearchEngine()
-    city = location.split(',')[0].strip()
-    state = location.split(',')[1].strip()
-    try:
-        return zip_search.by_city_and_state(city, state)[0].zipcode
-    except Exception as e:
-        return e
+
+    # Create a ZipCodeDatabase object
+    zcdb = ZipCodeDatabase()
+
+    # Get zip codes for the city and state
+    split = location.split(",")
+    city = split[0].strip()
+    state =  split[1].strip()
+    zip_codes = zcdb.find_zip(city=city, state=state)
+
+    if zip_codes:
+        # Return the first zip code found (most likely the primary one)
+        return zip_codes[0].zip
+    else:
+        return "Zip code not found."
+
+# Example usage
+print(find_zip("Amarillo, TX"))
