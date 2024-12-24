@@ -17,5 +17,3 @@ def find_zip(location):
     else:
         return "Zip code not found."
 
-# Example usage
-print(find_zip("Amarillo, TX"))

@@ -3,7 +3,7 @@ from ParseDate import parse_time
 
 
 def analyze_forecasts(location_list: list, criteria: dict, detail: bool = False):
-    forecasts = multi_city_forecasts(location_list)
+    forecasts, missings = multi_city_forecasts(location_list)
     highlight_forecasts = []
     for loc, dates in forecasts.items():
         try:
