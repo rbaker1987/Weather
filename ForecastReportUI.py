@@ -1,7 +1,7 @@
 import csv
 import PySimpleGUI as sg
 # from AnalyzeForecast import analyze_forecasts
-from ParseForecasts import parse_forcasts
+from ParseForecasts import parse_forecasts
 from ParseAlerts import parse_alerts
 from MergeDict import merge_dict
 from ExportKMZ import create_kml
@@ -100,7 +100,7 @@ while True:
                 if k[0] == 'state':
                     states.append(v)
         locations = [f'{x[0]}, {x[1]}' for x in zip(cities, states)]
-        forecasts_dict, forecasts_missing = parse_forcasts(locations)
+        forecasts_dict, forecasts_missing = parse_forecasts(locations)
         alerts_dict, alerts_missing = parse_alerts(locations)
         merged_list, merged_dict = merge_dict(forecasts_dict, alerts_dict)
         window['forecast'].update(values=merged_list)
@@ -137,7 +137,7 @@ while True:
                      'Norwalk, OH',
                      'Columbus, OH',
                      ]
-        forecasts_dict, forecasts_missing = parse_forcasts(locations)
+        forecasts_dict, forecasts_missing = parse_forecasts(locations)
         alerts_dict, alerts_missing = parse_alerts(locations)
         merged_list = merge_dict(forecasts_dict, alerts_dict)
         window['forecast'].update(values=merged_list)
