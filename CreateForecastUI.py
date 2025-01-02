@@ -4,30 +4,32 @@ from NWS import forecast
 import PySimpleGUI as sg
 from CreateTextOutput import create_text_output
 
+# Get current date and time
 today = datetime.date.today()
-now = datetime.datetime.now()
 
-
+# Function to dynamically create a new layout for additional days
 def new_layout(i):
+    date = today + datetime.timedelta(days=i + 1)
+    formatted_date = str(date)
+    day_name = date.strftime('%A')
     return [
-        [sg.InputText(today + datetime.timedelta(days=i + 1), key=('date', i), size=10),
-         sg.InputText(
-             datetime.datetime.strptime(str(today + datetime.timedelta(days=i + 1)), '%Y-%m-%d').strftime('%A'), key=(
-                 'day', i), size=10),
+        [sg.InputText(formatted_date, key=('date', i), size=10),
+         sg.InputText(day_name, key=('day', i), size=10),
          sg.T("AM Temp"), sg.InputText(key=("am-t", i), size=5),
          sg.T("PM Temp"), sg.InputText(key=("pm-t", i), size=5),
          sg.T("Weather"), sg.InputText(key=("weather", i), size=30)]
     ]
 
-
+# Initial column layout
 column_layout = [
-    [sg.InputText(today, key='date', size=10),
-     sg.InputText((today.strftime('%A')), key='day', size=10),
+    [sg.InputText(str(today), key='date', size=10),
+     sg.InputText(today.strftime('%A'), key='day', size=10),
      sg.T("AM Temp"), sg.InputText(key="am-t", size=5),
      sg.T("PM Temp"), sg.InputText(key="pm-t", size=5),
      sg.T("Weather"), sg.InputText(key="weather", size=30)]
 ]
 
+# Main layout
 layout = [
     [sg.T('Location'), sg.InputText('Lindale, TX', key='location')],
     [sg.T('NWS Forecast:'), sg.Button('Load Forecast')],
@@ -44,19 +46,24 @@ layout = [
      sg.Button('Export CSV'), sg.Button('Export TXT')]
 ]
 
+# Create the PySimpleGUI window
 window = sg.Window('Create Forecast', layout, resizable=True)
 
-create_forecast = []
+# Initialize variables
+forecast_table = []
 i = 0
+
+# Event loop
 while True:
     event, values = window.read()
-    location = values['location']
     if event == sg.WIN_CLOSED or event == 'Cancel':
         break
     elif event == 'Load Forecast':
-        # nws = nws(values['location'])
-        forecast = forecast(values['location'])
-        window['nws'].update(values=forecast)
+        try:
+            nws_forecast = forecast(values['location'])
+            window['nws'].update(values=nws_forecast)
+        except Exception as e:
+            sg.popup_error(f"Error loading forecast: {e}")
     elif event == 'Add Day':
         window.extend_layout(window['column'], new_layout(i))
         i += 1
@@ -85,18 +92,24 @@ while True:
     elif event == 'Export CSV':
         file_path = values['save_as']
         if file_path:
-            with open(values['save_as'], 'w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(['Date', 'AM Temp', 'PM Temp', 'Weather'])
-                writer.writerows(forecast_text)
+            try:
+                with open(file_path, 'w', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['Date', 'Day', 'AM Temp', 'PM Temp', 'Weather'])
+                    writer.writerows(forecast_table)
+            except Exception as e:
+                sg.popup_error(f"Error saving CSV: {e}")
         else:
             sg.popup_error('Please provide a valid file name for saving.')
     elif event == 'Export TXT':
         file_path = values['save_as']
         if file_path:
-            with open(file_path, 'w') as file:
-                file.write(forecast_text)
+            try:
+                with open(file_path, 'w') as file:
+                    file.write(create_text_output(forecast_table))
+            except Exception as e:
+                sg.popup_error(f"Error saving TXT: {e}")
         else:
             sg.popup_error('Please provide a valid file name for saving.')
-event, values = window.read()
+
 window.close()
