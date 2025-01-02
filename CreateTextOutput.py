@@ -62,6 +62,7 @@ def create_text_output(data):
         am_temp = int(row[2])
         pm_temp = int(row[3])
         weather = row[4]
+        emoji = row[5]
         if i == 0:
             day = 'Today'
         elif i == 1:
@@ -70,7 +71,8 @@ def create_text_output(data):
             day = row[1]
 
         output.append(
-            f"{date} {day} \n{parse_weather(weather)} with temperatures {parse_temperature(am_temp, pm_temp)}.")
+            f"{date} {day} {emoji} \n"
+            f"{parse_weather(weather)} with temperatures {parse_temperature(am_temp, pm_temp)}.")
     return '\n'.join(output)
 
 
