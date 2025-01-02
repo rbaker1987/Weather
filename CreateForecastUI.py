@@ -57,8 +57,7 @@ layout = [
     [sg.T('Custom forecast:')],
     [sg.Table(key='output_table', values=[], size=(80, 5),
               headings=['  Date  ', '  Day  ', 'AM Temp', 'PM Temp', 'Weather', 'Emoji'])],
-    [sg.Multiline(key='output_text', size=(80, 5))],
-    [sg.Button('Copy')],
+    [sg.Multiline(key='output_text', size=(80, 5)), sg.Button('Copy')],
     [sg.T('Save Location'), sg.InputText(key='save_as'), sg.SaveAs(target='save_as', default_extension='csv'),
      sg.Button('Export CSV'), sg.Button('Export TXT')]
 ]
