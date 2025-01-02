@@ -152,8 +152,8 @@ def multi_city_forecasts(location_list: list, type: str = 'standard'):
 
 
 if __name__ == '__main__':
-    locations = ['Lindale, TX', 'Dallas, TX', 'Norman, OK']
-    forecasts = multi_city_forecasts(locations, 'standard')
+    locations = ['Lindale, TX']
+    forecasts, missing = multi_city_forecasts(locations, 'standard')
     # detailed = multi_city_forecasts(locations, 'detailed')
     # alerts = multi_city_forecasts(locations, 'alerts')
     # zones = get_zones()
