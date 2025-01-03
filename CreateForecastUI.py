@@ -3,6 +3,7 @@ import datetime
 from NWS import forecast
 import PySimpleGUI as sg
 from CreateTextOutput import create_text_output
+import pyperclip
 
 # Get current date and time
 today = datetime.date.today()
@@ -155,7 +156,7 @@ while True:
             sg.popup_error('Please provide a valid file name for saving.')
     elif event == 'Copy':
         # Copy the content of the output text box to the clipboard
-        sg.clipboard_copy(values['output_text'])
+        pyperclip.copy(values['output_text'])
         sg.popup('Text copied to clipboard!')
 
 window.close()
