@@ -1,0 +1,283 @@
+{% extends "weather/base.html" %}
+
+{% block title %}Weather Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 mb-0">
+            <i class="fas fa-cloud-sun text-primary"></i> Weather Dashboard
+        </h1>
+        <p class="lead text-muted">Real-time weather forecasts and alerts</p>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-primary text-white weather-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="location-count">{{ total_locations }}</h4>
+                        <p class="card-text">Active Locations</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-map-marker-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-success text-white weather-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="forecast-count">{{ total_forecasts }}</h4>
+                        <p class="card-text">Total Forecasts</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-calendar-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-warning text-white weather-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="alert-count">{{ recent_alerts|length }}</h4>
+                        <p class="card-text">Active Alerts</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-info text-white weather-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ recent_forecasts|length }}</h4>
+                        <p class="card-text">Recent Updates</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-sync-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent Forecasts -->
+    <div class="col-lg-8 mb-4">
+        <div class="card weather-card">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-thermometer-half text-primary"></i> Recent Forecasts
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_forecasts %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Location</th>
+                                    <th>Date</th>
+                                    <th>Temperature</th>
+                                    <th>Forecast</th>
+                                    <th>Wind</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for forecast in recent_forecasts %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'weather:location-detail' forecast.location.id %}" class="text-decoration-none">
+                                            <i class="fas fa-map-marker-alt text-muted"></i>
+                                            {{ forecast.location.name }}
+                                        </a>
+                                    </td>
+                                    <td>{{ forecast.forecast_date|date:"M d" }}</td>
+                                    <td>
+                                        {% if forecast.high_temperature and forecast.low_temperature %}
+                                            <span class="temp-high">{{ forecast.high_temperature }}°</span> /
+                                            <span class="temp-low">{{ forecast.low_temperature }}°</span>
+                                        {% else %}
+                                            {{ forecast.temperature }}°{{ forecast.temperature_unit }}
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ forecast.short_forecast|truncatechars:30 }}</td>
+                                    <td>
+                                        {{ forecast.wind_speed }} mph
+                                        {% if forecast.wind_direction %}{{ forecast.wind_direction }}{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center">
+                        <a href="{% url 'weather:forecast-list' %}" class="btn btn-outline-primary">
+                            View All Forecasts <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-cloud fa-3x mb-3"></i>
+                        <p>No recent forecasts available</p>
+                        <a href="{% url 'weather:location-list' %}" class="btn btn-primary">
+                            Add Locations <i class="fas fa-plus"></i>
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Active Alerts -->
+        <div class="card weather-card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bell text-warning"></i> Active Alerts
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if active_alerts %}
+                    {% for alert in active_alerts %}
+                    <div class="alert alert-{{ alert.severity|lower }} py-2 mb-2">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="alert-heading mb-1">{{ alert.event }}</h6>
+                                <small>{{ alert.location.name }}</small>
+                            </div>
+                            <small class="text-muted">{{ alert.onset|timesince }} ago</small>
+                        </div>
+                        <p class="mb-0 mt-1">{{ alert.headline|truncatechars:100 }}</p>
+                    </div>
+                    {% endfor %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'weather:alert-list' %}" class="btn btn-outline-warning btn-sm">
+                            View All Alerts
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-check-circle fa-2x mb-2 text-success"></i>
+                        <p class="mb-0">No active alerts</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card weather-card">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bolt text-primary"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'weather:location-list' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add New Location
+                    </a>
+                    <a href="/api/" class="btn btn-outline-secondary">
+                        <i class="fas fa-code"></i> API Documentation
+                    </a>
+                    <a href="{% url 'admin:index' %}" class="btn btn-outline-info">
+                        <i class="fas fa-cogs"></i> Admin Panel
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Locations Quick View -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-globe text-primary"></i> Your Locations
+                    </h5>
+                    <a href="{% url 'weather:location-list' %}" class="btn btn-outline-primary btn-sm">
+                        View All
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if locations %}
+                    <div class="row">
+                        {% for location in locations %}
+                        <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                            <div class="card h-100 border-0 bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">{{ location.name }}</h6>
+                                    {% if location.zip_code %}
+                                        <p class="text-muted small mb-2">{{ location.zip_code }}</p>
+                                    {% endif %}
+                                    {% if location.last_forecast_update %}
+                                        <small class="text-success">
+                                            <i class="fas fa-sync-alt"></i>
+                                            Updated {{ location.last_forecast_update|timesince }} ago
+                                        </small>
+                                    {% else %}
+                                        <small class="text-warning">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            No recent data
+                                        </small>
+                                    {% endif %}
+                                    <div class="mt-2">
+                                        <a href="{% url 'weather:location-detail' location.id %}" class="btn btn-sm btn-primary">
+                                            View Details
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-map fa-3x mb-3"></i>
+                        <h5>No Locations Added</h5>
+                        <p>Add your first location to start getting weather forecasts</p>
+                        <a href="{% url 'weather:location-list' %}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Add Location
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-refresh alerts every 5 minutes
+    setInterval(function() {
+        // You could add AJAX refresh logic here
+        console.log('Checking for alert updates...');
+    }, 300000);
+});
+</script>
+{% endblock %}

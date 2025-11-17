@@ -8,7 +8,7 @@ build/
 dist/
 downloads/
 vflask/
-venv/
+.venv/
 s/
 ~/
 .vscode/

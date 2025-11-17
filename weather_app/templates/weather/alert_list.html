@@ -1,0 +1,173 @@
+{% extends "weather/base.html" %}
+
+{% block title %}Weather Alerts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="display-5 mb-0">
+            <i class="fas fa-exclamation-triangle text-warning"></i> Weather Alerts
+        </h1>
+        <p class="text-muted">Active weather warnings and advisories</p>
+    </div>
+    <div>
+        <a href="{% url 'weather:dashboard' %}" class="btn btn-outline-primary">
+            <i class="fas fa-dashboard"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Alert Summary -->
+{% if alerts %}
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h3>{{ alerts|length }}</h3>
+                <p class="mb-0">Active Alert{{ alerts|length|pluralize }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-warning text-dark">
+            <div class="card-body text-center">
+                <h3>
+                    {% for alert in alerts %}
+                        {% if alert.severity == 'Severe' %}{{ forloop.counter0|add:1 }}{% endif %}
+                    {% empty %}0{% endfor %}
+                </h3>
+                <p class="mb-0">Severe Alert{{ alerts|length|pluralize }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>
+                    {% for alert in alerts %}
+                        {% if alert.severity == 'Moderate' %}{{ forloop.counter0|add:1 }}{% endif %}
+                    {% empty %}0{% endfor %}
+                </h3>
+                <p class="mb-0">Moderate Alert{{ alerts|length|pluralize }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Alerts -->
+<div class="row">
+    {% for alert in alerts %}
+    <div class="col-12 mb-4">
+        <div class="card border-{% if alert.severity == 'Severe' %}danger{% elif alert.severity == 'Moderate' %}warning{% else %}info{% endif %}">
+            <div class="card-header bg-{% if alert.severity == 'Severe' %}danger{% elif alert.severity == 'Moderate' %}warning{% else %}info{% endif %} 
+                        text-{% if alert.severity == 'Moderate' %}dark{% else %}white{% endif %}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-{% if alert.severity == 'Severe' %}exclamation-triangle{% elif alert.severity == 'Moderate' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                        {{ alert.event_type }}
+                    </h5>
+                    <div class="text-end">
+                        <span class="badge bg-dark">{{ alert.severity }}</span>
+                        <br>
+                        <small>{{ alert.location.name }}</small>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if alert.headline %}
+                <h6 class="card-title">{{ alert.headline }}</h6>
+                {% endif %}
+                
+                {% if alert.description %}
+                <p class="card-text">{{ alert.description }}</p>
+                {% endif %}
+                
+                {% if alert.instruction %}
+                <div class="alert alert-light">
+                    <strong>Instructions:</strong> {{ alert.instruction }}
+                </div>
+                {% endif %}
+                
+                <div class="row text-muted small">
+                    <div class="col-md-6">
+                        <strong>Issued:</strong> {{ alert.issued_at|date:"M j, Y g:i A" }}<br>
+                        {% if alert.effective_at %}
+                        <strong>Effective:</strong> {{ alert.effective_at|date:"M j, Y g:i A" }}<br>
+                        {% endif %}
+                        {% if alert.expires_at %}
+                        <strong>Expires:</strong> {{ alert.expires_at|date:"M j, Y g:i A" }}
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        {% if alert.sender_name %}
+                        <strong>Issued by:</strong> {{ alert.sender_name }}<br>
+                        {% endif %}
+                        {% if alert.urgency %}
+                        <strong>Urgency:</strong> {{ alert.urgency }}<br>
+                        {% endif %}
+                        {% if alert.certainty %}
+                        <strong>Certainty:</strong> {{ alert.certainty }}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <a href="{% url 'weather:location-detail' alert.location.id %}" 
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-map-marker-alt"></i> View Location
+                    </a>
+                    {% if alert.web_url %}
+                    <a href="{{ alert.web_url }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-external-link-alt"></i> Official Notice
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<nav aria-label="Alerts pagination" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1">First</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+            </li>
+        {% endif %}
+        
+        <li class="page-item active">
+            <span class="page-link">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </span>
+        </li>
+        
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<!-- No Alerts -->
+<div class="text-center py-5">
+    <i class="fas fa-shield-alt fa-4x text-success mb-4"></i>
+    <h3 class="text-success">No Active Weather Alerts</h3>
+    <p class="text-muted mb-4">All clear! No weather warnings or advisories are currently active for your tracked locations.</p>
+    <a href="{% url 'weather:location-list' %}" class="btn btn-outline-primary">
+        <i class="fas fa-map-marker-alt"></i> Manage Locations
+    </a>
+</div>
+{% endif %}
+{% endblock %}

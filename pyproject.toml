@@ -1,0 +1,142 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weather-app"
+version = "0.2.0"
+authors = [
+    {name = "rbaker1987", email = "your.email@example.com"},
+]
+description = "A modernized weather forecasting application using NWS API"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "requests>=2.31.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "httpx>=0.25.0",
+    "loguru>=0.7.0",
+    "geopy>=2.4.0",
+    "haversine>=2.8.0",
+    "SQLAlchemy>=2.0.0",
+    "aiosqlite>=0.19.0",  # Modern async SQLite
+    "typer>=0.9.0",  # Modern CLI framework
+    "rich>=13.0.0",  # Better console output
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.6.0",
+]
+modern-ui = [
+    "streamlit>=1.28.0",  # Modern web UI
+    "plotly>=5.17.0",     # Interactive charts
+    "pandas>=2.0.0",      # Data manipulation
+    "fastapi>=0.104.0",   # REST API framework
+    "uvicorn>=0.24.0",    # ASGI server
+]
+django = [
+    "Django>=4.2.0",              # Django framework
+    "djangorestframework>=3.14.0", # REST API for Django
+    "django-cors-headers>=4.3.0",  # CORS support
+    "django-extensions>=3.2.0",    # Useful Django extensions
+    "django-celery-beat>=2.5.0",   # Periodic tasks
+    "django-celery-results>=2.5.0", # Task result storage
+    "celery>=5.3.0",               # Background task queue
+    "redis>=5.0.0",                # Cache and message broker
+    "django-redis>=5.4.0",         # Django Redis cache backend
+    "Pillow>=10.1.0",              # Image processing
+    "psycopg2-binary>=2.9.0",      # PostgreSQL support
+    "whitenoise>=6.6.0",           # Static file serving
+]
+ui = [
+    "streamlit>=1.28.0",  # Modern web UI alternative
+    "plotly>=5.17.0",
+    "folium>=0.15.0",  # Interactive maps
+]
+legacy-ui = [
+    "PySimpleGUI>=5.0.0",  # Keep for backward compatibility
+    "prettytable>=3.9.0",
+    "simplekml>=1.3.0",
+    "pyperclip>=1.8.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/rbaker1987/Weather"
+"Bug Reports" = "https://github.com/rbaker1987/Weather/issues"
+"Source" = "https://github.com/rbaker1987/Weather"
+
+# Django management commands available via:
+# cd weather_app && python manage.py <command>
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["weather_app*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.mypy_cache
+  | \.pytest_cache
+  | \.vscode
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
