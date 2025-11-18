@@ -169,6 +169,7 @@ class WeatherIntegrationService:
                     period_start=forecast.period_start,
                     period_end=forecast.period_end,
                     defaults={
+                        'is_daytime': getattr(forecast, 'is_daytime', True),
                         'temperature': forecast.temperature.value,
                         'temperature_unit': forecast.temperature.unit.value,
                         'high_temperature': forecast.high_temperature.value if forecast.high_temperature else None,

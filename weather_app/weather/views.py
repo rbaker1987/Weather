@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
-from django.db.models import Q, Count, Avg
+from django.db.models import Q, Count, Avg, Case, When, IntegerField
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.core.cache import cache
@@ -1258,6 +1258,64 @@ class LocationDetailView(DetailView):
         return context
 
 
+def _refresh_forecasts_for_location(location: Location):
+    """Fetch and store forecasts for a location using NWS API directly.
+    Fallback used by forecast list to guarantee data on first load.
+    """
+    try:
+        import requests
+        headers = {'User-Agent': '(Weather App, contact@example.com)'}
+        # Get grid point
+        grid_url = f'https://api.weather.gov/points/{location.latitude},{location.longitude}'
+        grid_response = requests.get(grid_url, headers=headers, timeout=10)
+        grid_response.raise_for_status()
+        grid_data = grid_response.json()
+        props = grid_data.get('properties', {})
+        location.nws_office = props.get('gridId', '')
+        location.grid_x = props.get('gridX')
+        location.grid_y = props.get('gridY')
+        # Forecast URL
+        fcst_url = props.get('forecast')
+        if not fcst_url:
+            return False
+        r = requests.get(fcst_url, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        periods = data.get('properties', {}).get('periods', [])
+        # Replace existing
+        DailyForecast.objects.filter(location=location).delete()
+        from datetime import datetime
+        def parse_ws(ws):
+            if not ws: return 0
+            import re
+            nums = re.findall(r'\d+', str(ws))
+            if not nums: return 0
+            if len(nums) > 1:
+                return int((int(nums[0]) + int(nums[1]))/2)
+            return int(nums[0])
+        for p in periods[:14]:
+            DailyForecast.objects.create(
+                location=location,
+                forecast_date=datetime.fromisoformat(p['startTime'].replace('Z', '+00:00')).date(),
+                period_start=datetime.fromisoformat(p['startTime'].replace('Z', '+00:00')),
+                period_end=datetime.fromisoformat(p['endTime'].replace('Z', '+00:00')),
+                is_daytime=p.get('isDaytime', True),
+                temperature=p.get('temperature'),
+                temperature_unit=p.get('temperatureUnit', 'F'),
+                wind_speed=parse_ws(p.get('windSpeed', '')),
+                wind_direction=p.get('windDirection', ''),
+                short_forecast=p.get('shortForecast', ''),
+                detailed_forecast=p.get('detailedForecast', ''),
+                precipitation_probability=p.get('probabilityOfPrecipitation', {}).get('value'),
+            )
+        location.last_forecast_update = timezone.now()
+        location.save(update_fields=['nws_office','grid_x','grid_y','last_forecast_update'])
+        return True
+    except Exception:
+        logger.exception('Forecast refresh failed for %s', location.name)
+        return False
+
+
 class ForecastListView(ListView):
     """List view for weather forecasts."""
     model = DailyForecast
@@ -1267,7 +1325,21 @@ class ForecastListView(ListView):
     
     def get_queryset(self):
         """Get forecasts for active locations."""
-        from django.db.models import Case, When, IntegerField
+        # Ensure forecasts are available/up-to-date on page load
+        threshold = timezone.now() - timedelta(minutes=30)
+        active_locations = Location.objects.filter(is_active=True)
+        for loc in active_locations:
+            has_upcoming = DailyForecast.objects.filter(
+                location=loc,
+                forecast_date__gte=timezone.now().date()
+            ).exists()
+            if not has_upcoming or not loc.last_forecast_update or loc.last_forecast_update < threshold:
+                # Try backend service first, then fallback to direct NWS
+                try:
+                    from .services import SyncWeatherService
+                    SyncWeatherService.update_forecasts_for_location(loc)
+                except Exception:
+                    _refresh_forecasts_for_location(loc)
         qs = DailyForecast.objects.select_related('location').filter(
             location__is_active=True,
             forecast_date__gte=timezone.now().date()
