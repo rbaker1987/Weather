@@ -2,6 +2,15 @@
 
 {% block title %}{{ location.name }} - Weather Details{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #radarMap {
+        z-index: 1;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
@@ -142,17 +151,17 @@
                                     </div>
                                     {% endif %}
                                 </div>
-                                {% if location.last_observation_time %}
-                                <p class="text-muted mt-3 mb-0">
-                                    <small><i class="fas fa-clock"></i> Updated {{ location.last_observation_time|timesince }} ago</small>
-                                </p>
-                                {% endif %}
                             </div>
                             <div class="col-md-6 text-center">
                                 <i class="fas fa-{% if 'storm' in location.current_conditions|lower or 'thunder' in location.current_conditions|lower or 't-storm' in location.current_conditions|lower %}bolt{% elif 'ice' in location.current_conditions|lower or 'icy' in location.current_conditions|lower or 'freezing' in location.current_conditions|lower or 'sleet' in location.current_conditions|lower %}icicles{% elif 'snow' in location.current_conditions|lower or 'flurries' in location.current_conditions|lower or 'blizzard' in location.current_conditions|lower %}snowflake{% elif 'fog' in location.current_conditions|lower or 'mist' in location.current_conditions|lower or 'haze' in location.current_conditions|lower %}smog{% elif 'rain' in location.current_conditions|lower or 'shower' in location.current_conditions|lower or 'drizzle' in location.current_conditions|lower %}cloud-rain{% elif 'wind' in location.current_conditions|lower and 'cloudy' not in location.current_conditions|lower %}wind{% elif 'partly' in location.current_conditions|lower %}cloud-sun{% elif 'sunny' in location.current_conditions|lower or 'clear' in location.current_conditions|lower or 'fair' in location.current_conditions|lower %}sun{% elif 'cloud' in location.current_conditions|lower or 'overcast' in location.current_conditions|lower %}cloud{% else %}cloud-sun{% endif %}" style="font-size: 8rem; opacity: 0.3;"></i>
                             </div>
                         </div>
                     </div>
+                    {% if location.last_observation_time %}
+                    <div class="card-footer small text-muted">
+                        <i class="fas fa-clock"></i> Observed <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -172,16 +181,21 @@
             </div>
             <div class="card-body">
                 {% for alert in active_alerts %}
-                <div class="alert alert-{{ alert.severity|lower }} d-flex align-items-center mb-2">
-                    <div class="flex-grow-1">
-                        <strong>{{ alert.event }}</strong>
-                        {% if alert.headline %}
-                        <p class="mb-0">{{ alert.headline }}</p>
-                        {% endif %}
-                        <small class="text-muted">
-                            {% if alert.onset %}Onset: {{ alert.onset|date:"M j, Y g:i A" }}{% endif %}
-                            {% if alert.expires %} | Expires: {{ alert.expires|date:"M j, Y g:i A" }}{% endif %}
-                        </small>
+                <div class="alert mb-2 {% if alert.severity == 'extreme' or alert.severity == 'severe' %}alert-danger{% elif alert.severity == 'moderate' %}alert-warning{% else %}alert-info{% endif %}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="mb-1">
+                                <span class="badge {% if alert.severity == 'extreme' or alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ alert.severity|upper }}</span>
+                                <strong class="ms-2">{{ alert.event }}</strong>
+                            </div>
+                            {% if alert.headline %}
+                            <p class="mb-1">{{ alert.headline }}</p>
+                            {% endif %}
+                            <div class="small text-muted border-top pt-2 mt-2">
+                                {% if alert.onset %}<strong>Onset:</strong> <span class="js-localtime" data-dt="{{ alert.onset|date:'c' }}"></span>{% endif %}
+                                {% if alert.expires %} <span class="ms-2"><strong>Expires:</strong> <span class="js-localtime" data-dt="{{ alert.expires|date:'c' }}"></span></span>{% endif %}
+                            </div>
+                        </div>
                     </div>
                 </div>
                 {% endfor %}
@@ -205,7 +219,7 @@
                 <div class="row">
                     {% for day_group in daily_forecasts %}
                     <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-                        <div class="card border-primary h-100">
+                        <div class="card border-0 h-100">
                             <div class="card-header text-center py-2">
                                 <strong>{{ day_group.date|date:"D, M j" }}</strong>
                             </div>
@@ -450,6 +464,24 @@
         </div>
     </div>
 </div>
+
+<!-- Weather Radar -->
+{% if location.latitude and location.longitude %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-radar"></i> Weather Radar
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="radarMap" style="height: 500px; width: 100%;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -458,6 +490,21 @@
 function updateForecast(locationId) {
     weatherApp.updateForecast(locationId);
 }
+
+// Convert ISO timestamps to user's local time on detail page
+document.addEventListener('DOMContentLoaded', function () {
+    const els = document.querySelectorAll('.js-localtime[data-dt]');
+    els.forEach(function(el){
+        const iso = el.getAttribute('data-dt');
+        if (!iso) return;
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return;
+        el.textContent = d.toLocaleString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit'
+        });
+    });
+});
 
 // NWS forecast data from Django template
 const nwsForecasts = [
@@ -513,7 +560,7 @@ function generateCustomForecastGrid() {
         
         const cardHtml = `
             <div class="col-lg-3 col-md-4 col-sm-6">
-                <div class="card border-primary h-100">
+                <div class="card border-0 h-100">
                     <div class="card-header text-center py-2">
                         <strong>${displayDate}</strong>
                     </div>
@@ -764,5 +811,70 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+{% if location.latitude and location.longitude %}
+// Initialize radar map
+document.addEventListener('DOMContentLoaded', function() {
+    const map = L.map('radarMap').setView([{{ location.latitude }}, {{ location.longitude }}], 8);
+    
+    // Base map layers
+    const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    });
+    
+    const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri',
+        maxZoom: 19
+    });
+    
+    streetMap.addTo(map);
+    
+    // Add location marker
+    L.marker([{{ location.latitude }}, {{ location.longitude }}])
+        .addTo(map)
+        .bindPopup('{{ location.display_name }}');
+    
+    // Weather overlay layers
+    const weatherLayers = {};
+
+    // NWS GeoServer base URL
+    const nwsGeoServerUrl = 'https://opengeo.ncep.noaa.gov/geoserver';
+    
+    // Radar - Base Reflectivity (CONUS)
+    const radarLayer = L.tileLayer.wms(nwsGeoServerUrl + '/conus/conus_bref_qcd/ows', {
+        layers: 'conus_bref_qcd',
+        format: 'image/png',
+        transparent: true,
+        opacity: 0.7,
+        zIndex: 10,
+        attribution: 'NOAA/NWS MRMS'
+    }).addTo(map);
+    
+    // Add radar legend
+    const radarLegendUrl = nwsGeoServerUrl + '/conus/conus_bref_qcd/wms?SERVICE=WMS&REQUEST=GetLegendGraphic&FORMAT=image/png&LAYER=conus_bref_qcd';
+    const radarLegend = L.control({position: 'bottomright'});
+    radarLegend.onAdd = function(map) {
+        const div = L.DomUtil.create('div', 'info legend');
+        div.innerHTML = '<div style="background:#fff;padding:8px;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);font-size:12px;max-width:260px">'
+            + '<div style="font-weight:600;margin-bottom:6px">Base Reflectivity (dBZ)</div>'
+            + '<img alt="legend" style="max-width:240px;border:1px solid #ccc;background:#fff" src="' + radarLegendUrl + '" />'
+            + '<div style="margin-top:6px;color:#666">Source: NOAA/NWS MRMS</div>'
+            + '</div>';
+        return div;
+    };
+    radarLegend.addTo(map);
+    
+    // Base map control
+    const baseMaps = {
+        "Street Map": streetMap,
+        "Satellite": satelliteMap
+    };
+    L.control.layers(baseMaps, null, {position: 'topright'}).addTo(map);
+});
+{% endif %}
 </script>
+
+<!-- Leaflet JS Library -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 {% endblock %}

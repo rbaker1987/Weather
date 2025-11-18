@@ -2,8 +2,23 @@
 # Application Keys
 appkeys.json
 
-# Distribution / packaging
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
 .Python
+
+# Django
+*.log
+*.sqlite3
+db.sqlite3
+db.sqlite3-journal
+*.pot
+*.pyc
+local_settings.py
+
+# Distribution / packaging
 build/
 dist/
 downloads/

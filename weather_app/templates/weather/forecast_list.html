@@ -65,60 +65,101 @@
 {% endif %}
 
 <!-- Forecasts -->
-{% if forecasts %}
+{% if grouped_by_date %}
 <div class="row">
-    {% regroup forecasts by forecast_date as forecast_groups %}
-    {% for date_group in forecast_groups %}
+    {% for date_group in grouped_by_date %}
     <div class="col-12 mb-4">
         <div class="card weather-card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="fas fa-calendar-day"></i> {{ date_group.grouper|date:"l, F j, Y" }}
+                    <i class="fas fa-calendar-day"></i> {{ date_group.date|date:"l, F j, Y" }}
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row">
-                    {% for forecast in date_group.list %}
+                    {% for location_forecast in date_group.locations %}
                     <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-                        <div class="card border-light h-100">
-                            <div class="card-body">
-                                <h6 class="card-title">
-                                    <a href="{% url 'weather:location-detail' forecast.location.id %}" 
-                                       class="text-decoration-none">
-                                        {{ forecast.location.name }}
+                        <div class="card border-0 h-100">
+                            <div class="card-header text-center py-2 bg-white">
+                                <strong>
+                                    <a href="{% url 'weather:location-detail' location_forecast.location.id %}" class="text-decoration-none text-dark">
+                                        {% if location_forecast.location.is_favorite %}<i class="fas fa-star text-warning me-1"></i>{% endif %}
+                                        {{ location_forecast.location.display_name }}
                                     </a>
-                                </h6>
-                                
-                                <div class="d-flex align-items-center mb-2">
-                                    {% if forecast.icon_url %}
-                                    <img src="{{ forecast.icon_url }}" alt="{{ forecast.short_forecast }}" 
-                                         style="width: 40px;" class="me-2">
-                                    {% else %}
-                                    <i class="fas fa-cloud text-primary me-2" style="font-size: 2rem;"></i>
-                                    {% endif %}
-                                    
+                                </strong>
+                            </div>
+                            <div class="card-body p-0 d-flex flex-column">
+                                <!-- Day Forecast (Top Half) -->
+                                {% if location_forecast.day %}
+                                <div class="p-3 text-center border-bottom flex-fill d-flex flex-column justify-content-between temp-bg-{{ location_forecast.day.temperature|floatformat:"0" }}" style="min-height: 180px;">
                                     <div>
-                                        <div class="temperature-small">
-                                            {% if forecast.high_temperature and forecast.low_temperature %}
-                                                {{ forecast.high_temperature }}° / {{ forecast.low_temperature }}°
-                                            {% elif forecast.temperature %}
-                                                {{ forecast.temperature }}°{{ forecast.temperature_unit }}
-                                            {% endif %}
+                                        <div class="mb-2">
+                                            <span class="badge bg-warning text-dark"><i class="fas fa-sun"></i> Day</span>
+                                        </div>
+                                        {% if "Thunder" in location_forecast.day.short_forecast or "Storm" in location_forecast.day.short_forecast or "storm" in location_forecast.day.short_forecast|lower %}
+                                            <i class="fas fa-bolt mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Ice" in location_forecast.day.short_forecast or "Icy" in location_forecast.day.short_forecast or "Freezing" in location_forecast.day.short_forecast or "Sleet" in location_forecast.day.short_forecast %}
+                                            <i class="fas fa-icicles mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Snow" in location_forecast.day.short_forecast or "Flurries" in location_forecast.day.short_forecast or "Blizzard" in location_forecast.day.short_forecast %}
+                                            <i class="fas fa-snowflake mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Rain" in location_forecast.day.short_forecast or "Showers" in location_forecast.day.short_forecast %}
+                                            <i class="fas fa-cloud-rain mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Fog" in location_forecast.day.short_forecast or "Mist" in location_forecast.day.short_forecast or "Haze" in location_forecast.day.short_forecast %}
+                                            <i class="fas fa-smog mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Wind" in location_forecast.day.short_forecast and "Cloudy" not in location_forecast.day.short_forecast %}
+                                            <i class="fas fa-wind mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Partly" in location_forecast.day.short_forecast or "Partly Clear" in location_forecast.day.short_forecast %}
+                                            <i class="fas fa-cloud-sun mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Cloudy" in location_forecast.day.short_forecast %}
+                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Clear" in location_forecast.day.short_forecast or "Sunny" in location_forecast.day.short_forecast %}
+                                            <i class="fas fa-sun mb-2" style="font-size: 2rem;"></i>
+                                        {% else %}
+                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                        {% endif %}
+                                        <div class="mb-2">
+                                            <h4 class="mb-0">{{ location_forecast.day.temperature }}°{{ location_forecast.day.temperature_unit }}</h4>
                                         </div>
                                     </div>
+                                    <p class="small mb-0" style="min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ location_forecast.day.short_forecast }}</p>
                                 </div>
-                                
-                                <p class="small text-muted mb-2">{{ forecast.short_forecast }}</p>
-                                
-                                {% if forecast.detailed_forecast %}
-                                <p class="small">{{ forecast.detailed_forecast|truncatewords:15 }}</p>
                                 {% endif %}
                                 
-                                <div class="mt-auto">
-                                    <small class="text-muted">
-                                        Updated: {{ forecast.created_at|timesince }} ago
-                                    </small>
+                                <!-- Night Forecast (Bottom Half) -->
+                                {% if location_forecast.night %}
+                                <div class="p-3 text-center flex-fill d-flex flex-column justify-content-between night-temp-bg-{{ location_forecast.night.temperature|floatformat:"0" }}" style="min-height: 180px;">
+                                    <div>
+                                        <div class="mb-2">
+                                            <span class="badge bg-secondary"><i class="fas fa-moon"></i> Night</span>
+                                        </div>
+                                        {% if "Thunder" in location_forecast.night.short_forecast or "Storm" in location_forecast.night.short_forecast or "storm" in location_forecast.night.short_forecast|lower %}
+                                            <i class="fas fa-bolt mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Ice" in location_forecast.night.short_forecast or "Icy" in location_forecast.night.short_forecast or "Freezing" in location_forecast.night.short_forecast or "Sleet" in location_forecast.night.short_forecast %}
+                                            <i class="fas fa-icicles mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Snow" in location_forecast.night.short_forecast or "Flurries" in location_forecast.night.short_forecast or "Blizzard" in location_forecast.night.short_forecast %}
+                                            <i class="fas fa-snowflake mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Rain" in location_forecast.night.short_forecast or "Showers" in location_forecast.night.short_forecast %}
+                                            <i class="fas fa-cloud-rain mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Fog" in location_forecast.night.short_forecast or "Mist" in location_forecast.night.short_forecast or "Haze" in location_forecast.night.short_forecast %}
+                                            <i class="fas fa-smog mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Wind" in location_forecast.night.short_forecast and "Cloudy" not in location_forecast.night.short_forecast %}
+                                            <i class="fas fa-wind mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Partly" in location_forecast.night.short_forecast or "Partly Clear" in location_forecast.night.short_forecast %}
+                                            <i class="fas fa-cloud-moon mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Cloudy" in location_forecast.night.short_forecast %}
+                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Clear" in location_forecast.night.short_forecast %}
+                                            <i class="fas fa-moon mb-2" style="font-size: 2rem;"></i>
+                                        {% else %}
+                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                        {% endif %}
+                                        <div class="mb-2">
+                                            <h4 class="mb-0">{{ location_forecast.night.temperature }}°{{ location_forecast.night.temperature_unit }}</h4>
+                                        </div>
+                                    </div>
+                                    <p class="small mb-0" style="min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ location_forecast.night.short_forecast }}</p>
                                 </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -129,37 +170,6 @@
     </div>
     {% endfor %}
 </div>
-
-<!-- Pagination -->
-{% if is_paginated %}
-<nav aria-label="Forecasts pagination" class="mt-4">
-    <ul class="pagination justify-content-center">
-        {% if page_obj.has_previous %}
-            <li class="page-item">
-                <a class="page-link" href="?page=1">First</a>
-            </li>
-            <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
-            </li>
-        {% endif %}
-        
-        <li class="page-item active">
-            <span class="page-link">
-                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-            </span>
-        </li>
-        
-        {% if page_obj.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
-            </li>
-            <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a>
-            </li>
-        {% endif %}
-    </ul>
-</nav>
-{% endif %}
 
 {% else %}
 <!-- No Forecasts -->

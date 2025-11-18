@@ -14,9 +14,6 @@
         <button class="btn btn-secondary me-2" id="reorderBtn" onclick="toggleReorderMode()">
             <i class="fas fa-arrows-alt"></i> Reorder
         </button>
-        <button class="btn btn-success me-2" onclick="updateAllForecasts()">
-            <i class="fas fa-sync-alt"></i> Update All Forecasts
-        </button>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLocationModal">
             <i class="fas fa-plus"></i> Add Location
         </button>
@@ -28,50 +25,55 @@
     {% for item in locations_data %}
     {% with location=item.location today_forecast=item.today_forecast active_alerts=item.active_alerts alert_count=item.alert_count %}
     <div class="col-lg-4 col-md-6 mb-4" data-location-id="{{ location.id }}">
-        <a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none">
-            <div class="card weather-card h-100" style="cursor: pointer;">
-                <div class="card-body">
-                    <div class="drag-handle text-center py-2" style="cursor: move; display: none;">
-                        <i class="fas fa-grip-lines text-muted"></i>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-start mb-3">
-                        <h5 class="card-title mb-0 text-dark">
+        <div class="card weather-card h-100">
+            <div class="card-body">
+                <div class="drag-handle text-center py-2" style="cursor: move; display: none;">
+                    <i class="fas fa-grip-lines text-muted"></i>
+                </div>
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <h5 class="card-title mb-0">
+                        <a href="{% url 'weather:location-detail' location.id %}" class="text-dark text-decoration-none">
+                            {% if location.is_favorite %}<i class="fas fa-star text-warning me-1"></i>{% endif %}
                             {{ location.display_name }}
-                            <button class="btn btn-sm btn-link p-0 ms-2" 
-                                    data-bs-toggle="modal" 
-                                    data-bs-target="#editNameModal{{ location.id }}"
-                                    title="Edit name"
-                                    onclick="event.preventDefault(); event.stopPropagation();">
-                                <i class="fas fa-edit text-muted"></i>
-                            </button>
-                        </h5>
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" onclick="event.preventDefault(); event.stopPropagation();">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            <ul class="dropdown-menu">
-                                <li>
-                                    <a class="dropdown-item" href="{% url 'weather:location-detail' location.id %}">
-                                        <i class="fas fa-eye"></i> View Details
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="#" onclick="event.preventDefault(); event.stopPropagation(); updateForecast('{{ location.id }}')">
-                                        <i class="fas fa-sync-alt"></i> Update Forecast
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <a class="dropdown-item text-danger" href="#" onclick="event.preventDefault(); event.stopPropagation(); deleteLocation('{{ location.id }}')">
-                                        <i class="fas fa-trash"></i> Remove
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
+                        </a>
+                    </h5>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" style="z-index: 1050;">
+                            <li>
+                                <a class="dropdown-item" href="{% url 'weather:location-detail' location.id %}">
+                                    <i class="fas fa-eye"></i> View Details
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="event.preventDefault(); setFavorite('{{ location.id }}');">
+                                    <i class="fas fa-star text-warning"></i> 
+                                    {% if location.is_favorite %}Favorite{% else %}Set as Favorite{% endif %}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" 
+                                   data-bs-toggle="modal" 
+                                   data-bs-target="#editNameModal{{ location.id }}"
+                                   onclick="event.preventDefault();">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="#" onclick="event.preventDefault(); deleteLocation('{{ location.id }}')">
+                                    <i class="fas fa-trash"></i> Remove
+                                </a>
+                            </li>
+                        </ul>
                     </div>
-                
-                <!-- Active Alerts -->
-                {% if alert_count > 0 %}
+                </div>
+            
+            <!-- Active Alerts -->
+            {% if alert_count > 0 %}
+            <a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none">
                 <div class="alert alert-danger mb-3 py-2" role="alert">
                     <div class="d-flex align-items-center">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -84,10 +86,12 @@
                     </small>
                     {% endfor %}
                 </div>
-                {% endif %}
-                
-                <!-- Current Conditions -->
-                {% if location.current_temp %}
+            </a>
+            {% endif %}
+            
+            <a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none">
+            <!-- Current Conditions -->
+            {% if location.current_temp %}
                 <div class="card mb-3 border-0 temp-bg-{{ location.current_temp }}">
                     <div class="card-body p-3">
                         <div class="d-flex align-items-center justify-content-between">
@@ -106,6 +110,11 @@
                             </div>
                         </div>
                     </div>
+                    {% if location.last_observation_time %}
+                    <div class="card-footer small text-muted">
+                        <i class="fas fa-clock"></i> Observed <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
+                    </div>
+                    {% endif %}
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-3" role="alert">
@@ -132,22 +141,11 @@
                     {% endif %}
                 </div>
                 
-                <!-- Status -->
-                <div class="mb-3">
-                    {% if location.last_forecast_update %}
-                        <span class="badge bg-success">
-                            <i class="fas fa-check"></i> Updated {{ location.last_forecast_update|timesince }} ago
-                        </span>
-                    {% else %}
-                        <span class="badge bg-warning">
-                            <i class="fas fa-exclamation-triangle"></i> No recent data
-                        </span>
-                    {% endif %}
-                </div>
+                
                 
             </div>
         </div>
-    </a>
+        </a>
     </div>
     {% endwith %}
     {% empty %}
@@ -163,6 +161,24 @@
     </div>
     {% endfor %}
 </div>
+
+    {% block extra_js %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const els = document.querySelectorAll('.js-localtime[data-dt]');
+        els.forEach(function(el){
+            const iso = el.getAttribute('data-dt');
+            if (!iso) return;
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return;
+            el.textContent = d.toLocaleString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: 'numeric', minute: '2-digit'
+            });
+        });
+    });
+    </script>
+    {% endblock %}
 
 <!-- Edit Name Modals (one for each location) -->
 {% for item in locations_data %}
@@ -278,50 +294,6 @@
 
 {% block extra_js %}
 <script>
-function updateAllForecasts() {
-    const button = event.target.closest('button');
-    const originalHTML = button.innerHTML;
-    button.disabled = true;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
-    
-    // Get all location IDs
-    const locationCards = document.querySelectorAll('[data-location-id]');
-    const locationIds = Array.from(locationCards).map(card => card.getAttribute('data-location-id'));
-    
-    let completed = 0;
-    let errors = [];
-    
-    // Update each location
-    const promises = locationIds.map(locationId => 
-        fetch(`/api/locations/${locationId}/update_forecast/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCsrfToken()
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            completed++;
-            if (data.status !== 'success') {
-                errors.push(data.message || 'Unknown error');
-            }
-        })
-        .catch(error => {
-            completed++;
-            errors.push(error.message);
-        })
-    );
-    
-    Promise.all(promises).then(() => {
-        button.disabled = false;
-        button.innerHTML = originalHTML;
-        
-        // Reload page to show updated data
-        window.location.reload();
-    });
-}
-
 function addLocation() {
     const locationInput = document.getElementById('locationInput').value;
     
@@ -363,27 +335,6 @@ function addLocation() {
     });
 }
 
-function updateForecast(locationId) {
-    fetch(`/api/locations/${locationId}/update_forecast/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCsrfToken()
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            // Reload page to show updated data
-            window.location.reload();
-        } else {
-            console.error('Error updating forecast');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
-}
-
 function deleteLocation(locationId) {
     fetch(`/api/locations/${locationId}/`, {
         method: 'DELETE',
@@ -396,6 +347,26 @@ function deleteLocation(locationId) {
             window.location.reload();
         } else {
             console.error('Error removing location');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+function setFavorite(locationId) {
+    fetch(`/api/locations/${locationId}/set_favorite/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            console.error('Error setting favorite location');
         }
     })
     .catch(error => {
