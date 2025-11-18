@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
+from django.views.generic import ListView
 from django.db.models import Q, Count, Avg, Case, When, IntegerField
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
@@ -997,6 +998,42 @@ class ExportAPIView(APIView):
             <coordinates>{location.longitude},{location.latitude},0</coordinates>
         </Point>
     </Placemark>"""
+
+
+# Web view: Alerts list with precomputed counts
+class AlertListView(ListView):
+    """List active weather alerts for session locations."""
+    model = WeatherAlert
+    template_name = 'weather/alert_list.html'
+    context_object_name = 'alerts'
+    paginate_by = 20
+
+    def get_queryset(self):
+        qs = WeatherAlert.objects.filter(
+            is_active=True,
+            expires__gt=timezone.now()
+        ).select_related('location').order_by('-severity', '-onset')
+
+        # If session tracks specific locations, limit to them
+        try:
+            location_ids = self.request.session.get('location_ids', [])
+            if location_ids:
+                qs = qs.filter(location_id__in=location_ids)
+        except Exception:
+            pass
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        alerts = ctx.get('alerts') or []
+        severe_extreme = sum(1 for a in alerts if a.severity in ('severe', 'extreme'))
+        moderate = sum(1 for a in alerts if a.severity == 'moderate')
+        ctx.update({
+            'severe_extreme_count': severe_extreme,
+            'moderate_count': moderate,
+        })
+        return ctx
 
 
 # =============================================================================

@@ -253,6 +253,20 @@ body {
     border-color: var(--weather-primary) !important;
 }
 
+/* Ensure links on colored cards inherit readable text color */
+.weather-card .card-title a,
+.weather-card a.text-decoration-none {
+    color: inherit !important;
+}
+
+.weather-card .card-title a:hover,
+.weather-card a.text-decoration-none:hover,
+.weather-card .card-title a:focus,
+.weather-card a.text-decoration-none:focus {
+    color: inherit !important;
+    text-decoration: none;
+}
+
 /* Temperature-based backgrounds for day periods - 10°F ranges */
 /* 110°F+ - white background (extreme heat) */
 .temp-bg-110, .temp-bg-111, .temp-bg-112, .temp-bg-113, .temp-bg-114, .temp-bg-115, .temp-bg-116, .temp-bg-117, .temp-bg-118, .temp-bg-119,
