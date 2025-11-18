@@ -1,4 +1,4 @@
-# Weather Django Application
+# Ralph's Weather Django Application
 
 A Django web application for weather forecasting with REST API and web interface.
 

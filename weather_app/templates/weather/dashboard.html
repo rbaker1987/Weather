@@ -2,6 +2,17 @@
 
 {% block title %}Weather Dashboard{% endblock %}
 
+{% block extra_css %}
+{% if favorite_location and favorite_location.latitude and favorite_location.longitude %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #dashboardRadarMap {
+        z-index: 1;
+    }
+</style>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
@@ -15,51 +26,57 @@
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="card bg-primary text-white weather-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title" id="location-count">{{ total_locations }}</h4>
-                        <p class="card-text">Active Locations</p>
-                    </div>
-                    <div>
-                        <i class="fas fa-map-marker-alt fa-2x"></i>
+        <a href="{% url 'weather:location-list' %}" class="text-decoration-none">
+            <div class="card bg-primary text-white weather-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title" id="location-count">{{ total_locations }}</h4>
+                            <p class="card-text">Active Locations</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-map-marker-alt fa-2x"></i>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
     
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="card bg-success text-white weather-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title" id="forecast-count">{{ total_forecasts }}</h4>
-                        <p class="card-text">Total Forecasts</p>
-                    </div>
-                    <div>
-                        <i class="fas fa-calendar-alt fa-2x"></i>
+        <a href="{% url 'weather:forecast-list' %}" class="text-decoration-none">
+            <div class="card bg-success text-white weather-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title" id="forecast-count">{{ total_forecasts }}</h4>
+                            <p class="card-text">Total Forecasts</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-calendar-alt fa-2x"></i>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
     
     <div class="col-md-3 col-sm-6 mb-3">
-        <div class="card bg-warning text-white weather-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h4 class="card-title" id="alert-count">{{ recent_alerts|length }}</h4>
-                        <p class="card-text">Active Alerts</p>
-                    </div>
-                    <div>
-                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+        <a href="{% url 'weather:alert-list' %}" class="text-decoration-none">
+            <div class="card bg-warning text-white weather-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h4 class="card-title" id="alert-count">{{ recent_alerts|length }}</h4>
+                            <p class="card-text">Active Alerts</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
     
     <div class="col-md-3 col-sm-6 mb-3">
@@ -67,7 +84,7 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h4 class="card-title">{{ recent_forecasts|length }}</h4>
+                        <h4 class="card-title">{{ daily_forecasts|length }}</h4>
                         <p class="card-text">Recent Updates</p>
                     </div>
                     <div>
@@ -79,61 +96,179 @@
     </div>
 </div>
 
+<!-- Current Conditions -->
+{% if locations_with_current %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i class="fas fa-thermometer-half"></i> Current Conditions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for location in locations_with_current %}
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                        <div class="card border-0 temp-bg-{{ location.current_temp }} h-100">
+                            <div class="card-body p-3">
+                                <h6 class="card-title mb-2">
+                                    <a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none">
+                                        {% if location.is_favorite %}<i class="fas fa-star text-warning me-1"></i>{% endif %}
+                                        {{ location.display_name }}
+                                    </a>
+                                </h6>
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <h3 class="mb-0">{{ location.current_temp }}°F</h3>
+                                        <p class="mb-0 small">{{ location.current_conditions }}</p>
+                                        {% if location.current_humidity %}
+                                        <p class="mb-0 small"><i class="fas fa-tint"></i> {{ location.current_humidity }}%</p>
+                                        {% endif %}
+                                        {% if location.current_wind_speed %}
+                                        <p class="mb-0 small"><i class="fas fa-wind"></i> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}</p>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <i class="fas fa-{% if 'storm' in location.current_conditions|lower or 'thunder' in location.current_conditions|lower or 't-storm' in location.current_conditions|lower %}bolt{% elif 'ice' in location.current_conditions|lower or 'icy' in location.current_conditions|lower or 'freezing' in location.current_conditions|lower or 'sleet' in location.current_conditions|lower %}icicles{% elif 'snow' in location.current_conditions|lower or 'flurries' in location.current_conditions|lower or 'blizzard' in location.current_conditions|lower %}snowflake{% elif 'fog' in location.current_conditions|lower or 'mist' in location.current_conditions|lower or 'haze' in location.current_conditions|lower %}smog{% elif 'rain' in location.current_conditions|lower or 'shower' in location.current_conditions|lower or 'drizzle' in location.current_conditions|lower %}cloud-rain{% elif 'wind' in location.current_conditions|lower and 'cloudy' not in location.current_conditions|lower %}wind{% elif 'partly' in location.current_conditions|lower %}cloud-sun{% elif 'sunny' in location.current_conditions|lower or 'clear' in location.current_conditions|lower or 'fair' in location.current_conditions|lower %}sun{% elif 'cloud' in location.current_conditions|lower or 'overcast' in location.current_conditions|lower %}cloud{% else %}cloud-sun{% endif %} fa-2x" style="opacity: 0.5;"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Weather Radar for Favorite Location -->
+{% if favorite_location and favorite_location.latitude and favorite_location.longitude %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i class="fas fa-radar"></i> Weather Radar - {{ favorite_location.display_name }}
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="dashboardRadarMap" style="height: 400px; width: 100%;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
     <!-- Recent Forecasts -->
     <div class="col-lg-8 mb-4">
         <div class="card weather-card">
             <div class="card-header bg-light">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-thermometer-half text-primary"></i> Recent Forecasts
+                    <i class="fas fa-star text-warning"></i> 
+                    {% if favorite_location %}
+                        Forecast for {{ favorite_location.display_name }}
+                    {% else %}
+                        Forecast
+                    {% endif %}
                 </h5>
             </div>
             <div class="card-body">
-                {% if recent_forecasts %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Location</th>
-                                    <th>Date</th>
-                                    <th>Temperature</th>
-                                    <th>Forecast</th>
-                                    <th>Wind</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for forecast in recent_forecasts %}
-                                <tr>
-                                    <td>
-                                        <a href="{% url 'weather:location-detail' forecast.location.id %}" class="text-decoration-none">
-                                            <i class="fas fa-map-marker-alt text-muted"></i>
-                                            {{ forecast.location.name }}
-                                        </a>
-                                    </td>
-                                    <td>{{ forecast.forecast_date|date:"M d" }}</td>
-                                    <td>
-                                        {% if forecast.high_temperature and forecast.low_temperature %}
-                                            <span class="temp-high">{{ forecast.high_temperature }}°</span> /
-                                            <span class="temp-low">{{ forecast.low_temperature }}°</span>
-                                        {% else %}
-                                            {{ forecast.temperature }}°{{ forecast.temperature_unit }}
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ forecast.short_forecast|truncatechars:30 }}</td>
-                                    <td>
-                                        {{ forecast.wind_speed }} mph
-                                        {% if forecast.wind_direction %}{{ forecast.wind_direction }}{% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                {% if daily_forecasts %}
+                    <div class="row">
+                        {% for day_group in daily_forecasts %}
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card border-primary h-100">
+                                <div class="card-header text-center py-2">
+                                    <strong>{{ day_group.date|date:"D, M j" }}</strong>
+                                </div>
+                                <div class="card-body p-0 d-flex flex-column">
+                                    <!-- Day Forecast (Top Half) -->
+                                    {% if day_group.day %}
+                                    <div class="p-3 text-center border-bottom flex-fill d-flex flex-column justify-content-between temp-bg-{{ day_group.day.temperature|floatformat:"0" }}" style="min-height: 180px;">
+                                        <div>
+                                            <div class="mb-2">
+                                                <span class="badge bg-warning text-dark"><i class="fas fa-sun"></i> Day</span>
+                                            </div>
+                                            {% if "Thunder" in day_group.day.short_forecast or "Storm" in day_group.day.short_forecast or "storm" in day_group.day.short_forecast|lower %}
+                                                <i class="fas fa-bolt mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Ice" in day_group.day.short_forecast or "Icy" in day_group.day.short_forecast or "Freezing" in day_group.day.short_forecast or "Sleet" in day_group.day.short_forecast %}
+                                                <i class="fas fa-icicles mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Snow" in day_group.day.short_forecast or "Flurries" in day_group.day.short_forecast or "Blizzard" in day_group.day.short_forecast %}
+                                                <i class="fas fa-snowflake mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Rain" in day_group.day.short_forecast or "Showers" in day_group.day.short_forecast %}
+                                                <i class="fas fa-cloud-rain mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Fog" in day_group.day.short_forecast or "Mist" in day_group.day.short_forecast or "Haze" in day_group.day.short_forecast %}
+                                                <i class="fas fa-smog mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Wind" in day_group.day.short_forecast and "Cloudy" not in day_group.day.short_forecast %}
+                                                <i class="fas fa-wind mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Partly" in day_group.day.short_forecast or "Partly Clear" in day_group.day.short_forecast %}
+                                                <i class="fas fa-cloud-sun mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Cloudy" in day_group.day.short_forecast %}
+                                                <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Clear" in day_group.day.short_forecast or "Sunny" in day_group.day.short_forecast %}
+                                                <i class="fas fa-sun mb-2" style="font-size: 2rem;"></i>
+                                            {% else %}
+                                                <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                            {% endif %}
+                                            <div class="mb-2">
+                                                <h4 class="mb-0">{{ day_group.day.temperature }}°{{ day_group.day.temperature_unit }}</h4>
+                                            </div>
+                                        </div>
+                                        <p class="small mb-0" style="min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ day_group.day.short_forecast }}</p>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <!-- Night Forecast (Bottom Half) -->
+                                    {% if day_group.night %}
+                                    <div class="p-3 text-center flex-fill d-flex flex-column justify-content-between night-temp-bg-{{ day_group.night.temperature|floatformat:"0" }}" style="min-height: 180px;">
+                                        <div>
+                                            <div class="mb-2">
+                                                <span class="badge bg-secondary"><i class="fas fa-moon"></i> Night</span>
+                                            </div>
+                                            {% if "Thunder" in day_group.night.short_forecast or "Storm" in day_group.night.short_forecast or "storm" in day_group.night.short_forecast|lower %}
+                                                <i class="fas fa-bolt mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Ice" in day_group.night.short_forecast or "Icy" in day_group.night.short_forecast or "Freezing" in day_group.night.short_forecast or "Sleet" in day_group.night.short_forecast %}
+                                                <i class="fas fa-icicles mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Snow" in day_group.night.short_forecast or "Flurries" in day_group.night.short_forecast or "Blizzard" in day_group.night.short_forecast %}
+                                                <i class="fas fa-snowflake mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Rain" in day_group.night.short_forecast or "Showers" in day_group.night.short_forecast %}
+                                                <i class="fas fa-cloud-rain mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Fog" in day_group.night.short_forecast or "Mist" in day_group.night.short_forecast or "Haze" in day_group.night.short_forecast %}
+                                                <i class="fas fa-smog mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Wind" in day_group.night.short_forecast and "Cloudy" not in day_group.night.short_forecast %}
+                                                <i class="fas fa-wind mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Partly" in day_group.night.short_forecast or "Partly Clear" in day_group.night.short_forecast %}
+                                                <i class="fas fa-cloud-moon mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Cloudy" in day_group.night.short_forecast %}
+                                                <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                            {% elif "Clear" in day_group.night.short_forecast %}
+                                                <i class="fas fa-moon mb-2" style="font-size: 2rem;"></i>
+                                            {% else %}
+                                                <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                            {% endif %}
+                                            <div class="mb-2">
+                                                <h4 class="mb-0">{{ day_group.night.temperature }}°{{ day_group.night.temperature_unit }}</h4>
+                                            </div>
+                                        </div>
+                                        <p class="small mb-0" style="min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ day_group.night.short_forecast }}</p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
-                    <div class="text-center">
-                        <a href="{% url 'weather:forecast-list' %}" class="btn btn-outline-primary">
-                            View All Forecasts <i class="fas fa-arrow-right"></i>
+                    {% if favorite_location %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'weather:location-detail' favorite_location.id %}" class="btn btn-outline-primary">
+                            View Full Forecast <i class="fas fa-arrow-right"></i>
                         </a>
                     </div>
+                    {% endif %}
                 {% else %}
                     <div class="text-center text-muted py-4">
                         <i class="fas fa-cloud fa-3x mb-3"></i>
@@ -158,110 +293,70 @@
             </div>
             <div class="card-body">
                 {% if active_alerts %}
-                    {% for alert in active_alerts %}
-                    <div class="alert alert-{{ alert.severity|lower }} py-2 mb-2">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <h6 class="alert-heading mb-1">{{ alert.event }}</h6>
-                                <small>{{ alert.location.name }}</small>
-                            </div>
-                            <small class="text-muted">{{ alert.onset|timesince }} ago</small>
-                        </div>
-                        <p class="mb-0 mt-1">{{ alert.headline|truncatechars:100 }}</p>
-                    </div>
-                    {% endfor %}
-                    <div class="text-center mt-3">
-                        <a href="{% url 'weather:alert-list' %}" class="btn btn-outline-warning btn-sm">
-                            View All Alerts
-                        </a>
-                    </div>
-                {% else %}
-                    <div class="text-center text-muted py-3">
-                        <i class="fas fa-check-circle fa-2x mb-2 text-success"></i>
-                        <p class="mb-0">No active alerts</p>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="card weather-card">
-            <div class="card-header bg-light">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-bolt text-primary"></i> Quick Actions
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{% url 'weather:location-list' %}" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> Add New Location
-                    </a>
-                    <a href="/api/" class="btn btn-outline-secondary">
-                        <i class="fas fa-code"></i> API Documentation
-                    </a>
-                    <a href="{% url 'admin:index' %}" class="btn btn-outline-info">
-                        <i class="fas fa-cogs"></i> Admin Panel
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Locations Quick View -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card weather-card">
-            <div class="card-header bg-light">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-globe text-primary"></i> Your Locations
-                    </h5>
-                    <a href="{% url 'weather:location-list' %}" class="btn btn-outline-primary btn-sm">
-                        View All
-                    </a>
-                </div>
-            </div>
-            <div class="card-body">
-                {% if locations %}
-                    <div class="row">
-                        {% for location in locations %}
-                        <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-                            <div class="card h-100 border-0 bg-light">
-                                <div class="card-body text-center">
-                                    <h6 class="card-title">{{ location.name }}</h6>
-                                    {% if location.zip_code %}
-                                        <p class="text-muted small mb-2">{{ location.zip_code }}</p>
-                                    {% endif %}
-                                    {% if location.last_forecast_update %}
-                                        <small class="text-success">
-                                            <i class="fas fa-sync-alt"></i>
-                                            Updated {{ location.last_forecast_update|timesince }} ago
-                                        </small>
-                                    {% else %}
-                                        <small class="text-warning">
-                                            <i class="fas fa-exclamation-triangle"></i>
-                                            No recent data
-                                        </small>
-                                    {% endif %}
-                                    <div class="mt-2">
-                                        <a href="{% url 'weather:location-detail' location.id %}" class="btn btn-sm btn-primary">
-                                            View Details
-                                        </a>
+                    {% if active_alerts|length == 1 %}
+                        {# Single alert - show full details #}
+                        {% for alert in active_alerts %}
+                        <div class="alert mb-3 {% if alert.severity == 'extreme' %}alert-danger border-danger{% elif alert.severity == 'severe' %}alert-danger border-warning{% elif alert.severity == 'moderate' %}alert-warning border-warning{% else %}alert-info border-info{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h5 class="alert-heading mb-2"><strong>{{ alert.event }}</strong></h5>
+                                    <div class="mb-2">
+                                        <i class="fas fa-map-marker-alt"></i> <strong>{{ alert.location.display_name }}</strong>
                                     </div>
                                 </div>
+                                <span class="badge {% if alert.severity == 'extreme' %}bg-danger{% elif alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %} fs-6">{{ alert.severity|upper }}</span>
+                            </div>
+                            {% if alert.headline %}
+                            <p class="mb-3"><strong>{{ alert.headline }}</strong></p>
+                            {% endif %}
+                            {% if alert.description %}
+                            <p class="mb-3">{{ alert.description }}</p>
+                            {% endif %}
+                            <div class="small">
+                                {% if alert.onset %}
+                                <div class="mb-1"><i class="fas fa-clock"></i> <strong>Onset:</strong> {{ alert.onset|date:"l, F j, Y g:i A" }}</div>
+                                {% endif %}
+                                {% if alert.expires %}
+                                <div class="mb-1"><i class="fas fa-hourglass-end"></i> <strong>Expires:</strong> {{ alert.expires|date:"l, F j, Y g:i A" }}</div>
+                                {% endif %}
+                                {% if alert.sender_name %}
+                                <div class="mb-1"><i class="fas fa-broadcast-tower"></i> <strong>Issued by:</strong> {{ alert.sender_name }}</div>
+                                {% endif %}
                             </div>
                         </div>
                         {% endfor %}
+                    {% else %}
+                        {# Multiple alerts - show condensed version #}
+                        {% for alert in active_alerts %}
+                        <div class="alert py-2 mb-2 {% if alert.severity == 'extreme' %}alert-danger border-danger{% elif alert.severity == 'severe' %}alert-danger border-warning{% elif alert.severity == 'moderate' %}alert-warning border-warning{% else %}alert-info border-info{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="badge {% if alert.severity == 'extreme' %}bg-danger{% elif alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ alert.severity|upper }}</span>
+                                        <strong>{{ alert.event }}</strong>
+                                    </div>
+                                    <div class="small mb-1">
+                                        <i class="fas fa-map-marker-alt"></i> {{ alert.location.display_name }}
+                                    </div>
+                                    {% if alert.headline %}
+                                    <p class="mb-1 small">{{ alert.headline|truncatechars:80 }}</p>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted ms-2">{{ alert.onset|timesince }} ago</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'weather:alert-list' %}" class="btn btn-outline-warning">
+                            View All Alerts <i class="fas fa-arrow-right"></i>
+                        </a>
                     </div>
                 {% else %}
                     <div class="text-center text-muted py-4">
-                        <i class="fas fa-map fa-3x mb-3"></i>
-                        <h5>No Locations Added</h5>
-                        <p>Add your first location to start getting weather forecasts</p>
-                        <a href="{% url 'weather:location-list' %}" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> Add Location
-                        </a>
+                        <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                        <h5>No Active Alerts</h5>
+                        <p class="mb-0">All locations are clear of weather alerts</p>
                     </div>
                 {% endif %}
             </div>
@@ -271,13 +366,119 @@
 {% endblock %}
 
 {% block extra_js %}
+{% if favorite_location and favorite_location.latitude and favorite_location.longitude %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// Initialize dashboard radar map
 document.addEventListener('DOMContentLoaded', function() {
-    // Auto-refresh alerts every 5 minutes
-    setInterval(function() {
-        // You could add AJAX refresh logic here
-        console.log('Checking for alert updates...');
-    }, 300000);
+    const map = L.map('dashboardRadarMap').setView([{{ favorite_location.latitude }}, {{ favorite_location.longitude }}], 8);
+    
+    // Base map layers
+    const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    });
+    
+    const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri',
+        maxZoom: 19
+    });
+    
+    streetMap.addTo(map);
+    
+    // Add location marker
+    L.marker([{{ favorite_location.latitude }}, {{ favorite_location.longitude }}])
+        .addTo(map)
+        .bindPopup('{{ favorite_location.display_name }}');
+    
+    // Weather overlay layers
+    const weatherLayers = {};
+    
+    // OpenWeatherMap API key from Django settings
+    const owmKey = '{{ OPENWEATHERMAP_API_KEY }}';
+    
+    // Temperature layer
+    const tempLayer = L.tileLayer(`https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
+        attribution: 'Temperature data © OpenWeatherMap',
+        opacity: 0.6,
+        maxZoom: 19
+    });
+    
+    // Precipitation layer
+    const precipLayer = L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
+        attribution: 'Precipitation © OpenWeatherMap',
+        opacity: 0.6,
+        maxZoom: 19
+    });
+    
+    // Clouds layer
+    const cloudsLayer = L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
+        attribution: 'Clouds © OpenWeatherMap',
+        opacity: 0.6,
+        maxZoom: 19
+    });
+    
+    // Wind layer
+    const windLayer = L.tileLayer(`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
+        attribution: 'Wind © OpenWeatherMap',
+        opacity: 0.6,
+        maxZoom: 19
+    });
+    
+    // Add RainViewer radar overlay
+    const apiRequest = new XMLHttpRequest();
+    apiRequest.open("GET", "https://api.rainviewer.com/public/weather-maps.json", true);
+    apiRequest.onload = function(e) {
+        if (apiRequest.status === 200) {
+            const apiData = JSON.parse(apiRequest.response);
+            
+            // Get the most recent radar frame
+            if (apiData.radar && apiData.radar.past && apiData.radar.past.length > 0) {
+                const radarPath = apiData.radar.past[apiData.radar.past.length - 1].path;
+                
+                // Radar layer
+                const radarLayer = L.tileLayer('https://tilecache.rainviewer.com' + radarPath + '/256/{z}/{x}/{y}/2/1_1.png', {
+                    tileSize: 256,
+                    opacity: 0.6,
+                    zIndex: 10,
+                    attribution: 'RainViewer.com'
+                }).addTo(map);
+                
+                weatherLayers['Radar (Precipitation)'] = radarLayer;
+                
+                // Add weather overlay options
+                if (owmKey) {
+                    weatherLayers['Temperature'] = tempLayer;
+                    weatherLayers['Precipitation Forecast'] = precipLayer;
+                    weatherLayers['Clouds'] = cloudsLayer;
+                    weatherLayers['Wind'] = windLayer;
+                }
+                
+                // Layer control
+                const baseMaps = {
+                    "Street Map": streetMap,
+                    "Satellite": satelliteMap
+                };
+                
+                L.control.layers(baseMaps, weatherLayers, {position: 'topright'}).addTo(map);
+                
+                // Add legend
+                const legend = L.control({position: 'bottomright'});
+                legend.onAdd = function(map) {
+                    const div = L.DomUtil.create('div', 'info legend');
+                    div.innerHTML = '<div style="background: white; padding: 10px; border-radius: 5px;">' +
+                        '<strong>Weather Data</strong><br>' +
+                        '<small>Radar updated: ' + new Date(apiData.radar.past[apiData.radar.past.length - 1].time * 1000).toLocaleTimeString() + '</small>' +
+                        (owmKey ? '' : '<br><small style="color: #888;">Note: Add OpenWeatherMap API key for more layers</small>') +
+                        '</div>';
+                    return div;
+                };
+                legend.addTo(map);
+            }
+        }
+    };
+    apiRequest.send();
 });
 </script>
+{% endif %}
 {% endblock %}

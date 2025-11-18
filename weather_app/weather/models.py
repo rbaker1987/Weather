@@ -81,6 +81,7 @@ class Location(TimeStampedModel):
     current_wind_speed = models.IntegerField(null=True, blank=True, help_text="Current wind speed in mph")
     current_wind_direction = models.CharField(max_length=10, blank=True, help_text="Current wind direction")
     last_observation_time = models.DateTimeField(null=True, blank=True, help_text="Last observation timestamp")
+    is_favorite = models.BooleanField(default=False, help_text="Mark as favorite location")
     
     class Meta:
         verbose_name = "Location"
@@ -91,6 +92,7 @@ class Location(TimeStampedModel):
             models.Index(fields=['zip_code']),
             models.Index(fields=['created_by']),
             models.Index(fields=['last_forecast_update']),
+            models.Index(fields=['is_favorite']),
         ]
 
     def __str__(self):
@@ -105,6 +107,12 @@ class Location(TimeStampedModel):
         """Update coordinates."""
         self.latitude = latitude
         self.longitude = longitude
+    
+    def set_as_favorite(self):
+        """Set this location as favorite and unset others."""
+        Location.objects.filter(is_favorite=True).update(is_favorite=False)
+        self.is_favorite = True
+        self.save()
 
 
 class ForecastPeriod(TimeStampedModel):

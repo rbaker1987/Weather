@@ -25,6 +25,93 @@ from .serializers import (
 logger = logging.getLogger('weather')
 
 
+def fetch_current_conditions(location):
+    """Helper function to fetch and update current conditions for a location."""
+    if not location.latitude or not location.longitude:
+        return False
+    
+    try:
+        import requests
+        from datetime import datetime
+        
+        headers = {'User-Agent': '(Weather App, contact@example.com)'}
+        
+        # Get grid point data
+        grid_url = f'https://api.weather.gov/points/{location.latitude},{location.longitude}'
+        grid_response = requests.get(grid_url, headers=headers, timeout=10)
+        grid_response.raise_for_status()
+        grid_data = grid_response.json()
+        
+        properties = grid_data.get('properties', {})
+        observation_stations_url = properties.get('observationStations')
+        
+        if not observation_stations_url:
+            return False
+        
+        # Get observation stations
+        stations_response = requests.get(observation_stations_url, headers=headers, timeout=10)
+        stations_response.raise_for_status()
+        stations_data = stations_response.json()
+        
+        stations = stations_data.get('features', [])
+        if not stations:
+            return False
+        
+        station_id = stations[0].get('properties', {}).get('stationIdentifier')
+        if not station_id:
+            return False
+        
+        # Get latest observation
+        obs_url = f'https://api.weather.gov/stations/{station_id}/observations/latest'
+        obs_response = requests.get(obs_url, headers=headers, timeout=10)
+        obs_response.raise_for_status()
+        obs_data = obs_response.json()
+        
+        obs_props = obs_data.get('properties', {})
+        
+        # Extract and update current conditions
+        temp_c = obs_props.get('temperature', {}).get('value')
+        if temp_c:
+            location.current_temp = int(temp_c * 9/5 + 32)
+        
+        location.current_conditions = obs_props.get('textDescription', '')
+        
+        humidity = obs_props.get('relativeHumidity', {}).get('value')
+        if humidity:
+            location.current_humidity = int(humidity)
+        
+        wind_speed_kmh = obs_props.get('windSpeed', {}).get('value')
+        if wind_speed_kmh is not None and wind_speed_kmh != 0:
+            try:
+                location.current_wind_speed = int(wind_speed_kmh * 0.621371)
+            except (ValueError, TypeError):
+                location.current_wind_speed = None
+        else:
+            location.current_wind_speed = None
+        
+        wind_dir_deg = obs_props.get('windDirection', {}).get('value')
+        if wind_dir_deg is not None:
+            try:
+                deg = float(wind_dir_deg)
+                directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+                location.current_wind_direction = directions[int((deg + 22.5) / 45) % 8]
+            except (ValueError, TypeError):
+                location.current_wind_direction = ''
+        else:
+            location.current_wind_direction = ''
+        
+        timestamp = obs_props.get('timestamp')
+        if timestamp:
+            location.last_observation_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        
+        location.save()
+        return True
+        
+    except Exception as e:
+        logger.warning(f"Could not fetch current conditions for {location.name}: {str(e)}")
+        return False
+
+
 class LocationViewSet(viewsets.ModelViewSet):
     """API ViewSet for managing locations."""
     
@@ -434,6 +521,23 @@ class LocationViewSet(viewsets.ModelViewSet):
                 'status': 'error',
                 'message': f'Error updating order: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['post'])
+    def set_favorite(self, request, pk=None):
+        """Set this location as favorite."""
+        location = self.get_object()
+        
+        try:
+            location.set_as_favorite()
+            return Response({
+                'status': 'success',
+                'message': f'{location.display_name} set as favorite'
+            })
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': f'Error setting favorite: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class HourlyForecastViewSet(viewsets.ReadOnlyModelViewSet):
@@ -787,17 +891,57 @@ class DashboardView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get recent locations and forecasts for dashboard
-        recent_locations = Location.objects.filter(is_active=True)[:5]
+        # Get recent locations (ordered same as location list page)
+        locations = Location.objects.filter(is_active=True).order_by('-is_favorite', 'display_order', 'name')[:8]
+        
+        # Get locations with current conditions
+        locations_with_current = Location.objects.filter(is_active=True).exclude(current_temp__isnull=True).order_by('-is_favorite', 'display_order', 'name')
+        
+        # Get favorite location
+        favorite_location = Location.objects.filter(is_active=True, is_favorite=True).first()
+        
+        # Get forecasts for favorite location (or first location if no favorite)
+        if not favorite_location and locations:
+            favorite_location = locations[0]
+        
+        # Get 3-day forecast grouped by date
+        daily_forecasts = []
+        if favorite_location:
+            from collections import defaultdict
+            forecasts = DailyForecast.objects.filter(
+                location=favorite_location,
+                forecast_date__gte=timezone.now().date()
+            ).order_by('forecast_date', '-is_daytime')[:6]  # Get up to 6 periods (3 days x 2 periods)
+            
+            # Group by date
+            grouped = defaultdict(lambda: {'date': None, 'day': None, 'night': None})
+            for forecast in forecasts:
+                date = forecast.forecast_date
+                grouped[date]['date'] = date
+                if forecast.is_daytime:
+                    grouped[date]['day'] = forecast
+                else:
+                    grouped[date]['night'] = forecast
+            
+            # Convert to list and limit to 3 days
+            daily_forecasts = [grouped[date] for date in sorted(grouped.keys())[:3]]
+        
+        # Get active alerts ordered by location order
+        active_alerts = WeatherAlert.objects.filter(
+            is_active=True,
+            expires__gt=timezone.now()
+        ).select_related('location').order_by('-location__is_favorite', 'location__display_order', 'location__name', '-severity', '-onset')[:10]
         
         # Dashboard statistics
         context.update({
-            'recent_locations': recent_locations,
+            'locations': locations,
+            'locations_with_current': locations_with_current,
+            'favorite_location': favorite_location,
+            'daily_forecasts': daily_forecasts,
+            'active_alerts': active_alerts,
             'total_locations': Location.objects.filter(is_active=True).count(),
             'total_forecasts': DailyForecast.objects.count(),
-            'recent_alerts': WeatherAlert.objects.filter(
-                is_active=True
-            ).order_by('-onset')[:5],
+            'recent_alerts': active_alerts,
             'page_title': 'Weather Dashboard',
         })
         
@@ -812,7 +956,7 @@ class LocationListView(ListView):
     paginate_by = 12
     
     def get_queryset(self):
-        """Get active locations with forecast counts."""
+        """Get active locations with forecast counts, favorite first."""
         queryset = Location.objects.filter(is_active=True)
         
         # Search functionality
@@ -825,19 +969,28 @@ class LocationListView(ListView):
         
         return queryset.annotate(
             forecast_count=Count('forecasts')
-        ).order_by('name')
+        ).order_by('-is_favorite', 'display_order', 'name')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'Weather Locations'
         context['search_query'] = self.request.GET.get('search', '')
         
-        # Add today's forecast and alerts for each location
-        from datetime import date
+        # Fetch current conditions for all locations on page load
+        from datetime import date, timedelta
         today = date.today()
         
         locations_data = []
         for location in context['locations']:
+            # Check if current conditions need updating (older than 30 minutes or don't exist)
+            needs_update = (
+                not location.last_observation_time or 
+                timezone.now() - location.last_observation_time > timedelta(minutes=30)
+            )
+            
+            if needs_update:
+                fetch_current_conditions(location)
+            
             # Get today's daytime forecast
             today_forecast = DailyForecast.objects.filter(
                 location=location,
@@ -881,15 +1034,18 @@ class LocationDetailView(DetailView):
         )
         
         if needs_update and self.object.latitude and self.object.longitude:
-            # Trigger forecast update in background
+            # Fetch current conditions first
+            fetch_current_conditions(self.object)
+            
+            # Update forecast data
             try:
                 import requests
                 from datetime import datetime
                 
-                # Get grid point data
-                grid_url = f'https://api.weather.gov/points/{self.object.latitude},{self.object.longitude}'
                 headers = {'User-Agent': '(Weather App, contact@example.com)'}
                 
+                # Get grid point data
+                grid_url = f'https://api.weather.gov/points/{self.object.latitude},{self.object.longitude}'
                 grid_response = requests.get(grid_url, headers=headers, timeout=10)
                 grid_response.raise_for_status()
                 grid_data = grid_response.json()
@@ -899,62 +1055,6 @@ class LocationDetailView(DetailView):
                 self.object.nws_office = properties.get('gridId', '')
                 self.object.grid_x = properties.get('gridX')
                 self.object.grid_y = properties.get('gridY')
-                
-                # Fetch current conditions
-                try:
-                    observation_stations_url = properties.get('observationStations')
-                    if observation_stations_url:
-                        stations_response = requests.get(observation_stations_url, headers=headers, timeout=10)
-                        stations_response.raise_for_status()
-                        stations_data = stations_response.json()
-                        
-                        stations = stations_data.get('features', [])
-                        if stations:
-                            station_id = stations[0].get('properties', {}).get('stationIdentifier')
-                            if station_id:
-                                obs_url = f'https://api.weather.gov/stations/{station_id}/observations/latest'
-                                obs_response = requests.get(obs_url, headers=headers, timeout=10)
-                                obs_response.raise_for_status()
-                                obs_data = obs_response.json()
-                                
-                                obs_props = obs_data.get('properties', {})
-                                
-                                temp_c = obs_props.get('temperature', {}).get('value')
-                                if temp_c:
-                                    self.object.current_temp = int(temp_c * 9/5 + 32)
-                                
-                                self.object.current_conditions = obs_props.get('textDescription', '')
-                                
-                                humidity = obs_props.get('relativeHumidity', {}).get('value')
-                                if humidity:
-                                    self.object.current_humidity = int(humidity)
-                                
-                                wind_speed_kmh = obs_props.get('windSpeed', {}).get('value')
-                                if wind_speed_kmh is not None and wind_speed_kmh != 0:
-                                    try:
-                                        # Wind speed from NWS is in km/h, convert to mph
-                                        self.object.current_wind_speed = int(wind_speed_kmh * 0.621371)
-                                    except (ValueError, TypeError):
-                                        self.object.current_wind_speed = None
-                                else:
-                                    self.object.current_wind_speed = None
-                                
-                                wind_dir_deg = obs_props.get('windDirection', {}).get('value')
-                                if wind_dir_deg is not None:
-                                    try:
-                                        deg = float(wind_dir_deg)
-                                        directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
-                                        self.object.current_wind_direction = directions[int((deg + 22.5) / 45) % 8]
-                                    except (ValueError, TypeError):
-                                        self.object.current_wind_direction = ''
-                                else:
-                                    self.object.current_wind_direction = ''
-                                
-                                timestamp = obs_props.get('timestamp')
-                                if timestamp:
-                                    self.object.last_observation_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                except Exception as e:
-                    print(f"Warning: Could not fetch current conditions: {str(e)}")
                 
                 # Get forecast URL
                 forecast_url = properties.get('forecast')
@@ -1100,22 +1200,61 @@ class ForecastListView(ListView):
     model = DailyForecast
     template_name = 'weather/forecast_list.html'
     context_object_name = 'forecasts'
-    paginate_by = 20
+    paginate_by = None  # Show all forecasts
     
     def get_queryset(self):
         """Get forecasts for active locations."""
         return DailyForecast.objects.select_related('location').filter(
             location__is_active=True,
             forecast_date__gte=timezone.now().date()
-        ).order_by('forecast_date', 'location__name')
+        ).order_by('-location__is_favorite', 'location__display_order', 'location__name', 'forecast_date', '-is_daytime')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'Weather Forecasts'
         
         # Add current conditions for each location
-        locations = Location.objects.filter(is_active=True).exclude(current_temp__isnull=True)
+        locations = Location.objects.filter(is_active=True).exclude(current_temp__isnull=True).order_by('-is_favorite', 'display_order', 'name')
         context['locations_with_current'] = locations
+        
+        # Group forecasts by date first, then by location
+        from collections import defaultdict
+        dates_forecasts = defaultdict(lambda: {})
+        
+        for forecast in context['forecasts']:
+            date = forecast.forecast_date
+            location_id = forecast.location.id
+            if location_id not in dates_forecasts[date]:
+                dates_forecasts[date][location_id] = {
+                    'location': forecast.location,
+                    'day': None,
+                    'night': None
+                }
+            if forecast.is_daytime:
+                dates_forecasts[date][location_id]['day'] = forecast
+            else:
+                dates_forecasts[date][location_id]['night'] = forecast
+        
+        # Convert to list format grouped by date with sorted locations
+        grouped_by_date = []
+        for date in sorted(dates_forecasts.keys()):
+            # Sort locations by favorite, display_order, name
+            locations_dict = dates_forecasts[date]
+            sorted_locations = sorted(
+                locations_dict.values(),
+                key=lambda x: (
+                    not x['location'].is_favorite,  # False (favorite) comes before True
+                    x['location'].display_order,
+                    x['location'].name
+                )
+            )
+            
+            grouped_by_date.append({
+                'date': date,
+                'locations': sorted_locations
+            })
+        
+        context['grouped_by_date'] = grouped_by_date
         
         return context
 

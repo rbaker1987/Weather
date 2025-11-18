@@ -2,6 +2,15 @@
 
 {% block title %}{{ location.name }} - Weather Details{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #radarMap {
+        z-index: 1;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
@@ -172,19 +181,42 @@
             </div>
             <div class="card-body">
                 {% for alert in active_alerts %}
-                <div class="alert alert-{{ alert.severity|lower }} d-flex align-items-center mb-2">
-                    <div class="flex-grow-1">
-                        <strong>{{ alert.event }}</strong>
-                        {% if alert.headline %}
-                        <p class="mb-0">{{ alert.headline }}</p>
-                        {% endif %}
-                        <small class="text-muted">
-                            {% if alert.onset %}Onset: {{ alert.onset|date:"M j, Y g:i A" }}{% endif %}
-                            {% if alert.expires %} | Expires: {{ alert.expires|date:"M j, Y g:i A" }}{% endif %}
-                        </small>
+                <div class="alert mb-2 {% if alert.severity == 'extreme' or alert.severity == 'severe' %}alert-danger{% elif alert.severity == 'moderate' %}alert-warning{% else %}alert-info{% endif %}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="mb-1">
+                                <span class="badge {% if alert.severity == 'extreme' or alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ alert.severity|upper }}</span>
+                                <strong class="ms-2">{{ alert.event }}</strong>
+                            </div>
+                            {% if alert.headline %}
+                            <p class="mb-1">{{ alert.headline }}</p>
+                            {% endif %}
+                            <small>
+                                {% if alert.onset %}Onset: {{ alert.onset|date:"M j, Y g:i A" }}{% endif %}
+                                {% if alert.expires %} | Expires: {{ alert.expires|date:"M j, Y g:i A" }}{% endif %}
+                            </small>
+                        </div>
                     </div>
                 </div>
                 {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Weather Radar -->
+{% if location.latitude and location.longitude %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-radar"></i> Weather Radar
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="radarMap" style="height: 500px; width: 100%;"></div>
             </div>
         </div>
     </div>
@@ -764,5 +796,121 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+{% if location.latitude and location.longitude %}
+// Initialize radar map
+document.addEventListener('DOMContentLoaded', function() {
+    const map = L.map('radarMap').setView([{{ location.latitude }}, {{ location.longitude }}], 8);
+    
+    // Base map layers
+    const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    });
+    
+    const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri',
+        maxZoom: 19
+    });
+    
+    streetMap.addTo(map);
+    
+    // Add location marker
+    L.marker([{{ location.latitude }}, {{ location.longitude }}])
+        .addTo(map)
+        .bindPopup('{{ location.display_name }}');
+    
+    // Weather overlay layers
+    const weatherLayers = {};
+    
+    // OpenWeatherMap API key from Django settings
+    const owmKey = '{{ OPENWEATHERMAP_API_KEY }}';
+    
+    // Temperature layer
+    const tempLayer = L.tileLayer(`https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
+        attribution: 'Temperature data © OpenWeatherMap',
+        opacity: 0.6,
+        maxZoom: 19
+    });
+    
+    // Precipitation layer
+    const precipLayer = L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
+        attribution: 'Precipitation © OpenWeatherMap',
+        opacity: 0.6,
+        maxZoom: 19
+    });
+    
+    // Clouds layer
+    const cloudsLayer = L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
+        attribution: 'Clouds © OpenWeatherMap',
+        opacity: 0.6,
+        maxZoom: 19
+    });
+    
+    // Wind layer
+    const windLayer = L.tileLayer(`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
+        attribution: 'Wind © OpenWeatherMap',
+        opacity: 0.6,
+        maxZoom: 19
+    });
+    
+    // Add RainViewer radar overlay
+    const apiRequest = new XMLHttpRequest();
+    apiRequest.open("GET", "https://api.rainviewer.com/public/weather-maps.json", true);
+    apiRequest.onload = function(e) {
+        if (apiRequest.status === 200) {
+            const apiData = JSON.parse(apiRequest.response);
+            
+            // Get the most recent radar frame
+            if (apiData.radar && apiData.radar.past && apiData.radar.past.length > 0) {
+                const radarPath = apiData.radar.past[apiData.radar.past.length - 1].path;
+                
+                // Radar layer
+                const radarLayer = L.tileLayer('https://tilecache.rainviewer.com' + radarPath + '/256/{z}/{x}/{y}/2/1_1.png', {
+                    tileSize: 256,
+                    opacity: 0.6,
+                    zIndex: 10,
+                    attribution: 'RainViewer.com'
+                }).addTo(map);
+                
+                weatherLayers['Radar (Precipitation)'] = radarLayer;
+                
+                // Add weather overlay options
+                if (owmKey) {
+                    weatherLayers['Temperature'] = tempLayer;
+                    weatherLayers['Precipitation Forecast'] = precipLayer;
+                    weatherLayers['Clouds'] = cloudsLayer;
+                    weatherLayers['Wind'] = windLayer;
+                }
+                
+                // Layer control
+                const baseMaps = {
+                    "Street Map": streetMap,
+                    "Satellite": satelliteMap
+                };
+                
+                L.control.layers(baseMaps, weatherLayers, {position: 'topright'}).addTo(map);
+                
+                // Add legend
+                const legend = L.control({position: 'bottomright'});
+                legend.onAdd = function(map) {
+                    const div = L.DomUtil.create('div', 'info legend');
+                    div.innerHTML = '<div style="background: white; padding: 10px; border-radius: 5px;">' +
+                        '<strong>Weather Data</strong><br>' +
+                        '<small>Radar updated: ' + new Date(apiData.radar.past[apiData.radar.past.length - 1].time * 1000).toLocaleTimeString() + '</small>' +
+                        (owmKey ? '' : '<br><small style="color: #888;">Note: Add OpenWeatherMap API key for more layers</small>') +
+                        '</div>';
+                    return div;
+                };
+                legend.addTo(map);
+            }
+        }
+    };
+    apiRequest.send();
+});
+{% endif %}
 </script>
+
+<!-- Leaflet JS Library -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 {% endblock %}
