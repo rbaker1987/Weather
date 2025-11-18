@@ -61,6 +61,7 @@ class Location(TimeStampedModel):
     
     # Status tracking
     is_active = models.BooleanField(default=True)
+    is_enabled = models.BooleanField(default=True, help_text="Whether this location is enabled and visible on other pages")
     last_forecast_update = models.DateTimeField(null=True, blank=True)
     display_order = models.IntegerField(default=0, help_text="Order for displaying locations")
     is_current_location = models.BooleanField(default=False, help_text="Mark as current/home location")

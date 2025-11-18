@@ -25,10 +25,18 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // CSRF Token handling
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+
 function getCsrfToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
            document.querySelector('input[name="csrfmiddlewaretoken"]')?.value ||
-           document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+           document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+           getCookie('csrftoken') || '';
 }
 
 // API Request helper
@@ -201,6 +209,38 @@ async function deleteLocation(locationId) {
     }
 }
 
+async function toggleLocationEnabled(locationId, currentState) {
+    try {
+        showLoading(currentState ? 'Disabling location...' : 'Enabling location...');
+        
+        const response = await fetch(`/api/locations/${locationId}/toggle_enabled/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            hideLoading();
+            showNotification(data.message, 'success');
+            
+            // Reload the page to reflect the updated state
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            throw new Error(data.message || 'Failed to toggle location');
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showNotification('Error toggling location: ' + error.message, 'error');
+    }
+}
+
 // UI Helper functions
 function showLoading(message = 'Loading...') {
     const loadingEl = document.getElementById('loading-indicator');
@@ -315,6 +355,7 @@ window.weatherApp = {
     addLocation,
     updateForecast,
     deleteLocation,
+    toggleLocationEnabled,
     getCsrfToken,
     apiRequest,
     showNotification,
