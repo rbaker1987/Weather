@@ -61,8 +61,8 @@ class WeatherIntegrationService:
         """Get all active Django locations."""
         return list(Location.objects.filter(is_active=True))
 
-    async def create_location_from_input(self, location_input: str, user=None) -> Optional[Location]:
-        """Create a Django location from string input using existing geocoding logic."""
+    async def create_location_from_input(self, location_input: str) -> Optional[Location]:
+        """Create a Django location from string input using existing geocoding logic.\"\"\""
         if not WEATHER_BACKEND_AVAILABLE:
             logger.error("Weather backend components not available")
             return None
@@ -75,7 +75,7 @@ class WeatherIntegrationService:
                 return None
 
             # Create Django location from Pydantic model
-            django_location = await self.pydantic_to_django_location(pydantic_location, user)
+            django_location = await self.pydantic_to_django_location(pydantic_location)
             return django_location
 
         except Exception as e:
@@ -83,8 +83,8 @@ class WeatherIntegrationService:
             return None
 
     @sync_to_async
-    def pydantic_to_django_location(self, pydantic_location: PydanticLocation, user=None) -> Location:
-        """Convert Pydantic location to Django model."""
+    def pydantic_to_django_location(self, pydantic_location: PydanticLocation) -> Location:
+        """Convert Pydantic location to Django model.\"\"\""
         
         # Check if location already exists
         existing = Location.objects.filter(
@@ -99,7 +99,6 @@ class WeatherIntegrationService:
         django_location = Location.objects.create(
             name=pydantic_location.name,
             zip_code=pydantic_location.zip_code or '',
-            created_by=user,
             is_active=True
         )
         

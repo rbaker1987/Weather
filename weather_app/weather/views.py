@@ -123,24 +123,26 @@ class LocationViewSet(viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        """Filter locations by user if authenticated."""
+        """Filter locations by session."""
         queryset = super().get_queryset()
         
-        if self.request.user.is_authenticated:
-            # Show user's locations first, then public ones
-            user_locations = Q(created_by=self.request.user)
-            public_locations = Q(created_by__isnull=True)
-            queryset = queryset.filter(user_locations | public_locations)
+        # Only show locations in session
+        location_ids = self.request.session.get('location_ids', [])
+        queryset = queryset.filter(id__in=location_ids)
         
         return queryset.annotate(
             forecast_count=Count('forecasts')
         )
 
     def perform_create(self, serializer):
-        """Set created_by to current user and geocode if needed."""
-        location = serializer.save(
-            created_by=self.request.user if self.request.user.is_authenticated else None
-        )
+        """Save location and add to session."""
+        location = serializer.save()
+        
+        # Save location ID in session (convert UUID to string)
+        if 'location_ids' not in self.request.session:
+            self.request.session['location_ids'] = []
+        self.request.session['location_ids'].append(str(location.id))
+        self.request.session.modified = True
         
         # If location doesn't have coordinates, try to geocode
         if not location.latitude or not location.longitude:
@@ -252,6 +254,62 @@ class LocationViewSet(viewsets.ModelViewSet):
         
         serializer = WeatherAlertSerializer(alerts, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def ensure_browser_location(self, request):
+        """Create or update a 'current' location from browser coordinates.
+        Payload: { name: str, latitude: float, longitude: float }
+        Ensures the location is enabled, marked current, and added to session.
+        Returns the location id.
+        """
+        try:
+            data = request.data or {}
+            name = data.get('name') or 'My Location'
+            lat = data.get('latitude')
+            lon = data.get('longitude')
+            if lat is None or lon is None:
+                return Response({'status': 'error', 'message': 'latitude and longitude are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # If a current location exists, update its coordinates and name
+            location = Location.objects.filter(is_current_location=True).first()
+            if location is None:
+                location = Location.objects.create(
+                    name=name,
+                    latitude=lat,
+                    longitude=lon,
+                    is_active=True,
+                    is_enabled=True,
+                    is_current_location=True,
+                )
+            else:
+                location.name = name or location.name
+                location.latitude = lat
+                location.longitude = lon
+                location.is_active = True
+                location.is_enabled = True
+                location.is_current_location = True
+                location.save(update_fields=['name','latitude','longitude','is_active','is_enabled','is_current_location'])
+
+            # Ensure in session (store as strings)
+            session_ids = request.session.get('location_ids', [])
+            session_ids_str = [str(x) for x in session_ids]
+            loc_id_str = str(location.id)
+            if loc_id_str not in session_ids_str:
+                session_ids_str.append(loc_id_str)
+                request.session['location_ids'] = session_ids_str
+                request.session.modified = True
+
+            # Kick off a forecast refresh (best-effort)
+            try:
+                from .services import SyncWeatherService
+                SyncWeatherService.update_forecasts_for_location(location)
+            except Exception:
+                _refresh_forecasts_for_location(location)
+
+            return Response({'status': 'success', 'location_id': str(location.id)})
+        except Exception as e:
+            logger.exception('ensure_browser_location failed: %s', e)
+            return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
     def update_forecast(self, request, pk=None):
@@ -559,9 +617,20 @@ class LocationViewSet(viewsets.ModelViewSet):
             # Unset any existing current location
             Location.objects.filter(is_current_location=True).update(is_current_location=False)
             
-            # Set this location as current
+            # Set this location as current and ensure it's enabled
             location.is_current_location = True
-            location.save()
+            location.is_enabled = True
+            location.save(update_fields=['is_current_location', 'is_enabled'])
+
+            # Ensure this location is tracked in session
+            session_ids = request.session.get('location_ids', [])
+            # Normalize all IDs to strings
+            session_ids_str = [str(x) for x in session_ids]
+            loc_id_str = str(location.id)
+            if loc_id_str not in session_ids_str:
+                session_ids_str.append(loc_id_str)
+                request.session['location_ids'] = session_ids_str
+                request.session.modified = True
             
             return Response({
                 'status': 'success',
@@ -571,6 +640,27 @@ class LocationViewSet(viewsets.ModelViewSet):
             return Response({
                 'status': 'error',
                 'message': f'Error setting current location: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['post'])
+    def toggle_enabled(self, request, pk=None):
+        """Toggle location enabled/disabled state."""
+        location = self.get_object()
+        
+        try:
+            # Toggle the is_enabled field
+            location.is_enabled = not location.is_enabled
+            location.save()
+            
+            return Response({
+                'status': 'success',
+                'is_enabled': location.is_enabled,
+                'message': f'{location.display_name} {"enabled" if location.is_enabled else "disabled"}'
+            })
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': f'Error toggling location: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -914,7 +1004,6 @@ class ExportAPIView(APIView):
 # =============================================================================
 
 from django.views.generic import TemplateView, ListView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Prefetch, Case, When, IntegerField
 
 
@@ -934,15 +1023,21 @@ class DashboardView(TemplateView):
             default=4,
             output_field=IntegerField(),
         )
+        
+        # Filter locations by session
+        location_filter = Q(is_active=True, is_enabled=True)
+        location_ids = self.request.session.get('location_ids', [])
+        location_filter &= Q(id__in=location_ids)
+        
         locations = (
-            Location.objects.filter(is_active=True)
+            Location.objects.filter(location_filter)
             .annotate(type_priority=type_priority)
             .order_by('-is_current_location', 'type_priority', 'display_order', 'name')[:8]
         )
         
         # Get locations with current conditions
         locations_with_current = (
-            Location.objects.filter(is_active=True)
+            Location.objects.filter(location_filter)
             .exclude(current_temp__isnull=True)
             .annotate(type_priority=type_priority)
             .order_by('-is_current_location', 'type_priority', 'display_order', 'name')
@@ -994,7 +1089,7 @@ class DashboardView(TemplateView):
             'favorite_location': favorite_location,
             'daily_forecasts': daily_forecasts,
             'active_alerts': active_alerts,
-            'total_locations': Location.objects.filter(is_active=True).count(),
+            'total_locations': Location.objects.filter(location_filter).count(),
             'total_forecasts': DailyForecast.objects.count(),
             'recent_alerts': active_alerts,
             'page_title': 'Weather Dashboard',
@@ -1012,7 +1107,9 @@ class LocationListView(ListView):
     
     def get_queryset(self):
         """Get active locations with forecast counts, favorite first."""
-        queryset = Location.objects.filter(is_active=True)
+        # Filter by session - show all locations including disabled ones on location list page
+        location_ids = self.request.session.get('location_ids', [])
+        queryset = Location.objects.filter(is_active=True, id__in=location_ids)
         
         # Search functionality
         search = self.request.GET.get('search')
@@ -1327,21 +1424,34 @@ class ForecastListView(ListView):
         """Get forecasts for active locations."""
         # Ensure forecasts are available/up-to-date on page load
         threshold = timezone.now() - timedelta(minutes=30)
-        active_locations = Location.objects.filter(is_active=True)
+        
+        # Filter locations by session - only show enabled locations
+        location_ids = self.request.session.get('location_ids', [])
+        active_locations = Location.objects.filter(is_active=True, is_enabled=True, id__in=location_ids)
         for loc in active_locations:
             has_upcoming = DailyForecast.objects.filter(
                 location=loc,
                 forecast_date__gte=timezone.now().date()
             ).exists()
             if not has_upcoming or not loc.last_forecast_update or loc.last_forecast_update < threshold:
-                # Try backend service first, then fallback to direct NWS
+                # Try backend service first
                 try:
                     from .services import SyncWeatherService
                     SyncWeatherService.update_forecasts_for_location(loc)
                 except Exception:
+                    # Service failed, fallback to direct NWS
                     _refresh_forecasts_for_location(loc)
+                else:
+                    # If service didn't create forecasts, fallback
+                    has_after = DailyForecast.objects.filter(
+                        location=loc,
+                        forecast_date__gte=timezone.now().date()
+                    ).exists()
+                    if not has_after:
+                        _refresh_forecasts_for_location(loc)
         qs = DailyForecast.objects.select_related('location').filter(
             location__is_active=True,
+            location__is_enabled=True,
             forecast_date__gte=timezone.now().date()
         )
         type_priority = Case(
@@ -1365,7 +1475,11 @@ class ForecastListView(ListView):
             default=4,
             output_field=IntegerField(),
         )
-        locations = Location.objects.filter(is_active=True).exclude(current_temp__isnull=True).annotate(type_priority=type_priority).order_by('-is_current_location', 'type_priority', 'display_order', 'name')
+        # Filter locations by session - only show enabled locations
+        location_ids = self.request.session.get('location_ids', [])
+        location_filter = Q(is_active=True, is_enabled=True, id__in=location_ids)
+        
+        locations = Location.objects.filter(location_filter).exclude(current_temp__isnull=True).annotate(type_priority=type_priority).order_by('-is_current_location', 'type_priority', 'display_order', 'name')
         context['locations_with_current'] = locations
         
         # Group forecasts by date first, then by location

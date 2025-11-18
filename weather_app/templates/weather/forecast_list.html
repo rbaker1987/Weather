@@ -338,6 +338,40 @@ function loadBrowserLocation() {
             const icon = getWeatherIcon(conditions);
             document.getElementById('browserWeatherIcon').className = `fas fa-${icon} fa-2x`;
 
+            // Append a Save button to persist and include in forecasts
+            const actionsRow = document.createElement('div');
+            actionsRow.className = 'mt-3';
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'btn btn-sm btn-primary';
+            saveBtn.textContent = 'Save Current Location';
+            saveBtn.onclick = async () => {
+                try {
+                    const resp = await fetch('/api/locations/ensure_browser_location/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCsrfToken()
+                        },
+                        body: JSON.stringify({
+                            name: locationName,
+                            latitude: lat,
+                            longitude: lon
+                        })
+                    });
+                    const data = await resp.json();
+                    if (resp.ok && data.status === 'success') {
+                        // Reload to show forecasts for this location
+                        window.location.reload();
+                    } else {
+                        showBrowserLocationError(data.message || 'Could not save location');
+                    }
+                } catch (e) {
+                    showBrowserLocationError('Could not save location: ' + e.message);
+                }
+            };
+            actionsRow.appendChild(saveBtn);
+            content.appendChild(actionsRow);
+
             loading.style.display = 'none';
             content.style.display = 'block';
             footer.style.display = 'block';

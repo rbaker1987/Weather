@@ -66,7 +66,7 @@
     {% for item in locations_data %}
     {% with location=item.location today_forecast=item.today_forecast active_alerts=item.active_alerts alert_count=item.alert_count %}
     <div class="col-lg-4 col-md-6 mb-4" data-location-id="{{ location.id }}" data-draggable="{% if not location.location_type and not location.is_current_location %}true{% else %}false{% endif %}">
-        <div class="card weather-card h-100">
+        <div class="card weather-card h-100 {% if not location.is_enabled %}opacity-50{% endif %}">
             <div class="card-body">
                 <div class="drag-handle text-center py-2" style="cursor: move; display: none;">
                     <i class="fas fa-grip-lines text-muted"></i>
@@ -78,6 +78,9 @@
                             {% if location.location_type == 'home' %}<i class="fas fa-home text-secondary me-1" title="Home"></i>{% elif location.location_type == 'work' %}<i class="fas fa-briefcase text-secondary me-1" title="Work"></i>{% elif location.location_type == 'school' %}<i class="fas fa-school text-secondary me-1" title="School"></i>{% endif %}
                             {{ location.display_name }}
                         </a>
+                        {% if not location.is_enabled %}
+                        <span class="badge bg-secondary ms-2" title="This location is disabled and hidden on other pages">Disabled</span>
+                        {% endif %}
                     </h5>
                     <div class="dropdown">
                         <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
@@ -101,6 +104,12 @@
                                    data-bs-target="#editNameModal{{ location.id }}"
                                    onclick="event.preventDefault();">
                                     <i class="fas fa-edit"></i> Edit
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="event.preventDefault(); toggleLocationEnabled('{{ location.id }}', {{ location.is_enabled|lower }});">
+                                    <i class="fas fa-{% if location.is_enabled %}eye-slash{% else %}eye{% endif %}"></i> 
+                                    {% if location.is_enabled %}Disable{% else %}Enable{% endif %}
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider"></li>
