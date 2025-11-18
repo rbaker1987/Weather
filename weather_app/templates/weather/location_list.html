@@ -110,6 +110,11 @@
                             </div>
                         </div>
                     </div>
+                    {% if location.last_observation_time %}
+                    <div class="card-footer small text-muted">
+                        <i class="fas fa-clock"></i> Observed <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
+                    </div>
+                    {% endif %}
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-3" role="alert">
@@ -136,18 +141,7 @@
                     {% endif %}
                 </div>
                 
-                <!-- Status -->
-                <div class="mb-3">
-                    {% if location.last_forecast_update %}
-                        <span class="badge bg-success">
-                            <i class="fas fa-check"></i> Updated {{ location.last_forecast_update|timesince }} ago
-                        </span>
-                    {% else %}
-                        <span class="badge bg-warning">
-                            <i class="fas fa-exclamation-triangle"></i> No recent data
-                        </span>
-                    {% endif %}
-                </div>
+                
                 
             </div>
         </div>
@@ -167,6 +161,24 @@
     </div>
     {% endfor %}
 </div>
+
+    {% block extra_js %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const els = document.querySelectorAll('.js-localtime[data-dt]');
+        els.forEach(function(el){
+            const iso = el.getAttribute('data-dt');
+            if (!iso) return;
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return;
+            el.textContent = d.toLocaleString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: 'numeric', minute: '2-digit'
+            });
+        });
+    });
+    </script>
+    {% endblock %}
 
 <!-- Edit Name Modals (one for each location) -->
 {% for item in locations_data %}

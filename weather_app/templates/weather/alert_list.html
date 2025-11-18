@@ -80,15 +80,7 @@
                 {% endif %}
                 
                 <div class="row small mt-3">
-                    <div class="col-md-6">
-                        {% if alert.onset %}
-                        <strong>Onset:</strong> {{ alert.onset|date:"M j, Y g:i A" }}<br>
-                        {% endif %}
-                        {% if alert.expires %}
-                        <strong>Expires:</strong> {{ alert.expires|date:"M j, Y g:i A" }}
-                        {% endif %}
-                    </div>
-                    <div class="col-md-6">
+                    <div class="col-12">
                         {% if alert.sender_name %}
                         <strong>Issued by:</strong> {{ alert.sender_name }}<br>
                         {% endif %}
@@ -107,6 +99,14 @@
                         <i class="fas fa-map-marker-alt"></i> View Location
                     </a>
                 </div>
+            </div>
+            <div class="card-footer small text-muted">
+                {% if alert.onset %}
+                <strong>Onset:</strong> <span class="js-localtime" data-dt="{{ alert.onset|date:'c' }}"></span>
+                {% endif %}
+                {% if alert.expires %}
+                <span class="ms-2"><strong>Expires:</strong> <span class="js-localtime" data-dt="{{ alert.expires|date:'c' }}"></span></span>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -155,4 +155,23 @@
     </a>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Convert ISO timestamps to user's local time on alerts list
+document.addEventListener('DOMContentLoaded', function () {
+    const els = document.querySelectorAll('.js-localtime[data-dt]');
+    els.forEach(function(el){
+        const iso = el.getAttribute('data-dt');
+        if (!iso) return;
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return;
+        el.textContent = d.toLocaleString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit'
+        });
+    });
+});
+</script>
 {% endblock %}
