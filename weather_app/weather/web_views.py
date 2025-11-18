@@ -6,9 +6,13 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.utils import timezone
 from datetime import timedelta
+import logging
 
 from .models import Location, DailyForecast, WeatherAlert
 from .serializers import LocationSerializer, DailyForecastSerializer
+from .views import fetch_current_conditions
+
+logger = logging.getLogger('weather')
 
 
 class DashboardView(TemplateView):
@@ -48,6 +52,23 @@ class LocationListView(ListView):
     
     def get_queryset(self):
         return Location.objects.filter(is_active=True).order_by('name')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Fetch current conditions for all locations
+        locations = context['locations'] if 'locations' in context else self.object_list
+        for location in locations:
+            if location.latitude and location.longitude:
+                try:
+                    # Only fetch if conditions are stale (older than 30 minutes) or missing
+                    if not location.last_observation_time or \
+                       (timezone.now() - location.last_observation_time).total_seconds() > 1800:
+                        fetch_current_conditions(location)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch conditions for {location.name}: {str(e)}")
+        
+        return context
 
 
 class LocationDetailView(DetailView):

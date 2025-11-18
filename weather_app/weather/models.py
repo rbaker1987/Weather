@@ -73,6 +73,7 @@ class Location(TimeStampedModel):
     is_active = models.BooleanField(default=True)
     last_forecast_update = models.DateTimeField(null=True, blank=True)
     display_order = models.IntegerField(default=0, help_text="Order for displaying locations")
+    is_current_location = models.BooleanField(default=False, help_text="Mark as current/home location")
     
     # Current conditions (cached)
     current_temp = models.IntegerField(null=True, blank=True, help_text="Current temperature")
@@ -83,16 +84,31 @@ class Location(TimeStampedModel):
     last_observation_time = models.DateTimeField(null=True, blank=True, help_text="Last observation timestamp")
     is_favorite = models.BooleanField(default=False, help_text="Mark as favorite location")
     
+    class LocationType(models.TextChoices):
+        HOME = 'home', 'Home'
+        WORK = 'work', 'Work'
+        SCHOOL = 'school', 'School'
+        GENERAL = '', 'General'
+    
+    location_type = models.CharField(
+        max_length=20,
+        choices=LocationType.choices,
+        default=LocationType.GENERAL,
+        blank=True,
+        help_text="Type/category of location for ordering"
+    )
+    
     class Meta:
         verbose_name = "Location"
         verbose_name_plural = "Locations"
-        ordering = ['display_order', 'name']
+        ordering = ['-is_current_location', 'display_order', 'name']
         indexes = [
             models.Index(fields=['name']),
             models.Index(fields=['zip_code']),
             models.Index(fields=['created_by']),
             models.Index(fields=['last_forecast_update']),
             models.Index(fields=['is_favorite']),
+            models.Index(fields=['is_current_location']),
         ]
 
     def __str__(self):

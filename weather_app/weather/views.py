@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
-from django.db.models import Q, Count, Avg
+from django.db.models import Q, Count, Avg, Case, When, IntegerField
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.core.cache import cache
@@ -165,7 +165,14 @@ class LocationViewSet(viewsets.ModelViewSet):
                     location.save()
             except Exception as e:
                 # Log error but don't fail the creation
-                print(f"Geocoding error: {str(e)}")
+                logger.warning(f"Geocoding error: {str(e)}")
+        
+        # Automatically fetch current conditions after creating location
+        if location.latitude and location.longitude:
+            try:
+                fetch_current_conditions(location)
+            except Exception as e:
+                logger.warning(f"Could not fetch initial conditions for {location.name}: {str(e)}")
 
     @action(detail=True, methods=['get', 'post'])
     def forecasts(self, request, pk=None):
@@ -521,22 +528,49 @@ class LocationViewSet(viewsets.ModelViewSet):
                 'status': 'error',
                 'message': f'Error updating order: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=True, methods=['post'])
-    def set_favorite(self, request, pk=None):
-        """Set this location as favorite."""
-        location = self.get_object()
-        
+
+    @action(detail=False, methods=['post'])
+    def clear_all(self, request):
+        """Delete all saved locations and their related data.
+        Only affects persisted locations; the browser 'current location' card is not stored.
+        """
         try:
-            location.set_as_favorite()
+            count = Location.objects.filter(is_active=True).count()
+            Location.objects.filter(is_active=True).delete()
             return Response({
                 'status': 'success',
-                'message': f'{location.display_name} set as favorite'
+                'deleted': count,
+                'message': f'Removed {count} location(s)'
             })
         except Exception as e:
             return Response({
                 'status': 'error',
-                'message': f'Error setting favorite: {str(e)}'
+                'message': f'Error clearing locations: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # Removed favorite support; reordering replaces this feature.
+    
+    @action(detail=True, methods=['post'])
+    def set_current(self, request, pk=None):
+        """Set this location as current/home location."""
+        location = self.get_object()
+        
+        try:
+            # Unset any existing current location
+            Location.objects.filter(is_current_location=True).update(is_current_location=False)
+            
+            # Set this location as current
+            location.is_current_location = True
+            location.save()
+            
+            return Response({
+                'status': 'success',
+                'message': f'{location.display_name} set as current location'
+            })
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': f'Error setting current location: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -881,7 +915,7 @@ class ExportAPIView(APIView):
 
 from django.views.generic import TemplateView, ListView, DetailView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Case, When, IntegerField
 
 
 class DashboardView(TemplateView):
@@ -892,17 +926,30 @@ class DashboardView(TemplateView):
         context = super().get_context_data(**kwargs)
         
         # Get recent locations (ordered same as location list page)
-        locations = Location.objects.filter(is_active=True).order_by('-is_favorite', 'display_order', 'name')[:8]
+        # Order: current-location flag first (for saved entries), then by location_type priority, then display_order/name
+        type_priority = Case(
+            When(location_type='home', then=1),
+            When(location_type='work', then=2),
+            When(location_type='school', then=3),
+            default=4,
+            output_field=IntegerField(),
+        )
+        locations = (
+            Location.objects.filter(is_active=True)
+            .annotate(type_priority=type_priority)
+            .order_by('-is_current_location', 'type_priority', 'display_order', 'name')[:8]
+        )
         
         # Get locations with current conditions
-        locations_with_current = Location.objects.filter(is_active=True).exclude(current_temp__isnull=True).order_by('-is_favorite', 'display_order', 'name')
+        locations_with_current = (
+            Location.objects.filter(is_active=True)
+            .exclude(current_temp__isnull=True)
+            .annotate(type_priority=type_priority)
+            .order_by('-is_current_location', 'type_priority', 'display_order', 'name')
+        )
         
-        # Get favorite location
-        favorite_location = Location.objects.filter(is_active=True, is_favorite=True).first()
-        
-        # Get forecasts for favorite location (or first location if no favorite)
-        if not favorite_location and locations:
-            favorite_location = locations[0]
+        # Select primary location as first in ordered list
+        favorite_location = locations[0] if locations else None
         
         # Get 3-day forecast grouped by date
         daily_forecasts = []
@@ -930,7 +977,15 @@ class DashboardView(TemplateView):
         active_alerts = WeatherAlert.objects.filter(
             is_active=True,
             expires__gt=timezone.now()
-        ).select_related('location').order_by('-location__is_favorite', 'location__display_order', 'location__name', '-severity', '-onset')[:10]
+        ).select_related('location').annotate(
+            type_priority=Case(
+                When(location__location_type='home', then=1),
+                When(location__location_type='work', then=2),
+                When(location__location_type='school', then=3),
+                default=4,
+                output_field=IntegerField(),
+            )
+        ).order_by('-location__is_current_location', 'type_priority', 'location__display_order', 'location__name', '-severity', '-onset')[:10]
         
         # Dashboard statistics
         context.update({
@@ -967,9 +1022,17 @@ class LocationListView(ListView):
                 Q(zip_code__icontains=search)
             )
         
+        type_priority = Case(
+            When(location_type='home', then=1),
+            When(location_type='work', then=2),
+            When(location_type='school', then=3),
+            default=4,
+            output_field=IntegerField(),
+        )
         return queryset.annotate(
-            forecast_count=Count('forecasts')
-        ).order_by('-is_favorite', 'display_order', 'name')
+            forecast_count=Count('forecasts'),
+            type_priority=type_priority,
+        ).order_by('-is_current_location', 'type_priority', 'display_order', 'name')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1195,6 +1258,64 @@ class LocationDetailView(DetailView):
         return context
 
 
+def _refresh_forecasts_for_location(location: Location):
+    """Fetch and store forecasts for a location using NWS API directly.
+    Fallback used by forecast list to guarantee data on first load.
+    """
+    try:
+        import requests
+        headers = {'User-Agent': '(Weather App, contact@example.com)'}
+        # Get grid point
+        grid_url = f'https://api.weather.gov/points/{location.latitude},{location.longitude}'
+        grid_response = requests.get(grid_url, headers=headers, timeout=10)
+        grid_response.raise_for_status()
+        grid_data = grid_response.json()
+        props = grid_data.get('properties', {})
+        location.nws_office = props.get('gridId', '')
+        location.grid_x = props.get('gridX')
+        location.grid_y = props.get('gridY')
+        # Forecast URL
+        fcst_url = props.get('forecast')
+        if not fcst_url:
+            return False
+        r = requests.get(fcst_url, headers=headers, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        periods = data.get('properties', {}).get('periods', [])
+        # Replace existing
+        DailyForecast.objects.filter(location=location).delete()
+        from datetime import datetime
+        def parse_ws(ws):
+            if not ws: return 0
+            import re
+            nums = re.findall(r'\d+', str(ws))
+            if not nums: return 0
+            if len(nums) > 1:
+                return int((int(nums[0]) + int(nums[1]))/2)
+            return int(nums[0])
+        for p in periods[:14]:
+            DailyForecast.objects.create(
+                location=location,
+                forecast_date=datetime.fromisoformat(p['startTime'].replace('Z', '+00:00')).date(),
+                period_start=datetime.fromisoformat(p['startTime'].replace('Z', '+00:00')),
+                period_end=datetime.fromisoformat(p['endTime'].replace('Z', '+00:00')),
+                is_daytime=p.get('isDaytime', True),
+                temperature=p.get('temperature'),
+                temperature_unit=p.get('temperatureUnit', 'F'),
+                wind_speed=parse_ws(p.get('windSpeed', '')),
+                wind_direction=p.get('windDirection', ''),
+                short_forecast=p.get('shortForecast', ''),
+                detailed_forecast=p.get('detailedForecast', ''),
+                precipitation_probability=p.get('probabilityOfPrecipitation', {}).get('value'),
+            )
+        location.last_forecast_update = timezone.now()
+        location.save(update_fields=['nws_office','grid_x','grid_y','last_forecast_update'])
+        return True
+    except Exception:
+        logger.exception('Forecast refresh failed for %s', location.name)
+        return False
+
+
 class ForecastListView(ListView):
     """List view for weather forecasts."""
     model = DailyForecast
@@ -1204,17 +1325,47 @@ class ForecastListView(ListView):
     
     def get_queryset(self):
         """Get forecasts for active locations."""
-        return DailyForecast.objects.select_related('location').filter(
+        # Ensure forecasts are available/up-to-date on page load
+        threshold = timezone.now() - timedelta(minutes=30)
+        active_locations = Location.objects.filter(is_active=True)
+        for loc in active_locations:
+            has_upcoming = DailyForecast.objects.filter(
+                location=loc,
+                forecast_date__gte=timezone.now().date()
+            ).exists()
+            if not has_upcoming or not loc.last_forecast_update or loc.last_forecast_update < threshold:
+                # Try backend service first, then fallback to direct NWS
+                try:
+                    from .services import SyncWeatherService
+                    SyncWeatherService.update_forecasts_for_location(loc)
+                except Exception:
+                    _refresh_forecasts_for_location(loc)
+        qs = DailyForecast.objects.select_related('location').filter(
             location__is_active=True,
             forecast_date__gte=timezone.now().date()
-        ).order_by('-location__is_favorite', 'location__display_order', 'location__name', 'forecast_date', '-is_daytime')
+        )
+        type_priority = Case(
+            When(location__location_type='home', then=1),
+            When(location__location_type='work', then=2),
+            When(location__location_type='school', then=3),
+            default=4,
+            output_field=IntegerField(),
+        )
+        return qs.annotate(type_priority=type_priority).order_by('-location__is_current_location', 'type_priority', 'location__display_order', 'location__name', 'forecast_date', '-is_daytime')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'Weather Forecasts'
         
         # Add current conditions for each location
-        locations = Location.objects.filter(is_active=True).exclude(current_temp__isnull=True).order_by('-is_favorite', 'display_order', 'name')
+        type_priority = Case(
+            When(location_type='home', then=1),
+            When(location_type='work', then=2),
+            When(location_type='school', then=3),
+            default=4,
+            output_field=IntegerField(),
+        )
+        locations = Location.objects.filter(is_active=True).exclude(current_temp__isnull=True).annotate(type_priority=type_priority).order_by('-is_current_location', 'type_priority', 'display_order', 'name')
         context['locations_with_current'] = locations
         
         # Group forecasts by date first, then by location
@@ -1238,12 +1389,13 @@ class ForecastListView(ListView):
         # Convert to list format grouped by date with sorted locations
         grouped_by_date = []
         for date in sorted(dates_forecasts.keys()):
-            # Sort locations by favorite, display_order, name
+            # Sort locations by current flag, type priority, display_order, name
             locations_dict = dates_forecasts[date]
             sorted_locations = sorted(
                 locations_dict.values(),
                 key=lambda x: (
-                    not x['location'].is_favorite,  # False (favorite) comes before True
+                    0 if x['location'].is_current_location else 1,
+                    (1 if x['location'].location_type == 'home' else 2 if x['location'].location_type == 'work' else 3 if x['location'].location_type == 'school' else 4),
                     x['location'].display_order,
                     x['location'].name
                 )
