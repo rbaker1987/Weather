@@ -11,15 +11,15 @@ from .models import Location, HourlyForecast, DailyForecast, WeatherAlert, Forec
 class LocationAdmin(admin.ModelAdmin):
     """Admin interface for locations."""
     
-    list_display = ['name', 'zip_code', 'coordinates_display', 'forecast_count', 'last_update', 'created_by', 'is_active']
-    list_filter = ['is_active', 'created_at', 'nws_office', 'created_by']
+    list_display = ['name', 'zip_code', 'coordinates_display', 'forecast_count', 'last_update', 'is_active']
+    list_filter = ['is_active', 'created_at', 'nws_office']
     search_fields = ['name', 'zip_code', 'nws_office']
     readonly_fields = ['id', 'created_at', 'updated_at', 'nws_office', 'grid_x', 'grid_y']
     ordering = ['name']
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'is_active', 'created_by')
+            'fields': ('name', 'is_active')
         }),
         ('Geographic Data', {
             'fields': ('point', 'zip_code')
@@ -225,16 +225,16 @@ class WeatherAlertAdmin(admin.ModelAdmin):
 class ForecastRequestAdmin(admin.ModelAdmin):
     """Admin interface for forecast requests."""
     
-    list_display = ['user_display', 'request_type', 'status', 'location_count', 'response_time_display', 'created_at']
+    list_display = ['session_display', 'request_type', 'status', 'location_count', 'response_time_display', 'created_at']
     list_filter = ['request_type', 'status', 'cache_hit', 'created_at']
-    search_fields = ['user__username', 'error_message']
+    search_fields = ['session_key', 'error_message']
     readonly_fields = ['id', 'created_at', 'response_time_display', 'location_names']
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
     
     fieldsets = (
         ('Request Information', {
-            'fields': ('user', 'request_type', 'status', 'locations_requested')
+            'fields': ('session_key', 'request_type', 'status', 'locations_requested')
         }),
         ('Performance', {
             'fields': ('response_time_ms', 'response_time_display', 'cache_hit')
@@ -249,10 +249,10 @@ class ForecastRequestAdmin(admin.ModelAdmin):
         })
     )
     
-    def user_display(self, obj):
-        """Display user name or Anonymous."""
-        return obj.user.username if obj.user else "Anonymous"
-    user_display.short_description = "User"
+    def session_display(self, obj):
+        """Display session key or Unknown."""
+        return obj.session_key[:12] if obj.session_key else "Unknown"
+    session_display.short_description = "Session"
     
     def location_count(self, obj):
         """Display number of locations requested."""

@@ -123,24 +123,26 @@ class LocationViewSet(viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        """Filter locations by user if authenticated."""
+        """Filter locations by session."""
         queryset = super().get_queryset()
         
-        if self.request.user.is_authenticated:
-            # Show user's locations first, then public ones
-            user_locations = Q(created_by=self.request.user)
-            public_locations = Q(created_by__isnull=True)
-            queryset = queryset.filter(user_locations | public_locations)
+        # Only show locations in session
+        location_ids = self.request.session.get('location_ids', [])
+        queryset = queryset.filter(id__in=location_ids)
         
         return queryset.annotate(
             forecast_count=Count('forecasts')
         )
 
     def perform_create(self, serializer):
-        """Set created_by to current user and geocode if needed."""
-        location = serializer.save(
-            created_by=self.request.user if self.request.user.is_authenticated else None
-        )
+        """Save location and add to session."""
+        location = serializer.save()
+        
+        # Save location ID in session
+        if 'location_ids' not in self.request.session:
+            self.request.session['location_ids'] = []
+        self.request.session['location_ids'].append(location.id)
+        self.request.session.modified = True
         
         # If location doesn't have coordinates, try to geocode
         if not location.latitude or not location.longitude:
@@ -914,7 +916,6 @@ class ExportAPIView(APIView):
 # =============================================================================
 
 from django.views.generic import TemplateView, ListView, DetailView
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Prefetch, Case, When, IntegerField
 
 
@@ -934,15 +935,21 @@ class DashboardView(TemplateView):
             default=4,
             output_field=IntegerField(),
         )
+        
+        # Filter locations by session
+        location_filter = Q(is_active=True)
+        location_ids = self.request.session.get('location_ids', [])
+        location_filter &= Q(id__in=location_ids)
+        
         locations = (
-            Location.objects.filter(is_active=True)
+            Location.objects.filter(location_filter)
             .annotate(type_priority=type_priority)
             .order_by('-is_current_location', 'type_priority', 'display_order', 'name')[:8]
         )
         
         # Get locations with current conditions
         locations_with_current = (
-            Location.objects.filter(is_active=True)
+            Location.objects.filter(location_filter)
             .exclude(current_temp__isnull=True)
             .annotate(type_priority=type_priority)
             .order_by('-is_current_location', 'type_priority', 'display_order', 'name')
@@ -994,7 +1001,7 @@ class DashboardView(TemplateView):
             'favorite_location': favorite_location,
             'daily_forecasts': daily_forecasts,
             'active_alerts': active_alerts,
-            'total_locations': Location.objects.filter(is_active=True).count(),
+            'total_locations': Location.objects.filter(location_filter).count(),
             'total_forecasts': DailyForecast.objects.count(),
             'recent_alerts': active_alerts,
             'page_title': 'Weather Dashboard',
@@ -1012,7 +1019,9 @@ class LocationListView(ListView):
     
     def get_queryset(self):
         """Get active locations with forecast counts, favorite first."""
-        queryset = Location.objects.filter(is_active=True)
+        # Filter by session
+        location_ids = self.request.session.get('location_ids', [])
+        queryset = Location.objects.filter(is_active=True, id__in=location_ids)
         
         # Search functionality
         search = self.request.GET.get('search')
@@ -1327,7 +1336,10 @@ class ForecastListView(ListView):
         """Get forecasts for active locations."""
         # Ensure forecasts are available/up-to-date on page load
         threshold = timezone.now() - timedelta(minutes=30)
-        active_locations = Location.objects.filter(is_active=True)
+        
+        # Filter locations by session
+        location_ids = self.request.session.get('location_ids', [])
+        active_locations = Location.objects.filter(is_active=True, id__in=location_ids)
         for loc in active_locations:
             has_upcoming = DailyForecast.objects.filter(
                 location=loc,
@@ -1365,7 +1377,11 @@ class ForecastListView(ListView):
             default=4,
             output_field=IntegerField(),
         )
-        locations = Location.objects.filter(is_active=True).exclude(current_temp__isnull=True).annotate(type_priority=type_priority).order_by('-is_current_location', 'type_priority', 'display_order', 'name')
+        # Filter locations by session
+        location_ids = self.request.session.get('location_ids', [])
+        location_filter = Q(is_active=True, id__in=location_ids)
+        
+        locations = Location.objects.filter(location_filter).exclude(current_temp__isnull=True).annotate(type_priority=type_priority).order_by('-is_current_location', 'type_priority', 'display_order', 'name')
         context['locations_with_current'] = locations
         
         # Group forecasts by date first, then by location

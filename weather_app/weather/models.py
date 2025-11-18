@@ -5,7 +5,6 @@ Includes geographic support for locations and proper relationships.
 """
 
 from django.db import models
-from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from datetime import datetime, date
@@ -60,15 +59,6 @@ class Location(TimeStampedModel):
     grid_x = models.IntegerField(null=True, blank=True, help_text="NWS grid X coordinate")
     grid_y = models.IntegerField(null=True, blank=True, help_text="NWS grid Y coordinate")
     
-    # User association
-    created_by = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True,
-        related_name='locations'
-    )
-    
     # Status tracking
     is_active = models.BooleanField(default=True)
     last_forecast_update = models.DateTimeField(null=True, blank=True)
@@ -105,7 +95,6 @@ class Location(TimeStampedModel):
         indexes = [
             models.Index(fields=['name']),
             models.Index(fields=['zip_code']),
-            models.Index(fields=['created_by']),
             models.Index(fields=['last_forecast_update']),
             models.Index(fields=['is_favorite']),
             models.Index(fields=['is_current_location']),
@@ -339,7 +328,7 @@ class ForecastRequest(TimeStampedModel):
         CACHED = 'cached', 'Cached'
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    session_key = models.CharField(max_length=40, blank=True, help_text="Session key for anonymous users")
     
     # Request details
     locations_requested = models.ManyToManyField(Location, related_name='forecast_requests')
@@ -358,11 +347,11 @@ class ForecastRequest(TimeStampedModel):
         verbose_name_plural = "Forecast Requests"
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['session_key', 'created_at']),
             models.Index(fields=['status']),
             models.Index(fields=['request_type']),
         ]
 
     def __str__(self):
-        user_str = self.user.username if self.user else "Anonymous"
-        return f"Request by {user_str} at {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+        session_str = self.session_key[:8] if self.session_key else "Unknown"
+        return f"Request from session {session_str} at {self.created_at.strftime('%Y-%m-%d %H:%M')}"
