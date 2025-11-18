@@ -10,11 +10,7 @@
         </h1>
         <p class="text-muted">Daily weather forecasts for all locations</p>
     </div>
-    <div>
-        <a href="{% url 'weather:location-list' %}" class="btn btn-outline-primary">
-            <i class="fas fa-map-marker-alt"></i> Manage Locations
-        </a>
-    </div>
+    <div></div>
 </div>
 
 <!-- Current Conditions -->
@@ -29,6 +25,44 @@
             </div>
             <div class="card-body">
                 <div class="row">
+                    <!-- Browser Location Card (Always First) -->
+                    <div class="col-xl-3 col-lg-4 col-md-6 mb-3">
+                        <div class="card weather-card h-100 border-0" id="browserLocationCard" style="display: none;">
+                            <div class="card-body p-3">
+                                <div class="mb-3">
+                                    <h6 class="card-title mb-0">
+                                        <i class="fas fa-location-arrow text-info me-1" title="Your Location"></i>
+                                        <span id="browserLocationName">Your Location</span>
+                                    </h6>
+                                </div>
+                                <div id="browserLocationContent" style="display: none;">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <h2 class="mb-0" id="browserTemp">--°F</h2>
+                                            <p class="mb-0"><small id="browserConditions">--</small></p>
+                                            <p class="mb-0" id="browserHumidity" style="display: none;"><small><i class="fas fa-tint"></i> <span></span>%</small></p>
+                                            <p class="mb-0" id="browserWind" style="display: none;"><small><i class="fas fa-wind"></i> <span></span></small></p>
+                                        </div>
+                                        <div>
+                                            <i class="fas fa-cloud-sun fa-2x" id="browserWeatherIcon"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="browserLocationLoading" style="display: none;" class="text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="small mt-2 mb-0">Getting location...</p>
+                                </div>
+                                <div id="browserLocationError" style="display: none;" class="alert alert-warning mb-0 py-2">
+                                    <small><i class="fas fa-exclamation-triangle"></i> <span></span></small>
+                                </div>
+                            </div>
+                            <div class="card-footer small text-muted" id="browserLocationFooter" style="display: none;">
+                                <i class="fas fa-clock"></i> Just now
+                            </div>
+                        </div>
+                    </div>
                     {% for location in locations_with_current %}
                     <div class="col-xl-3 col-lg-4 col-md-6 mb-3">
                         <a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none text-dark">
@@ -202,9 +236,6 @@
     <i class="fas fa-calendar-times fa-4x text-muted mb-4"></i>
     <h3 class="text-muted">No Forecasts Available</h3>
     <p class="text-muted mb-4">Add some locations and update their forecasts to see weather data here.</p>
-    <a href="{% url 'weather:location-list' %}" class="btn btn-primary btn-lg">
-        <i class="fas fa-plus"></i> Add Locations
-    </a>
 </div>
 {% endif %}
 {% endblock %}
@@ -224,6 +255,143 @@ document.addEventListener('DOMContentLoaded', function () {
             hour: 'numeric', minute: '2-digit'
         });
     });
+
+    // Auto-load browser location card
+    loadBrowserLocation();
 });
+
+// Minimal browser location loader (current conditions only)
+function loadBrowserLocation() {
+    const card = document.getElementById('browserLocationCard');
+    if (!card) return;
+    const loading = document.getElementById('browserLocationLoading');
+    const content = document.getElementById('browserLocationContent');
+    const error = document.getElementById('browserLocationError');
+    const footer = document.getElementById('browserLocationFooter');
+
+    card.style.display = 'block';
+    loading.style.display = 'block';
+    content.style.display = 'none';
+    error.style.display = 'none';
+    footer.style.display = 'none';
+
+    if (!navigator.geolocation) {
+        showBrowserLocationError('Geolocation not supported by your browser');
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async function(pos){
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        window.browserLocationCoords = { lat, lon };
+        try {
+            // Reverse geocode for display name
+            const geoResp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, { headers: { 'User-Agent': 'WeatherApp/1.0' } });
+            const geoData = await geoResp.json();
+            const address = geoData.address || {};
+            let locationName = address.city || address.town || address.village || address.county || 'Your Location';
+            document.getElementById('browserLocationName').textContent = locationName;
+
+            // NWS: find nearest station and get latest observation
+            const pointsResp = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`, { headers: { 'User-Agent': 'WeatherApp/1.0' } });
+            if (!pointsResp.ok) throw new Error('Location not supported by NWS');
+            const points = await pointsResp.json();
+            const stationsUrl = points.properties.observationStations;
+            const stationsResp = await fetch(stationsUrl, { headers: { 'User-Agent': 'WeatherApp/1.0' } });
+            if (!stationsResp.ok) throw new Error('Unable to get observation stations');
+            const stations = await stationsResp.json();
+            if (!stations.features || !stations.features.length) throw new Error('No observation stations found');
+            const stationUrl = stations.features[0].id;
+            const obsResp = await fetch(`${stationUrl}/observations/latest`, { headers: { 'User-Agent': 'WeatherApp/1.0' } });
+            if (!obsResp.ok) throw new Error('Unable to get observation data');
+            const obsData = await obsResp.json();
+            const props = obsData.properties || {};
+
+            const tempC = props.temperature && props.temperature.value;
+            const tempF = tempC !== null && tempC !== undefined ? Math.round(tempC * 9/5 + 32) : null;
+            if (tempF !== null) {
+                document.getElementById('browserTemp').textContent = tempF + '°F';
+                const tempBgClass = getTempBackgroundClass(tempF);
+                card.classList.add(tempBgClass);
+                card.classList.remove('border-0');
+            } else {
+                document.getElementById('browserTemp').textContent = 'N/A';
+            }
+
+            const conditions = props.textDescription || 'Unknown';
+            document.getElementById('browserConditions').textContent = conditions;
+
+            if (props.relativeHumidity && props.relativeHumidity.value !== null) {
+                const h = Math.round(props.relativeHumidity.value);
+                const el = document.getElementById('browserHumidity');
+                el.style.display = 'block';
+                el.querySelector('span').textContent = h;
+            }
+            if (props.windSpeed && props.windSpeed.value !== null) {
+                const mph = Math.round(props.windSpeed.value * 0.621371);
+                const dir = props.windDirection && props.windDirection.value ? getWindDirection(props.windDirection.value) : '';
+                const el = document.getElementById('browserWind');
+                el.style.display = 'block';
+                el.querySelector('span').textContent = `${mph} mph ${dir}`;
+            }
+
+            const icon = getWeatherIcon(conditions);
+            document.getElementById('browserWeatherIcon').className = `fas fa-${icon} fa-2x`;
+
+            loading.style.display = 'none';
+            content.style.display = 'block';
+            footer.style.display = 'block';
+        } catch (e) {
+            showBrowserLocationError('Unable to get weather data: ' + e.message);
+        }
+    }, function(err){
+        let message = 'Unable to get your location';
+        if (err.code === err.PERMISSION_DENIED) message = 'Location permission denied';
+        showBrowserLocationError(message);
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 });
+}
+
+function showBrowserLocationError(message) {
+    const loading = document.getElementById('browserLocationLoading');
+    const error = document.getElementById('browserLocationError');
+    if (loading) loading.style.display = 'none';
+    if (error) {
+        error.style.display = 'block';
+        const span = error.querySelector('span');
+        if (span) span.textContent = message;
+    }
+}
+
+function getTempBackgroundClass(temp) {
+    if (temp >= 100) return 'temp-bg-100';
+    if (temp >= 90) return 'temp-bg-90';
+    if (temp >= 80) return 'temp-bg-80';
+    if (temp >= 70) return 'temp-bg-70';
+    if (temp >= 60) return 'temp-bg-60';
+    if (temp >= 50) return 'temp-bg-50';
+    if (temp >= 40) return 'temp-bg-40';
+    if (temp >= 32) return 'temp-bg-32';
+    return 'temp-bg-cold';
+}
+
+function getWindDirection(degrees) {
+    const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    const idx = Math.round(degrees / 22.5) % 16;
+    return dirs[idx];
+}
+
+function getWeatherIcon(conditions) {
+    const c = (conditions || '').toLowerCase();
+    if (c.includes('storm') || c.includes('thunder') || c.includes('t-storm')) return 'bolt';
+    if (c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet')) return 'icicles';
+    if (c.includes('snow') || c.includes('flurries') || c.includes('blizzard')) return 'snowflake';
+    if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
+    if (c.includes('rain') || c.includes('shower') || c.includes('drizzle')) return 'cloud-rain';
+    if (c.includes('wind') && !c.includes('cloudy')) return 'wind';
+    if (c.includes('partly')) return 'cloud-sun';
+    if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return 'sun';
+    if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
+    return 'cloud-sun';
+}
 </script>
 {% endblock %}
