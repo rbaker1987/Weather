@@ -79,7 +79,7 @@
                 <div class="row">
                     {% for location_forecast in date_group.locations %}
                     <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-                        <div class="card h-100">
+                        <div class="card border-0 h-100">
                             <div class="card-header text-center py-2 bg-white">
                                 <strong>
                                     <a href="{% url 'weather:location-detail' location_forecast.location.id %}" class="text-decoration-none text-dark">
