@@ -1,0 +1,436 @@
+/* Weather App Custom Styles */
+
+/* Custom variables for weather theming */
+:root {
+    --weather-primary: #007bff;
+    --weather-secondary: #6c757d;
+    --weather-success: #28a745;
+    --weather-warning: #ffc107;
+    --weather-danger: #dc3545;
+    --weather-info: #17a2b8;
+    --weather-light: #f8f9fa;
+    --weather-dark: #343a40;
+}
+
+/* Global styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+/* Header and navigation */
+.navbar-brand {
+    font-weight: bold;
+    color: var(--weather-primary) !important;
+}
+
+/* Weather cards */
+.weather-card {
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-radius: 10px;
+}
+
+.weather-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--weather-primary), var(--weather-info));
+    color: white;
+    border-radius: 10px 10px 0 0 !important;
+    border: none;
+}
+
+/* Temperature display */
+.temperature {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--weather-primary);
+}
+
+.temperature-small {
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+/* Weather icons and status */
+.weather-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.weather-status {
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+/* Forecast mini cards */
+.forecast-mini {
+    background: rgba(0, 123, 255, 0.05);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.forecast-mini .forecast-day {
+    font-weight: 600;
+    color: var(--weather-primary);
+}
+
+/* Alert styles */
+.alert-severe {
+    background: linear-gradient(45deg, #dc3545, #fd7e14);
+    color: white;
+    border: none;
+}
+
+.alert-moderate {
+    background: linear-gradient(45deg, #ffc107, #fd7e14);
+    color: #333;
+    border: none;
+}
+
+.alert-minor {
+    background: linear-gradient(45deg, #17a2b8, #007bff);
+    color: white;
+    border: none;
+}
+
+/* Dashboard statistics */
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 2rem;
+    text-align: center;
+    border: none;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.stat-number {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Location info styling */
+.location-info {
+    background: rgba(0, 123, 255, 0.05);
+    border-left: 4px solid var(--weather-primary);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.location-coordinates {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: var(--weather-secondary);
+}
+
+/* Button styling */
+.btn-weather {
+    background: linear-gradient(45deg, var(--weather-primary), var(--weather-info));
+    border: none;
+    border-radius: 25px;
+    padding: 0.75rem 1.5rem;
+    color: white;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-weather:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    color: white;
+}
+
+/* Table styling */
+.table-weather {
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table-weather th {
+    background: var(--weather-primary);
+    color: white;
+    font-weight: 600;
+    border: none;
+}
+
+/* Form styling */
+.form-weather {
+    background: white;
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.form-control:focus {
+    border-color: var(--weather-primary);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Loading spinner */
+.weather-spinner {
+    color: var(--weather-primary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .temperature {
+        font-size: 2rem;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+    }
+    
+    .weather-icon {
+        font-size: 2rem;
+    }
+}
+
+/* Animation for loading states */
+.loading-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--weather-primary);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--weather-info);
+}
+
+/* Utility classes */
+.text-weather-primary {
+    color: var(--weather-primary) !important;
+}
+
+.bg-weather-gradient {
+    background: linear-gradient(135deg, var(--weather-primary), var(--weather-info)) !important;
+}
+
+.border-weather {
+    border-color: var(--weather-primary) !important;
+}
+
+/* Temperature-based backgrounds for day periods - 10°F ranges */
+/* 110°F+ - white background (extreme heat) */
+.temp-bg-110, .temp-bg-111, .temp-bg-112, .temp-bg-113, .temp-bg-114, .temp-bg-115, .temp-bg-116, .temp-bg-117, .temp-bg-118, .temp-bg-119,
+.temp-bg-120, .temp-bg-121, .temp-bg-122, .temp-bg-123, .temp-bg-124, .temp-bg-125 {
+    background: linear-gradient(135deg, #FFFFFF 0%, #FFFACD 100%) !important;
+    color: black !important;
+}
+
+/* 100-109°F - deep red (very hot) */
+.temp-bg-100, .temp-bg-101, .temp-bg-102, .temp-bg-103, .temp-bg-104, .temp-bg-105, .temp-bg-106, .temp-bg-107, .temp-bg-108, .temp-bg-109 {
+    background: linear-gradient(135deg, #FF6347 0%, #FF4500 100%) !important;
+    color: black !important;
+}
+
+/* 90-99°F - orange-red (hot) */
+.temp-bg-90, .temp-bg-91, .temp-bg-92, .temp-bg-93, .temp-bg-94, .temp-bg-95, .temp-bg-96, .temp-bg-97, .temp-bg-98, .temp-bg-99 {
+    background: linear-gradient(135deg, #FFA500 0%, #FF6347 100%) !important;
+    color: black !important;
+}
+
+/* 80-89°F - yellow-orange (warm) */
+.temp-bg-80, .temp-bg-81, .temp-bg-82, .temp-bg-83, .temp-bg-84, .temp-bg-85, .temp-bg-86, .temp-bg-87, .temp-bg-88, .temp-bg-89 {
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%) !important;
+    color: black !important;
+}
+
+/* 70-79°F - light yellow-green (warm) */
+.temp-bg-70, .temp-bg-71, .temp-bg-72, .temp-bg-73, .temp-bg-74, .temp-bg-75, .temp-bg-76, .temp-bg-77, .temp-bg-78, .temp-bg-79 {
+    background: linear-gradient(135deg, #F0E68C 0%, #BDB76B 100%) !important;
+    color: black !important;
+}
+
+/* 60-69°F - khaki-green (cool) */
+.temp-bg-60, .temp-bg-61, .temp-bg-62, .temp-bg-63, .temp-bg-64, .temp-bg-65, .temp-bg-66, .temp-bg-67, .temp-bg-68, .temp-bg-69 {
+    background: linear-gradient(135deg, #BDB76B 0%, #9ACD32 100%) !important;
+    color: black !important;
+}
+
+/* 50-59°F - green-cyan (cool) */
+.temp-bg-50, .temp-bg-51, .temp-bg-52, .temp-bg-53, .temp-bg-54, .temp-bg-55, .temp-bg-56, .temp-bg-57, .temp-bg-58, .temp-bg-59 {
+    background: linear-gradient(135deg, #66CDAA 0%, #48D1CC 100%) !important;
+    color: black !important;
+}
+
+/* 40-49°F - cyan-blue (cool) */
+.temp-bg-40, .temp-bg-41, .temp-bg-42, .temp-bg-43, .temp-bg-44, .temp-bg-45, .temp-bg-46, .temp-bg-47, .temp-bg-48, .temp-bg-49 {
+    background: linear-gradient(135deg, #48D1CC 0%, #00CED1 100%) !important;
+    color: black !important;
+}
+
+/* 30-39°F - turquoise-blue (cool) */
+.temp-bg-33, .temp-bg-34, .temp-bg-35, .temp-bg-36, .temp-bg-37, .temp-bg-38, .temp-bg-39 {
+    background: linear-gradient(135deg, #00CED1 0%, #1E90FF 100%) !important;
+    color: black !important;
+}
+
+.temp-bg-30, .temp-bg-31, .temp-bg-32 {
+    background: linear-gradient(135deg, #00CED1 0%, #1E90FF 100%) !important;
+    color: white !important;
+}
+
+/* 20-29°F - blue (cool) */
+.temp-bg-20, .temp-bg-21, .temp-bg-22, .temp-bg-23, .temp-bg-24, .temp-bg-25, .temp-bg-26, .temp-bg-27, .temp-bg-28, .temp-bg-29 {
+    background: linear-gradient(135deg, #1E90FF 0%, #4169E1 100%) !important;
+    color: white !important;
+}
+
+/* 10-19°F - royal blue (cool) */
+.temp-bg-10, .temp-bg-11, .temp-bg-12, .temp-bg-13, .temp-bg-14, .temp-bg-15, .temp-bg-16, .temp-bg-17, .temp-bg-18, .temp-bg-19 {
+    background: linear-gradient(135deg, #4169E1 0%, #191970 100%) !important;
+    color: white !important;
+}
+
+/* 0-9°F - midnight blue (cool) */
+.temp-bg-0, .temp-bg-1, .temp-bg-2, .temp-bg-3, .temp-bg-4, .temp-bg-5, .temp-bg-6, .temp-bg-7, .temp-bg-8, .temp-bg-9 {
+    background: linear-gradient(135deg, #191970 0%, #0f0f3d 100%) !important;
+    color: white !important;
+}
+
+/* -10°F to -1°F - navy-black (extreme cold) */
+.temp-bg--1, .temp-bg--2, .temp-bg--3, .temp-bg--4, .temp-bg--5, .temp-bg--6, .temp-bg--7, .temp-bg--8, .temp-bg--9, .temp-bg--10 {
+    background: linear-gradient(135deg, #0f0f3d 0%, #000000 100%) !important;
+    color: white !important;
+}
+
+/* Night temperature backgrounds - same as day */
+/* 110°F+ - white background (extreme heat) */
+.night-temp-bg-110, .night-temp-bg-111, .night-temp-bg-112, .night-temp-bg-113, .night-temp-bg-114, .night-temp-bg-115,
+.night-temp-bg-116, .night-temp-bg-117, .night-temp-bg-118, .night-temp-bg-119, .night-temp-bg-120, .night-temp-bg-121,
+.night-temp-bg-122, .night-temp-bg-123, .night-temp-bg-124, .night-temp-bg-125 {
+    background: linear-gradient(135deg, #FFFFFF 0%, #FFFACD 100%) !important;
+    color: black !important;
+}
+
+/* 100-109°F - deep red (very hot) */
+.night-temp-bg-100, .night-temp-bg-101, .night-temp-bg-102, .night-temp-bg-103, .night-temp-bg-104, .night-temp-bg-105,
+.night-temp-bg-106, .night-temp-bg-107, .night-temp-bg-108, .night-temp-bg-109 {
+    background: linear-gradient(135deg, #FF6347 0%, #FF4500 100%) !important;
+    color: black !important;
+}
+
+/* 90-99°F - orange-red (hot) */
+.night-temp-bg-90, .night-temp-bg-91, .night-temp-bg-92, .night-temp-bg-93, .night-temp-bg-94, .night-temp-bg-95,
+.night-temp-bg-96, .night-temp-bg-97, .night-temp-bg-98, .night-temp-bg-99 {
+    background: linear-gradient(135deg, #FFA500 0%, #FF6347 100%) !important;
+    color: black !important;
+}
+
+/* 80-89°F - yellow-orange (warm) */
+.night-temp-bg-80, .night-temp-bg-81, .night-temp-bg-82, .night-temp-bg-83, .night-temp-bg-84, .night-temp-bg-85,
+.night-temp-bg-86, .night-temp-bg-87, .night-temp-bg-88, .night-temp-bg-89 {
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%) !important;
+    color: black !important;
+}
+
+/* 70-79°F - light yellow-green (warm) */
+.night-temp-bg-70, .night-temp-bg-71, .night-temp-bg-72, .night-temp-bg-73, .night-temp-bg-74, .night-temp-bg-75,
+.night-temp-bg-76, .night-temp-bg-77, .night-temp-bg-78, .night-temp-bg-79 {
+    background: linear-gradient(135deg, #F0E68C 0%, #BDB76B 100%) !important;
+    color: black !important;
+}
+
+/* 60-69°F - khaki-green (cool) */
+.night-temp-bg-60, .night-temp-bg-61, .night-temp-bg-62, .night-temp-bg-63, .night-temp-bg-64, .night-temp-bg-65,
+.night-temp-bg-66, .night-temp-bg-67, .night-temp-bg-68, .night-temp-bg-69 {
+    background: linear-gradient(135deg, #BDB76B 0%, #9ACD32 100%) !important;
+    color: black !important;
+}
+
+/* 50-59°F - green-cyan (cool) */
+.night-temp-bg-50, .night-temp-bg-51, .night-temp-bg-52, .night-temp-bg-53, .night-temp-bg-54, .night-temp-bg-55,
+.night-temp-bg-56, .night-temp-bg-57, .night-temp-bg-58, .night-temp-bg-59 {
+    background: linear-gradient(135deg, #66CDAA 0%, #48D1CC 100%) !important;
+    color: black !important;
+}
+
+/* 40-49°F - cyan-blue (cool) */
+.night-temp-bg-40, .night-temp-bg-41, .night-temp-bg-42, .night-temp-bg-43, .night-temp-bg-44, .night-temp-bg-45,
+.night-temp-bg-46, .night-temp-bg-47, .night-temp-bg-48, .night-temp-bg-49 {
+    background: linear-gradient(135deg, #48D1CC 0%, #00CED1 100%) !important;
+    color: black !important;
+}
+
+/* 30-39°F - turquoise-blue (cool) */
+.night-temp-bg-33, .night-temp-bg-34, .night-temp-bg-35, .night-temp-bg-36, .night-temp-bg-37, .night-temp-bg-38, .night-temp-bg-39 {
+    background: linear-gradient(135deg, #00CED1 0%, #1E90FF 100%) !important;
+    color: black !important;
+}
+
+.night-temp-bg-30, .night-temp-bg-31, .night-temp-bg-32 {
+    background: linear-gradient(135deg, #00CED1 0%, #1E90FF 100%) !important;
+    color: white !important;
+}
+
+/* 20-29°F - blue (cool) */
+.night-temp-bg-20, .night-temp-bg-21, .night-temp-bg-22, .night-temp-bg-23, .night-temp-bg-24, .night-temp-bg-25,
+.night-temp-bg-26, .night-temp-bg-27, .night-temp-bg-28, .night-temp-bg-29 {
+    background: linear-gradient(135deg, #1E90FF 0%, #4169E1 100%) !important;
+    color: white !important;
+}
+
+/* 10-19°F - royal blue (cool) */
+.night-temp-bg-10, .night-temp-bg-11, .night-temp-bg-12, .night-temp-bg-13, .night-temp-bg-14, .night-temp-bg-15,
+.night-temp-bg-16, .night-temp-bg-17, .night-temp-bg-18, .night-temp-bg-19 {
+    background: linear-gradient(135deg, #4169E1 0%, #191970 100%) !important;
+    color: white !important;
+}
+
+/* 0-9°F - midnight blue (cool) */
+.night-temp-bg-0, .night-temp-bg-1, .night-temp-bg-2, .night-temp-bg-3, .night-temp-bg-4, .night-temp-bg-5,
+.night-temp-bg-6, .night-temp-bg-7, .night-temp-bg-8, .night-temp-bg-9 {
+    background: linear-gradient(135deg, #191970 0%, #0f0f3d 100%) !important;
+    color: white !important;
+}
+
+/* -10°F to -1°F - navy-black (extreme cold) */
+.night-temp-bg--1, .night-temp-bg--2, .night-temp-bg--3, .night-temp-bg--4, .night-temp-bg--5, .night-temp-bg--6,
+.night-temp-bg--7, .night-temp-bg--8, .night-temp-bg--9, .night-temp-bg--10 {
+    background: linear-gradient(135deg, #0f0f3d 0%, #000000 100%) !important;
+    color: white !important;
+}

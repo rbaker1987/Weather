@@ -1,0 +1,768 @@
+{% extends "weather/base.html" %}
+
+{% block title %}{{ location.name }} - Weather Details{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'weather:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'weather:location-list' %}">Locations</a></li>
+                <li class="breadcrumb-item active">{{ location.name }}</li>
+            </ol>
+        </nav>
+        
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1 class="display-5 mb-0">
+                    <i class="fas fa-map-marker-alt text-primary"></i> {{ location.display_name }}
+                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editNameModal">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </h1>
+                <p class="text-muted">Weather details and forecasts</p>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#addCustomForecastModal">
+                    <i class="fas fa-plus"></i> Add Custom Forecast
+                </button>
+                <button class="btn btn-outline-primary" onclick="updateForecast('{{ location.id }}')">
+                    <i class="fas fa-sync-alt"></i> Update Forecast
+                </button>
+                <a href="{% url 'weather:location-list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Locations
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Location Information -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card weather-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> Location Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Address & Coordinates</h6>
+                        {% if location.zip_code %}
+                        <p class="mb-1"><strong>ZIP Code:</strong> {{ location.zip_code }}</p>
+                        {% endif %}
+                        {% if location.latitude and location.longitude %}
+                        <p class="mb-1">
+                            <strong>Coordinates:</strong> 
+                            <span class="location-coordinates">
+                                {{ location.latitude|floatformat:4 }}, {{ location.longitude|floatformat:4 }}
+                            </span>
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Weather Service Info</h6>
+                        {% if location.nws_office %}
+                        <p class="mb-1"><strong>NWS Office:</strong> {{ location.nws_office }}</p>
+                        {% endif %}
+                        {% if location.grid_x and location.grid_y %}
+                        <p class="mb-1"><strong>Grid:</strong> {{ location.grid_x }}, {{ location.grid_y }}</p>
+                        {% endif %}
+                        <p class="mb-1">
+                            <strong>Last Update:</strong> 
+                            {% if location.last_forecast_update %}
+                                {{ location.last_forecast_update|timesince }} ago
+                            {% else %}
+                                Never
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <!-- Current Status -->
+        <div class="card weather-card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-thermometer-half"></i> Status
+                </h6>
+            </div>
+            <div class="card-body text-center">
+                {% if location.last_forecast_update %}
+                    <span class="badge bg-success mb-2">
+                        <i class="fas fa-check"></i> Active
+                    </span>
+                    <p class="small text-muted">
+                        Updated {{ location.last_forecast_update|timesince }} ago
+                    </p>
+                {% else %}
+                    <span class="badge bg-warning mb-2">
+                        <i class="fas fa-exclamation-triangle"></i> No Data
+                    </span>
+                    <p class="small text-muted">No forecast data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Current Conditions -->
+{% if location.current_temp %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-thermometer-half"></i> Current Conditions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="card border-0 temp-bg-{{ location.current_temp }}">
+                    <div class="card-body p-4">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <h1 class="display-3 mb-2">{{ location.current_temp }}°F</h1>
+                                <h4 class="mb-3">{{ location.current_conditions }}</h4>
+                                <div class="d-flex flex-wrap gap-3">
+                                    {% if location.current_humidity %}
+                                    <div>
+                                        <i class="fas fa-tint text-primary"></i>
+                                        <strong>Humidity:</strong> {{ location.current_humidity }}%
+                                    </div>
+                                    {% endif %}
+                                    {% if location.current_wind_speed %}
+                                    <div>
+                                        <i class="fas fa-wind text-primary"></i>
+                                        <strong>Wind:</strong> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% if location.last_observation_time %}
+                                <p class="text-muted mt-3 mb-0">
+                                    <small><i class="fas fa-clock"></i> Updated {{ location.last_observation_time|timesince }} ago</small>
+                                </p>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 text-center">
+                                <i class="fas fa-{% if 'storm' in location.current_conditions|lower or 'thunder' in location.current_conditions|lower or 't-storm' in location.current_conditions|lower %}bolt{% elif 'ice' in location.current_conditions|lower or 'icy' in location.current_conditions|lower or 'freezing' in location.current_conditions|lower or 'sleet' in location.current_conditions|lower %}icicles{% elif 'snow' in location.current_conditions|lower or 'flurries' in location.current_conditions|lower or 'blizzard' in location.current_conditions|lower %}snowflake{% elif 'fog' in location.current_conditions|lower or 'mist' in location.current_conditions|lower or 'haze' in location.current_conditions|lower %}smog{% elif 'rain' in location.current_conditions|lower or 'shower' in location.current_conditions|lower or 'drizzle' in location.current_conditions|lower %}cloud-rain{% elif 'wind' in location.current_conditions|lower and 'cloudy' not in location.current_conditions|lower %}wind{% elif 'partly' in location.current_conditions|lower %}cloud-sun{% elif 'sunny' in location.current_conditions|lower or 'clear' in location.current_conditions|lower or 'fair' in location.current_conditions|lower %}sun{% elif 'cloud' in location.current_conditions|lower or 'overcast' in location.current_conditions|lower %}cloud{% else %}cloud-sun{% endif %}" style="font-size: 8rem; opacity: 0.3;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Active Alerts -->
+{% if active_alerts %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle"></i> Active Weather Alerts
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for alert in active_alerts %}
+                <div class="alert alert-{{ alert.severity|lower }} d-flex align-items-center mb-2">
+                    <div class="flex-grow-1">
+                        <strong>{{ alert.event }}</strong>
+                        {% if alert.headline %}
+                        <p class="mb-0">{{ alert.headline }}</p>
+                        {% endif %}
+                        <small class="text-muted">
+                            {% if alert.onset %}Onset: {{ alert.onset|date:"M j, Y g:i A" }}{% endif %}
+                            {% if alert.expires %} | Expires: {{ alert.expires|date:"M j, Y g:i A" }}{% endif %}
+                        </small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Daily Forecasts -->
+{% if daily_forecasts %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-alt"></i> 7-Day Forecast
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for day_group in daily_forecasts %}
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                        <div class="card border-primary h-100">
+                            <div class="card-header text-center py-2">
+                                <strong>{{ day_group.date|date:"D, M j" }}</strong>
+                            </div>
+                            <div class="card-body p-0 d-flex flex-column">
+                                <!-- Day Forecast (Top Half) -->
+                                {% if day_group.day %}
+                                <div class="p-3 text-center border-bottom flex-fill d-flex flex-column justify-content-between temp-bg-{{ day_group.day.temperature|floatformat:"0" }}" style="min-height: 180px;">
+                                    <div>
+                                        <div class="mb-2">
+                                            <span class="badge bg-warning text-dark"><i class="fas fa-sun"></i> Day</span>
+                                        </div>
+                                        {% if "Thunder" in day_group.day.short_forecast or "Storm" in day_group.day.short_forecast or "storm" in day_group.day.short_forecast|lower %}
+                                            <i class="fas fa-bolt mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Ice" in day_group.day.short_forecast or "Icy" in day_group.day.short_forecast or "Freezing" in day_group.day.short_forecast or "Sleet" in day_group.day.short_forecast %}
+                                            <i class="fas fa-icicles mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Snow" in day_group.day.short_forecast or "Flurries" in day_group.day.short_forecast or "Blizzard" in day_group.day.short_forecast %}
+                                            <i class="fas fa-snowflake mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Rain" in day_group.day.short_forecast or "Showers" in day_group.day.short_forecast %}
+                                            <i class="fas fa-cloud-rain mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Fog" in day_group.day.short_forecast or "Mist" in day_group.day.short_forecast or "Haze" in day_group.day.short_forecast %}
+                                            <i class="fas fa-smog mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Wind" in day_group.day.short_forecast and "Cloudy" not in day_group.day.short_forecast %}
+                                            <i class="fas fa-wind mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Partly" in day_group.day.short_forecast or "Partly Clear" in day_group.day.short_forecast %}
+                                            <i class="fas fa-cloud-sun mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Cloudy" in day_group.day.short_forecast %}
+                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Clear" in day_group.day.short_forecast or "Sunny" in day_group.day.short_forecast %}
+                                            <i class="fas fa-sun mb-2" style="font-size: 2rem;"></i>
+                                        {% else %}
+                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                        {% endif %}
+                                        <div class="mb-2">
+                                            <h4 class="mb-0">{{ day_group.day.temperature }}°{{ day_group.day.temperature_unit }}</h4>
+                                        </div>
+                                    </div>
+                                    <p class="small mb-0" style="min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ day_group.day.short_forecast }}</p>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Night Forecast (Bottom Half) -->
+                                {% if day_group.night %}
+                                <div class="p-3 text-center flex-fill d-flex flex-column justify-content-between night-temp-bg-{{ day_group.night.temperature|floatformat:"0" }}" style="min-height: 180px;">
+                                    <div>
+                                        <div class="mb-2">
+                                            <span class="badge bg-secondary"><i class="fas fa-moon"></i> Night</span>
+                                        </div>
+                                        {% if "Thunder" in day_group.night.short_forecast or "Storm" in day_group.night.short_forecast or "storm" in day_group.night.short_forecast|lower %}
+                                            <i class="fas fa-bolt mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Ice" in day_group.night.short_forecast or "Icy" in day_group.night.short_forecast or "Freezing" in day_group.night.short_forecast or "Sleet" in day_group.night.short_forecast %}
+                                            <i class="fas fa-icicles mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Snow" in day_group.night.short_forecast or "Flurries" in day_group.night.short_forecast or "Blizzard" in day_group.night.short_forecast %}
+                                            <i class="fas fa-snowflake mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Rain" in day_group.night.short_forecast or "Showers" in day_group.night.short_forecast %}
+                                            <i class="fas fa-cloud-rain mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Fog" in day_group.night.short_forecast or "Mist" in day_group.night.short_forecast or "Haze" in day_group.night.short_forecast %}
+                                            <i class="fas fa-smog mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Wind" in day_group.night.short_forecast and "Cloudy" not in day_group.night.short_forecast %}
+                                            <i class="fas fa-wind mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Partly" in day_group.night.short_forecast or "Partly Clear" in day_group.night.short_forecast %}
+                                            <i class="fas fa-cloud-moon mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Cloudy" in day_group.night.short_forecast %}
+                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                        {% elif "Clear" in day_group.night.short_forecast %}
+                                            <i class="fas fa-moon mb-2" style="font-size: 2rem;"></i>
+                                        {% else %}
+                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
+                                        {% endif %}
+                                        <div class="mb-2">
+                                            <h4 class="mb-0">{{ day_group.night.temperature }}°{{ day_group.night.temperature_unit }}</h4>
+                                        </div>
+                                    </div>
+                                    <p class="small mb-0" style="min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ day_group.night.short_forecast }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Hourly Forecasts -->
+{% if hourly_forecasts %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-clock"></i> 24-Hour Forecast
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Temperature</th>
+                                <th>Conditions</th>
+                                <th>Wind</th>
+                                <th>Humidity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for forecast in hourly_forecasts|slice:":12" %}
+                            <tr>
+                                <td>{{ forecast.forecast_time|date:"g:i A" }}</td>
+                                <td>
+                                    <span class="temperature-small">
+                                        {{ forecast.temperature }}°{{ forecast.temperature_unit }}
+                                    </span>
+                                </td>
+                                <td>{{ forecast.short_forecast }}</td>
+                                <td>
+                                    {% if forecast.wind_speed %}
+                                        {{ forecast.wind_speed }} {{ forecast.wind_direction }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if forecast.humidity %}
+                                        {{ forecast.humidity }}%
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- No Data Message -->
+{% if not daily_forecasts and not hourly_forecasts %}
+<div class="row">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-cloud-meatball fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">No Forecast Data Available</h4>
+                <p class="text-muted mb-4">Click "Update Forecast" to fetch the latest weather data for this location.</p>
+                <button class="btn btn-primary btn-lg" onclick="updateForecast('{{ location.id }}')">
+                    <i class="fas fa-sync-alt"></i> Update Forecast
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div id="loading-indicator" style="display: none;" class="text-center">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<!-- Edit Name Modal -->
+<div class="modal fade" id="editNameModal" tabindex="-1" aria-labelledby="editNameModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editNameModalLabel">Edit Location Name</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editNameForm">
+                    <div class="mb-3">
+                        <label for="customName" class="form-label">Location Name</label>
+                        <input type="text" class="form-control" id="customName" name="custom_name" 
+                               value="{{ location.custom_name|default:location.name }}" 
+                               placeholder="Enter location name (e.g., 'Home', 'Office', '75771')">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveCustomName()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Name Modal -->
+<div class="modal fade" id="editNameModal" tabindex="-1" aria-labelledby="editNameModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editNameModalLabel">Edit Location Name</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editNameForm">
+                    <div class="mb-3">
+                        <label for="customName" class="form-label">Custom Name</label>
+                        <input type="text" class="form-control" id="customName" 
+                               value="{{ location.custom_name|default:location.name }}" 
+                               placeholder="Enter custom name (e.g., 'Home', 'Office')">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveCustomName()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Custom Forecast Modal -->
+<div class="modal fade" id="addCustomForecastModal" tabindex="-1" aria-labelledby="addCustomForecastModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addCustomForecastModalLabel">Add Custom Forecast - 7 Days</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="customForecastForm">
+                    <!-- Forecast Cards Grid -->
+                    <div class="row g-3" id="customForecastsGrid">
+                        <!-- Day cards will be generated dynamically -->
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="saveAllCustomForecasts()">
+                    <i class="fas fa-save"></i> Save All Forecasts
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Update forecast functionality specific to detail page
+function updateForecast(locationId) {
+    weatherApp.updateForecast(locationId);
+}
+
+// NWS forecast data from Django template
+const nwsForecasts = [
+    {% for day_group in daily_forecasts %}
+    {
+        date: '{{ day_group.date|date:"Y-m-d" }}',
+        day: {% if day_group.day %}{ 
+            temperature: {{ day_group.day.temperature }}, 
+            short_forecast: '{{ day_group.day.short_forecast|escapejs }}' 
+        }{% else %}null{% endif %},
+        night: {% if day_group.night %}{ 
+            temperature: {{ day_group.night.temperature }}, 
+            short_forecast: '{{ day_group.night.short_forecast|escapejs }}' 
+        }{% else %}null{% endif %}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+// Initialize 7-day custom forecast grid
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('addCustomForecastModal');
+    
+    modal.addEventListener('shown.bs.modal', function() {
+        generateCustomForecastGrid();
+    });
+});
+
+function generateCustomForecastGrid() {
+    const grid = document.getElementById('customForecastsGrid');
+    grid.innerHTML = '';
+    
+    const today = new Date();
+    
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        const displayDate = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        
+        const dayCardId = `forecast-${i}-day`;
+        const nightCardId = `forecast-${i}-night`;
+        
+        // Get NWS forecast data for this day
+        const nwsForecast = nwsForecasts[i] || {};
+        const dayTemp = nwsForecast.day?.temperature || '';
+        const dayForecast = nwsForecast.day?.short_forecast || '';
+        const nightTemp = nwsForecast.night?.temperature || '';
+        const nightForecast = nwsForecast.night?.short_forecast || '';
+        
+        // Determine background classes
+        const dayBgClass = dayTemp ? `temp-bg-${dayTemp}` : 'temp-bg-70';
+        const nightBgClass = nightTemp ? `night-temp-bg-${nightTemp}` : 'night-temp-bg-50';
+        
+        const cardHtml = `
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="card border-primary h-100">
+                    <div class="card-header text-center py-2">
+                        <strong>${displayDate}</strong>
+                    </div>
+                    <div class="card-body p-0 d-flex flex-column">
+                        <!-- Day Period -->
+                        <div class="p-3 text-center border-bottom flex-fill ${dayBgClass}" id="${dayCardId}-card" style="min-height: 180px;">
+                            <div>
+                                <div class="mb-2">
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-sun"></i> Day
+                                    </span>
+                                </div>
+                                <i class="fas fa-cloud mb-2" id="${dayCardId}-icon" style="font-size: 2rem;"></i>
+                                <div class="mb-2">
+                                    <input type="number" class="form-control form-control-sm text-center mx-auto" 
+                                           id="${dayCardId}-temp" 
+                                           data-card="${dayCardId}"
+                                           placeholder="°F" 
+                                           value="${dayTemp}"
+                                           style="width: 70px; font-size: 1.1rem;">
+                                </div>
+                            </div>
+                            <input type="text" class="form-control form-control-sm text-center" 
+                                   id="${dayCardId}-short" 
+                                   data-card="${dayCardId}"
+                                   placeholder="Forecast" 
+                                   value="${dayForecast}"
+                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.85rem;">
+                            <input type="hidden" id="${dayCardId}-date" value="${dateStr}">
+                            <input type="hidden" id="${dayCardId}-period" value="day">
+                        </div>
+                        
+                        <!-- Night Period -->
+                        <div class="p-3 text-center flex-fill ${nightBgClass}" id="${nightCardId}-card" style="min-height: 180px;">
+                            <div>
+                                <div class="mb-2">
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-moon"></i> Night
+                                    </span>
+                                </div>
+                                <i class="fas fa-cloud mb-2" id="${nightCardId}-icon" style="font-size: 2rem;"></i>
+                                <div class="mb-2">
+                                    <input type="number" class="form-control form-control-sm text-center mx-auto" 
+                                           id="${nightCardId}-temp" 
+                                           data-card="${nightCardId}"
+                                           placeholder="°F" 
+                                           value="${nightTemp}"
+                                           style="width: 70px; font-size: 1.1rem;">
+                                </div>
+                            </div>
+                            <input type="text" class="form-control form-control-sm text-center" 
+                                   id="${nightCardId}-short" 
+                                   data-card="${nightCardId}"
+                                   placeholder="Forecast" 
+                                   value="${nightForecast}"
+                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.85rem;">
+                            <input type="hidden" id="${nightCardId}-date" value="${dateStr}">
+                            <input type="hidden" id="${nightCardId}-period" value="night">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        grid.insertAdjacentHTML('beforeend', cardHtml);
+    }
+    
+    // Add event listeners for live preview and update initial icons
+    setTimeout(() => {
+        document.querySelectorAll('[data-card]').forEach(input => {
+            input.addEventListener('input', function() {
+                updateForecastCard(this.dataset.card);
+            });
+        });
+        
+        // Update icons for pre-filled forecasts
+        for (let i = 0; i < 7; i++) {
+            updateForecastCard(`forecast-${i}-day`);
+            updateForecastCard(`forecast-${i}-night`);
+        }
+    }, 100);
+}
+
+function updateForecastCard(cardId) {
+    const temp = parseInt(document.getElementById(`${cardId}-temp`).value) || 70;
+    const shortForecast = document.getElementById(`${cardId}-short`).value.toLowerCase();
+    const card = document.getElementById(`${cardId}-card`);
+    const icon = document.getElementById(`${cardId}-icon`);
+    const period = document.getElementById(`${cardId}-period`).value;
+    const isDaytime = period === 'day';
+    
+    // Update background based on temperature
+    let bgClass = '';
+    if (temp >= 110) bgClass = 'temp-bg-110';
+    else if (temp >= 100) bgClass = 'temp-bg-100';
+    else if (temp >= 90) bgClass = 'temp-bg-90';
+    else if (temp >= 80) bgClass = 'temp-bg-80';
+    else if (temp >= 70) bgClass = 'temp-bg-70';
+    else if (temp >= 60) bgClass = 'temp-bg-60';
+    else if (temp >= 50) bgClass = 'temp-bg-50';
+    else if (temp >= 40) bgClass = 'temp-bg-40';
+    else if (temp >= 33) bgClass = 'temp-bg-33';
+    else if (temp >= 20) bgClass = 'temp-bg-20';
+    else if (temp >= 10) bgClass = 'temp-bg-10';
+    else if (temp >= 0) bgClass = 'temp-bg-0';
+    else bgClass = 'temp-bg--10';
+    
+    card.className = `p-3 text-center ${bgClass}`;
+    card.style.minHeight = '200px';
+    
+    // Update icon
+    let iconClass = 'fas fa-cloud';
+    if (shortForecast.includes('storm') || shortForecast.includes('thunder')) iconClass = 'fas fa-bolt';
+    else if (shortForecast.includes('ice') || shortForecast.includes('freezing') || shortForecast.includes('sleet')) iconClass = 'fas fa-icicles';
+    else if (shortForecast.includes('snow') || shortForecast.includes('flurries') || shortForecast.includes('blizzard')) iconClass = 'fas fa-snowflake';
+    else if (shortForecast.includes('fog') || shortForecast.includes('mist') || shortForecast.includes('haze')) iconClass = 'fas fa-smog';
+    else if (shortForecast.includes('rain') || shortForecast.includes('shower') || shortForecast.includes('drizzle')) iconClass = 'fas fa-cloud-rain';
+    else if (shortForecast.includes('wind')) iconClass = 'fas fa-wind';
+    else if (shortForecast.includes('partly')) iconClass = isDaytime ? 'fas fa-cloud-sun' : 'fas fa-cloud-moon';
+    else if (shortForecast.includes('sunny') || shortForecast.includes('clear')) iconClass = isDaytime ? 'fas fa-sun' : 'fas fa-moon';
+    else if (shortForecast.includes('cloud')) iconClass = 'fas fa-cloud';
+    
+    icon.className = `${iconClass} mb-2`;
+    icon.style.fontSize = '2rem';
+}
+
+function saveAllCustomForecasts() {
+    const locationId = '{{ location.id }}';
+    const forecasts = [];
+    
+    // Collect all forecast data
+    for (let i = 0; i < 7; i++) {
+        ['day', 'night'].forEach(period => {
+            const cardId = `forecast-${i}-${period}`;
+            const temp = document.getElementById(`${cardId}-temp`).value;
+            const shortForecast = document.getElementById(`${cardId}-short`).value;
+            const date = document.getElementById(`${cardId}-date`).value;
+            
+            // Only save if temperature and forecast are provided
+            if (temp && shortForecast) {
+                forecasts.push({
+                    location: locationId,
+                    date: date,
+                    is_daytime: period === 'day',
+                    temperature: parseInt(temp),
+                    temperature_unit: 'F',
+                    short_forecast: shortForecast,
+                    detailed_forecast: shortForecast,
+                    name: period === 'day' ? 'Custom Day' : 'Custom Night'
+                });
+            }
+        });
+    }
+    
+    if (forecasts.length === 0) {
+        alert('Please enter at least one forecast with temperature and description.');
+        return;
+    }
+    
+    // Save all forecasts
+    let savedCount = 0;
+    let errors = [];
+    
+    const savePromises = forecasts.map(forecastData => 
+        fetch(`/api/locations/${locationId}/forecasts/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(forecastData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(JSON.stringify(err));
+                });
+            }
+            savedCount++;
+            return response.json();
+        })
+        .catch(error => {
+            errors.push(error.message);
+        })
+    );
+    
+    Promise.all(savePromises).then(() => {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addCustomForecastModal'));
+        modal.hide();
+        
+        if (errors.length > 0) {
+            console.error('Some forecasts failed to save:', errors);
+        }
+        
+        // Reload page to show new forecasts
+        window.location.reload();
+    });
+}
+
+// Save custom name
+function saveCustomName() {
+    const customName = document.getElementById('customName').value;
+    const locationId = '{{ location.id }}';
+    
+    fetch(`/api/locations/${locationId}/`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            custom_name: customName
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editNameModal'));
+        modal.hide();
+        
+        // Reload page to show updated name
+        window.location.reload();
+    })
+    .catch(error => {
+        console.error('Error updating location name:', error);
+        alert('Failed to update location name. Please try again.');
+    });
+}
+
+// Save custom forecast
+function saveCustomForecast() {
+    // This function is no longer used - replaced by saveAllCustomForecasts
+    saveAllCustomForecasts();
+}
+
+// Get CSRF token from cookies
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}
