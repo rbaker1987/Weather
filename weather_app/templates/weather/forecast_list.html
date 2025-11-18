@@ -83,7 +83,6 @@
                             <div class="card-header text-center py-2 bg-white">
                                 <strong>
                                     <a href="{% url 'weather:location-detail' location_forecast.location.id %}" class="text-decoration-none text-dark">
-                                        {% if location_forecast.location.is_favorite %}<i class="fas fa-star text-warning me-1"></i>{% endif %}
                                         {{ location_forecast.location.display_name }}
                                     </a>
                                 </strong>

@@ -24,8 +24,8 @@ class LocationSerializer(ModelSerializer):
     class Meta:
         model = Location
         fields = [
-            'id', 'name', 'custom_name', 'display_name', 'latitude', 'longitude', 'zip_code',
-            'nws_office', 'grid_x', 'grid_y', 'is_active',
+            'id', 'name', 'custom_name', 'display_name', 'latitude', 'longitude', 'zip_code', 'location_type',
+            'nws_office', 'grid_x', 'grid_y', 'is_active', 'is_favorite', 'is_current_location',
             'created_at', 'updated_at', 'last_forecast_update',
             'forecast_count'
         ]

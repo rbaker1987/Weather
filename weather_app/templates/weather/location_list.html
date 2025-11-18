@@ -11,6 +11,9 @@
         <p class="text-muted">Manage your tracked weather locations</p>
     </div>
     <div>
+        <button class="btn btn-outline-danger me-2" onclick="clearAllLocations()">
+            <i class="fas fa-trash"></i> Clear All
+        </button>
         <button class="btn btn-secondary me-2" id="reorderBtn" onclick="toggleReorderMode()">
             <i class="fas fa-arrows-alt"></i> Reorder
         </button>
@@ -24,7 +27,7 @@
 <div class="row" id="locationCards">
     {% for item in locations_data %}
     {% with location=item.location today_forecast=item.today_forecast active_alerts=item.active_alerts alert_count=item.alert_count %}
-    <div class="col-lg-4 col-md-6 mb-4" data-location-id="{{ location.id }}">
+    <div class="col-lg-4 col-md-6 mb-4" data-location-id="{{ location.id }}" data-draggable="{% if not location.location_type and not location.is_current_location %}true{% else %}false{% endif %}">
         <div class="card weather-card h-100">
             <div class="card-body">
                 <div class="drag-handle text-center py-2" style="cursor: move; display: none;">
@@ -33,7 +36,8 @@
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <h5 class="card-title mb-0">
                         <a href="{% url 'weather:location-detail' location.id %}" class="text-dark text-decoration-none">
-                            {% if location.is_favorite %}<i class="fas fa-star text-warning me-1"></i>{% endif %}
+                            {% if location.is_current_location %}<i class="fas fa-home text-info me-1" title="Current Location"></i>{% endif %}
+                            {% if location.location_type == 'home' %}<i class="fas fa-home text-secondary me-1" title="Home"></i>{% elif location.location_type == 'work' %}<i class="fas fa-briefcase text-secondary me-1" title="Work"></i>{% elif location.location_type == 'school' %}<i class="fas fa-school text-secondary me-1" title="School"></i>{% endif %}
                             {{ location.display_name }}
                         </a>
                     </h5>
@@ -48,9 +52,9 @@
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="#" onclick="event.preventDefault(); setFavorite('{{ location.id }}');">
-                                    <i class="fas fa-star text-warning"></i> 
-                                    {% if location.is_favorite %}Favorite{% else %}Set as Favorite{% endif %}
+                                <a class="dropdown-item" href="#" onclick="event.preventDefault(); setCurrentLocation('{{ location.id }}');">
+                                    <i class="fas fa-home text-info"></i> 
+                                    {% if location.is_current_location %}Current Location{% else %}Set as Current{% endif %}
                                 </a>
                             </li>
                             <li>
@@ -162,24 +166,6 @@
     {% endfor %}
 </div>
 
-    {% block extra_js %}
-    <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const els = document.querySelectorAll('.js-localtime[data-dt]');
-        els.forEach(function(el){
-            const iso = el.getAttribute('data-dt');
-            if (!iso) return;
-            const d = new Date(iso);
-            if (isNaN(d.getTime())) return;
-            el.textContent = d.toLocaleString(undefined, {
-                year: 'numeric', month: 'short', day: 'numeric',
-                hour: 'numeric', minute: '2-digit'
-            });
-        });
-    });
-    </script>
-    {% endblock %}
-
 <!-- Edit Name Modals (one for each location) -->
 {% for item in locations_data %}
 {% with location=item.location %}
@@ -197,6 +183,15 @@
                         <input type="text" class="form-control" id="customName{{ location.id }}" name="custom_name" 
                                value="{{ location.custom_name|default:location.name }}" 
                                placeholder="Enter location name (e.g., 'Home', 'Office', '75771')">
+                    </div>
+                    <div class="mb-3">
+                        <label for="locationType{{ location.id }}" class="form-label">Location Type</label>
+                        <select class="form-select" id="locationType{{ location.id }}">
+                            <option value="" {% if not location.location_type %}selected{% endif %}>General</option>
+                            <option value="home" {% if location.location_type == 'home' %}selected{% endif %}>Home</option>
+                            <option value="work" {% if location.location_type == 'work' %}selected{% endif %}>Work</option>
+                            <option value="school" {% if location.location_type == 'school' %}selected{% endif %}>School</option>
+                        </select>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
@@ -273,17 +268,52 @@
                 <form id="addLocationForm">
                     <div class="mb-3">
                         <label for="locationInput" class="form-label">Location</label>
-                        <input type="text" class="form-control" id="locationInput" 
-                               placeholder="Enter city, state, or ZIP code" required>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="locationInput" 
+                                   placeholder="Enter city, state, or ZIP code" required>
+                            <button class="btn btn-outline-secondary" type="button" id="useMyLocationBtn" onclick="useMyLocation()">
+                                <i class="fas fa-location-arrow"></i> Use My Location
+                            </button>
+                        </div>
                         <div class="form-text">
                             Examples: "Austin, TX", "78701", "New York, NY"
                         </div>
+                        <div id="geolocationStatus" class="mt-2"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="displayNameInput" class="form-label">Display Name (optional)</label>
+                        <input type="text" class="form-control" id="displayNameInput" placeholder="e.g., Home, Work, School" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="locationTypeSelect" class="form-label">Location Type</label>
+                        <select class="form-select" id="locationTypeSelect">
+                            <option value="">General</option>
+                            <option value="home">Home</option>
+                            <option value="work">Work</option>
+                            <option value="school">School</option>
+                        </select>
+                        <div class="form-text">Used for ordering and labeling.</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="addLatitude" class="form-label">Latitude</label>
+                            <input type="number" step="0.000001" class="form-control" id="addLatitude" placeholder="Click map or use My Location" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="addLongitude" class="form-label">Longitude</label>
+                            <input type="number" step="0.000001" class="form-control" id="addLongitude" placeholder="Click map or use My Location" readonly>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Click on map to set location</label>
+                        <div id="addLocationMap" style="height: 300px; border-radius: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa;"></div>
+                        <small class="text-muted">Tip: Use the map to fine-tune the point, or click "Use My Location".</small>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="addLocation()">
+                <button type="button" id="addLocationBtn" class="btn btn-primary" onclick="addLocation()" disabled>
                     <i class="fas fa-plus"></i> Add Location
                 </button>
             </div>
@@ -294,21 +324,68 @@
 
 {% block extra_js %}
 <script>
+// Convert ISO timestamps to user's local time
+document.addEventListener('DOMContentLoaded', function () {
+    const els = document.querySelectorAll('.js-localtime[data-dt]');
+    els.forEach(function(el){
+        const iso = el.getAttribute('data-dt');
+        if (!iso) return;
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return;
+        el.textContent = d.toLocaleString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit'
+        });
+    });
+});
+
 function addLocation() {
-    const locationInput = document.getElementById('locationInput').value;
+    const locationInput = document.getElementById('locationInput');
+    const locationValue = locationInput.value;
+    const typeSelect = document.getElementById('locationTypeSelect');
+    const displayNameInput = document.getElementById('displayNameInput');
+    const addLatEl = document.getElementById('addLatitude');
+    const addLonEl = document.getElementById('addLongitude');
+    const addBtn = document.getElementById('addLocationBtn');
     
-    if (!locationInput.trim()) {
+    if (!locationValue.trim()) {
         alert('Please enter a location');
         return;
     }
     
-    // Check if it's a ZIP code (5 digits)
-    const isZipCode = /^\d{5}$/.test(locationInput.trim());
+    // Ensure geocoded coordinates or a map-click are present (dataset set)
+    if (!locationInput.dataset.latitude || !locationInput.dataset.longitude) {
+        alert('Please wait for the map to locate your place or click on the map to choose a point.');
+        if (addBtn) addBtn.disabled = true;
+        return;
+    }
+
+    // Coordinates from geolocation/geocoding (if available)
+    const lat = locationInput.dataset.latitude;
+    const lon = locationInput.dataset.longitude;
+    // Prefer explicit map values if present
+    const mapLat = addLatEl && addLatEl.value ? addLatEl.value : null;
+    const mapLon = addLonEl && addLonEl.value ? addLonEl.value : null;
     
+    // Check if it's a ZIP code (5 digits)
+    const isZipCode = /^\d{5}$/.test(locationValue.trim());
+    
+    // Prepare payload; round coordinates to 6 decimal places (model constraint)
     const data = {
-        name: locationInput,
-        ...(isZipCode && { zip_code: locationInput.trim() })
+        name: locationValue,
+        ...(displayNameInput && displayNameInput.value.trim() ? { custom_name: displayNameInput.value.trim() } : {}),
+        ...(isZipCode && { zip_code: locationValue.trim() }),
+        ...((mapLat && mapLon) ? {
+            latitude: Number(parseFloat(mapLat).toFixed(6)),
+            longitude: Number(parseFloat(mapLon).toFixed(6))
+        } : (lat && lon ? {
+            latitude: Number(parseFloat(lat).toFixed(6)),
+            longitude: Number(parseFloat(lon).toFixed(6))
+        } : {})),
+        ...(typeSelect && typeSelect.value ? { location_type: typeSelect.value } : {})
     };
+    
+    console.log('Sending location data:', data);
     
     fetch('/api/locations/', {
         method: 'POST',
@@ -318,20 +395,48 @@ function addLocation() {
         },
         body: JSON.stringify(data)
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(JSON.stringify(err));
+            });
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('Response data:', data);
         if (data.id) {
-            // Success - reload page
+            // Success - close modal and reload page
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addLocationModal'));
+            if (modal) {
+                modal.hide();
+            }
             window.location.reload();
         } else {
-            // Error - show in console
-            console.error('Error adding location:', data.detail || 'Unknown error');
-            window.location.reload();
+            // Error - show alert with details
+            let errorMsg = 'Unknown error';
+            if (data.detail) {
+                errorMsg = data.detail;
+            } else if (data.name) {
+                errorMsg = Array.isArray(data.name) ? data.name.join(', ') : data.name;
+            } else if (typeof data === 'object') {
+                errorMsg = JSON.stringify(data);
+            }
+            alert('Error adding location: ' + errorMsg);
+            console.error('Error adding location:', data);
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        window.location.reload();
+        let errorMsg = error.message;
+        try {
+            const errorObj = JSON.parse(error.message);
+            errorMsg = JSON.stringify(errorObj, null, 2);
+        } catch (e) {
+            // Not JSON, use as-is
+        }
+        alert('Error adding location: ' + errorMsg);
     });
 }
 
@@ -354,8 +459,10 @@ function deleteLocation(locationId) {
     });
 }
 
-function setFavorite(locationId) {
-    fetch(`/api/locations/${locationId}/set_favorite/`, {
+// Removed: favorites are no longer supported; use reordering instead.
+
+function setCurrentLocation(locationId) {
+    fetch(`/api/locations/${locationId}/set_current/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCsrfToken(),
@@ -366,7 +473,7 @@ function setFavorite(locationId) {
         if (response.ok) {
             window.location.reload();
         } else {
-            console.error('Error setting favorite location');
+            console.error('Error setting current location');
         }
     })
     .catch(error => {
@@ -383,6 +490,8 @@ function saveCustomName(locationId) {
     const customName = document.getElementById(`customName${locationId}`).value;
     const latitude = parseFloat(document.getElementById(`latitude${locationId}`).value);
     const longitude = parseFloat(document.getElementById(`longitude${locationId}`).value);
+    const locationTypeEl = document.getElementById(`locationType${locationId}`);
+    const locationType = locationTypeEl ? locationTypeEl.value : '';
     
     fetch(`/api/locations/${locationId}/`, {
         method: 'PATCH',
@@ -393,7 +502,8 @@ function saveCustomName(locationId) {
         body: JSON.stringify({
             custom_name: customName,
             latitude: latitude,
-            longitude: longitude
+            longitude: longitude,
+            location_type: locationType
         })
     })
     .then(response => response.json())
@@ -420,10 +530,210 @@ function getCsrfToken() {
            document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
 }
 
+// Find typed location and move the add-location map there
+async function findLocationByText() {
+    const input = document.getElementById('locationInput');
+    const statusDiv = document.getElementById('geolocationStatus');
+    const addLatEl = document.getElementById('addLatitude');
+    const addLonEl = document.getElementById('addLongitude');
+    const addBtn = document.getElementById('addLocationBtn');
+    const q = input.value.trim();
+    if (!q) {
+        // Clear dataset and disable Add button when empty
+        delete input.dataset.latitude;
+        delete input.dataset.longitude;
+        if (addBtn) addBtn.disabled = true;
+        statusDiv.innerHTML = '';
+        return;
+    }
+    statusDiv.innerHTML = '<div class="alert alert-info">Searching location...</div>';
+    if (addBtn) addBtn.disabled = true;
+    try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
+        const resp = await fetch(url, { headers: { 'User-Agent': 'WeatherApp/1.0' } });
+        if (!resp.ok) throw new Error('Geocoding failed');
+        const results = await resp.json();
+        if (!results || results.length === 0) {
+            statusDiv.innerHTML = '<div class="alert alert-warning">No results found. Try a more specific query.</div>';
+            if (addBtn) addBtn.disabled = true;
+            return;
+        }
+        const lat = parseFloat(results[0].lat);
+        const lon = parseFloat(results[0].lon);
+        input.dataset.latitude = lat.toFixed(6);
+        input.dataset.longitude = lon.toFixed(6);
+        if (addLatEl) addLatEl.value = lat.toFixed(6);
+        if (addLonEl) addLonEl.value = lon.toFixed(6);
+        if (window.initAddLocationMap) initAddLocationMap(lat, lon);
+        statusDiv.innerHTML = '<div class="alert alert-success">Found location. You can refine it by clicking the map.</div>';
+        updateAddButtonState();
+    } catch (e) {
+        console.error(e);
+        statusDiv.innerHTML = '<div class="alert alert-danger">Could not geocode that input. Please adjust and try again.</div>';
+        if (addBtn) addBtn.disabled = true;
+    }
+}
+
+// Clear all saved locations
+function clearAllLocations() {
+    if (!confirm('This will remove all saved locations and related data. Continue?')) {
+        return;
+    }
+    fetch('/api/locations/clear_all/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            window.location.reload();
+        } else {
+            alert('Error clearing locations: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Error clearing locations: ' + err.message);
+    });
+}
+
+// Browser Geolocation
+function useMyLocation() {
+    const statusDiv = document.getElementById('geolocationStatus');
+    const btn = document.getElementById('useMyLocationBtn');
+    const input = document.getElementById('locationInput');
+    const addLatEl = document.getElementById('addLatitude');
+    const addLonEl = document.getElementById('addLongitude');
+    const addBtn = document.getElementById('addLocationBtn');
+    
+    if (!navigator.geolocation) {
+        statusDiv.innerHTML = '<div class="alert alert-warning">Geolocation is not supported by your browser</div>';
+        return;
+    }
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting location...';
+    statusDiv.innerHTML = '<div class="alert alert-info">Requesting your location...</div>';
+    
+    navigator.geolocation.getCurrentPosition(
+        async function(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            
+            statusDiv.innerHTML = '<div class="alert alert-info">Found coordinates, getting address...</div>';
+            
+            try {
+                // Use Nominatim reverse geocoding
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+                    {
+                        headers: {
+                            'User-Agent': 'WeatherApp/1.0'
+                        }
+                    }
+                );
+                
+                if (!response.ok) {
+                    throw new Error('Geocoding failed');
+                }
+                
+                const data = await response.json();
+                const address = data.address;
+                
+                // Build location string
+                let locationStr = '';
+                if (address.city) {
+                    locationStr = address.city;
+                } else if (address.town) {
+                    locationStr = address.town;
+                } else if (address.village) {
+                    locationStr = address.village;
+                } else if (address.county) {
+                    locationStr = address.county;
+                }
+                
+                if (address.state) {
+                    locationStr += locationStr ? ', ' + address.state : address.state;
+                }
+                
+                if (!locationStr && address.postcode) {
+                    locationStr = address.postcode;
+                }
+                
+                if (locationStr) {
+                    input.value = locationStr;
+                    statusDiv.innerHTML = `<div class="alert alert-success">Location found: ${locationStr}</div>`;
+                } else {
+                    // Fallback to coordinates
+                    input.value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                    statusDiv.innerHTML = `<div class="alert alert-success">Using coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}</div>`;
+                }
+                
+                // Store rounded to 6 decimals, update map inputs
+                input.dataset.latitude = Number(lat).toFixed(6);
+                input.dataset.longitude = Number(lon).toFixed(6);
+                if (addLatEl) addLatEl.value = Number(lat).toFixed(6);
+                if (addLonEl) addLonEl.value = Number(lon).toFixed(6);
+                if (window.initAddLocationMap) {
+                    initAddLocationMap(Number(lat), Number(lon));
+                }
+                updateAddButtonState();
+                
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                // Use coordinates as fallback
+                input.value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                statusDiv.innerHTML = `<div class="alert alert-success">Using coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}</div>`;
+                input.dataset.latitude = Number(lat).toFixed(6);
+                input.dataset.longitude = Number(lon).toFixed(6);
+                if (addLatEl) addLatEl.value = Number(lat).toFixed(6);
+                if (addLonEl) addLonEl.value = Number(lon).toFixed(6);
+                if (window.initAddLocationMap) {
+                    initAddLocationMap(Number(lat), Number(lon));
+                }
+                updateAddButtonState();
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-location-arrow"></i> Use My Location';
+            }
+        },
+        function(error) {
+            let message = 'Unable to get your location. ';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message += 'Permission denied. Please allow location access.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message += 'Location information unavailable.';
+                    break;
+                case error.TIMEOUT:
+                    message += 'Location request timed out.';
+                    break;
+                default:
+                    message += 'Unknown error occurred.';
+            }
+            statusDiv.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-location-arrow"></i> Use My Location';
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
+
 // Drag and drop reordering
 let sortable = null;
 let reorderMode = false;
 const locationMaps = {};
+let addMap = null;
+let addMarker = null;
 
 // Initialize maps when modals are shown
 document.addEventListener('DOMContentLoaded', function() {
@@ -436,6 +746,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     {% endfor %}
+
+    // Initialize add-location map when modal opens
+    const addModal = document.getElementById('addLocationModal');
+    if (addModal) {
+        addModal.addEventListener('shown.bs.modal', function() {
+            const input = document.getElementById('locationInput');
+            let lat = parseFloat(input.dataset.latitude);
+            let lon = parseFloat(input.dataset.longitude);
+            if (isNaN(lat) || isNaN(lon)) {
+                // Center on continental US by default
+                lat = 39.8283; lon = -98.5795;
+            }
+            initAddLocationMap(lat, lon);
+        });
+    }
 });
 
 function initLocationMap(locationId, lat, lon) {
@@ -483,6 +808,66 @@ function initLocationMap(locationId, lat, lon) {
     }, 100);
 }
 
+function initAddLocationMap(lat, lon) {
+    const latEl = document.getElementById('addLatitude');
+    const lonEl = document.getElementById('addLongitude');
+    const input = document.getElementById('locationInput');
+    if (!addMap) {
+        addMap = L.map('addLocationMap').setView([lat, lon], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(addMap);
+        addMarker = L.marker([lat, lon], { draggable: false }).addTo(addMap);
+        addMap.on('click', function(e) {
+            const newLat = e.latlng.lat;
+            const newLon = e.latlng.lng;
+            addMarker.setLatLng([newLat, newLon]);
+            if (latEl) latEl.value = newLat.toFixed(6);
+            if (lonEl) lonEl.value = newLon.toFixed(6);
+            input.dataset.latitude = newLat.toFixed(6);
+            input.dataset.longitude = newLon.toFixed(6);
+            updateAddButtonState();
+        });
+    } else {
+        addMap.setView([lat, lon], addMap.getZoom() || 11);
+        if (addMarker) addMarker.setLatLng([lat, lon]);
+    }
+    if (latEl) latEl.value = Number(lat).toFixed(6);
+    if (lonEl) lonEl.value = Number(lon).toFixed(6);
+}
+
+// Debounced auto-geocoding when typing location
+let _geoDebounce = null;
+function updateAddButtonState() {
+    const input = document.getElementById('locationInput');
+    const addBtn = document.getElementById('addLocationBtn');
+    const ready = !!(input?.dataset?.latitude && input?.dataset?.longitude);
+    if (addBtn) addBtn.disabled = !ready;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('locationInput');
+    if (input) {
+        input.addEventListener('input', function () {
+            // Clear current coordinates while user edits
+            delete input.dataset.latitude;
+            delete input.dataset.longitude;
+            updateAddButtonState();
+            const q = input.value.trim();
+            if (_geoDebounce) clearTimeout(_geoDebounce);
+            if (q.length < 3) {
+                const statusDiv = document.getElementById('geolocationStatus');
+                if (statusDiv) statusDiv.innerHTML = '';
+                return;
+            }
+            _geoDebounce = setTimeout(() => {
+                findLocationByText();
+            }, 600);
+        });
+    }
+});
+
 function toggleReorderMode() {
     reorderMode = !reorderMode;
     const btn = document.getElementById('reorderBtn');
@@ -495,15 +880,17 @@ function toggleReorderMode() {
         btn.classList.remove('btn-secondary');
         btn.classList.add('btn-primary');
         
-        // Show drag handles
+        // Show drag handles only for General (draggable) cards
         dragHandles.forEach(handle => {
-            handle.style.display = 'block';
+            const card = handle.closest('[data-location-id]');
+            handle.style.display = card && card.dataset.draggable === 'true' ? 'block' : 'none';
         });
         
         // Initialize Sortable
         sortable = Sortable.create(locationCards, {
             animation: 150,
             handle: '.drag-handle',
+            draggable: '[data-draggable="true"]',
             ghostClass: 'sortable-ghost',
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
@@ -511,7 +898,7 @@ function toggleReorderMode() {
     } else {
         // Disable reorder mode and save
         const locationOrder = [];
-        const cards = locationCards.querySelectorAll('[data-location-id]');
+        const cards = locationCards.querySelectorAll('[data-location-id][data-draggable="true"]');
         cards.forEach(card => {
             locationOrder.push(card.getAttribute('data-location-id'));
         });
