@@ -829,28 +829,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Temperature layer
     const tempLayer = L.tileLayer(`https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
         attribution: 'Temperature data © OpenWeatherMap',
-        opacity: 0.6,
+        opacity: 1.0,
         maxZoom: 19
     });
     
     // Precipitation layer
     const precipLayer = L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
         attribution: 'Precipitation © OpenWeatherMap',
-        opacity: 0.6,
+        opacity: 1.0,
         maxZoom: 19
     });
     
     // Clouds layer
     const cloudsLayer = L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
         attribution: 'Clouds © OpenWeatherMap',
-        opacity: 0.6,
+        opacity: 1.0,
         maxZoom: 19
     });
     
     // Wind layer
     const windLayer = L.tileLayer(`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${owmKey}`, {
         attribution: 'Wind © OpenWeatherMap',
-        opacity: 0.6,
+        opacity: 1.0,
         maxZoom: 19
     });
     
@@ -868,10 +868,88 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Radar layer
                 const radarLayer = L.tileLayer('https://tilecache.rainviewer.com' + radarPath + '/256/{z}/{x}/{y}/2/1_1.png', {
                     tileSize: 256,
-                    opacity: 0.6,
+                    opacity: 1.0,
                     zIndex: 10,
                     attribution: 'RainViewer.com'
                 }).addTo(map);
+                
+                // Track current active layer and legend
+                let currentLegend = null;
+                let activeWeatherLayer = radarLayer;
+                
+                // Function to update legend based on active layer
+                function updateLegend(layerName) {
+                    if (currentLegend) {
+                        map.removeControl(currentLegend);
+                    }
+                    
+                    currentLegend = L.control({position: 'bottomright'});
+                    currentLegend.onAdd = function(map) {
+                        const div = L.DomUtil.create('div', 'info legend');
+                        let legendContent = '<div style="background: white; padding: 10px; border-radius: 5px; font-size: 12px;">';
+                        
+                        if (layerName === 'Radar (Precipitation)') {
+                            legendContent += '<strong>Precipitation Radar</strong><br>' +
+                                '<div style="margin-top: 5px; font-size: 11px;">' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #b8f0f0; border: 1px solid #ccc; margin-right: 5px;"></span>Drizzle (&lt;0.1 in/hr)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #04e9e7; border: 1px solid #ccc; margin-right: 5px;"></span>Light (0.1-0.3 in/hr)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #019ff4; border: 1px solid #ccc; margin-right: 5px;"></span>Moderate (0.3-0.5 in/hr)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #0300f4; border: 1px solid #ccc; margin-right: 5px;"></span>Heavy (0.5-1 in/hr)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #02037d; border: 1px solid #ccc; margin-right: 5px;"></span>Very Heavy (1-2 in/hr)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #ff0000; border: 1px solid #ccc; margin-right: 5px;"></span>Extreme (&gt;2 in/hr)</div>' +
+                                '</div>' +
+                                '<small style="display: block; margin-top: 5px; color: #666;">Updated: ' + new Date(apiData.radar.past[apiData.radar.past.length - 1].time * 1000).toLocaleTimeString() + '</small>';
+                        } else if (layerName === 'Temperature') {
+                            legendContent += '<strong>Temperature</strong><br>' +
+                                '<div style="margin-top: 5px; font-size: 11px;">' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #800080; border: 1px solid #ccc; margin-right: 5px;"></span>&lt; -40°C (-40°F)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #0000ff; border: 1px solid #ccc; margin-right: 5px;"></span>-40 to 0°C (-40 to 32°F)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #00ffff; border: 1px solid #ccc; margin-right: 5px;"></span>0 to 10°C (32 to 50°F)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #00ff00; border: 1px solid #ccc; margin-right: 5px;"></span>10 to 20°C (50 to 68°F)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #ffff00; border: 1px solid #ccc; margin-right: 5px;"></span>20 to 30°C (68 to 86°F)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #ff8c00; border: 1px solid #ccc; margin-right: 5px;"></span>30 to 40°C (86 to 104°F)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: #ff0000; border: 1px solid #ccc; margin-right: 5px;"></span>&gt; 40°C (104°F)</div>' +
+                                '</div>';
+                        } else if (layerName === 'Precipitation Forecast') {
+                            legendContent += '<strong>Precipitation</strong><br>' +
+                                '<div style="margin-top: 5px; font-size: 11px;">' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(127, 140, 141, 0.3); border: 1px solid #ccc; margin-right: 5px;"></span>Very Light</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(52, 152, 219, 0.5); border: 1px solid #ccc; margin-right: 5px;"></span>Light</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(41, 128, 185, 0.7); border: 1px solid #ccc; margin-right: 5px;"></span>Moderate</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(142, 68, 173, 0.8); border: 1px solid #ccc; margin-right: 5px;"></span>Heavy</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(155, 89, 182, 0.9); border: 1px solid #ccc; margin-right: 5px;"></span>Very Heavy</div>' +
+                                '</div>';
+                        } else if (layerName === 'Clouds') {
+                            legendContent += '<strong>Cloud Coverage</strong><br>' +
+                                '<div style="margin-top: 5px; font-size: 11px;">' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(255, 255, 255, 0); border: 1px solid #ccc; margin-right: 5px;"></span>0% (Clear)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(255, 255, 255, 0.2); border: 1px solid #ccc; margin-right: 5px;"></span>20%</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(255, 255, 255, 0.4); border: 1px solid #ccc; margin-right: 5px;"></span>40%</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(255, 255, 255, 0.6); border: 1px solid #ccc; margin-right: 5px;"></span>60%</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(255, 255, 255, 0.8); border: 1px solid #ccc; margin-right: 5px;"></span>80%</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(255, 255, 255, 1); border: 1px solid #999; margin-right: 5px;"></span>100% (Overcast)</div>' +
+                                '</div>';
+                        } else if (layerName === 'Wind') {
+                            legendContent += '<strong>Wind Speed (m/s)</strong><br>' +
+                                '<div style="margin-top: 5px; font-size: 11px;">' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(255, 255, 255, 0.3); border: 1px solid #ccc; margin-right: 5px;"></span>0-1 (Calm)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(238, 238, 238, 0.5); border: 1px solid #ccc; margin-right: 5px;"></span>1-5 (Light)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(205, 220, 235, 0.6); border: 1px solid #ccc; margin-right: 5px;"></span>5-10 (Moderate)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(150, 180, 210, 0.7); border: 1px solid #ccc; margin-right: 5px;"></span>10-15 (Fresh)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(100, 140, 180, 0.8); border: 1px solid #ccc; margin-right: 5px;"></span>15-20 (Strong)</div>' +
+                                '<div style="margin: 2px 0;"><span style="display: inline-block; width: 20px; height: 12px; background: rgba(50, 100, 150, 0.9); border: 1px solid #ccc; margin-right: 5px;"></span>&gt;20 (Very Strong)</div>' +
+                                '</div>';;
+                        }
+                        
+                        legendContent += '</div>';
+                        div.innerHTML = legendContent;
+                        return div;
+                    };
+                    currentLegend.addTo(map);
+                }
+                
+                // Initialize with radar legend
+                updateLegend('Radar (Precipitation)');
                 
                 weatherLayers['Radar (Precipitation)'] = radarLayer;
                 
@@ -889,20 +967,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     "Satellite": satelliteMap
                 };
                 
-                L.control.layers(baseMaps, weatherLayers, {position: 'topright'}).addTo(map);
+                const layerControl = L.control.layers(baseMaps, weatherLayers, {position: 'topright'}).addTo(map);
                 
-                // Add legend
-                const legend = L.control({position: 'bottomright'});
-                legend.onAdd = function(map) {
-                    const div = L.DomUtil.create('div', 'info legend');
-                    div.innerHTML = '<div style="background: white; padding: 10px; border-radius: 5px;">' +
-                        '<strong>Weather Data</strong><br>' +
-                        '<small>Radar updated: ' + new Date(apiData.radar.past[apiData.radar.past.length - 1].time * 1000).toLocaleTimeString() + '</small>' +
-                        (owmKey ? '' : '<br><small style="color: #888;">Note: Add OpenWeatherMap API key for more layers</small>') +
-                        '</div>';
-                    return div;
-                };
-                legend.addTo(map);
+                // Listen for layer changes to update legend and enforce single overlay
+                map.on('overlayadd', function(e) {
+                    // Remove the previously active weather layer
+                    if (activeWeatherLayer && activeWeatherLayer !== e.layer) {
+                        map.removeLayer(activeWeatherLayer);
+                    }
+                    activeWeatherLayer = e.layer;
+                    updateLegend(e.name);
+                });
+                
+                map.on('overlayremove', function(e) {
+                    if (currentLegend) {
+                        map.removeControl(currentLegend);
+                        currentLegend = null;
+                    }
+                    activeWeatherLayer = null;
+                });
             }
         }
     };
