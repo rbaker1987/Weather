@@ -1,18 +1,23 @@
 """Tests for date/time utilities."""
 
-import pytest
 from datetime import datetime
 
+import pytest
+
 from weather.utils.datetime_utils import (
-    format_time_12hour, parse_time_12hour, create_datetime_from_date_and_time,
-    format_temperature_trend, round_temperature_description, 
-    describe_temperature_range, normalize_weather_description
+    create_datetime_from_date_and_time,
+    describe_temperature_range,
+    format_temperature_trend,
+    format_time_12hour,
+    normalize_weather_description,
+    parse_time_12hour,
+    round_temperature_description,
 )
 
 
 class TestTimeFormatting:
     """Test time formatting functions."""
-    
+
     def test_format_time_12hour(self):
         """Test 12-hour time formatting."""
         # Morning hours
@@ -20,17 +25,17 @@ class TestTimeFormatting:
         assert format_time_12hour(datetime(2025, 1, 1, 1)) == "01AM"
         assert format_time_12hour(datetime(2025, 1, 1, 9)) == "09AM"
         assert format_time_12hour(datetime(2025, 1, 1, 11)) == "11AM"
-        
+
         # Noon and afternoon
         assert format_time_12hour(datetime(2025, 1, 1, 12)) == "12PM"
         assert format_time_12hour(datetime(2025, 1, 1, 13)) == "01PM"
         assert format_time_12hour(datetime(2025, 1, 1, 15)) == "03PM"
         assert format_time_12hour(datetime(2025, 1, 1, 21)) == "09PM"
-        
+
         # Late night
         assert format_time_12hour(datetime(2025, 1, 1, 22)) == "10PM"
         assert format_time_12hour(datetime(2025, 1, 1, 23)) == "11PM"
-    
+
     def test_parse_time_12hour(self):
         """Test parsing 12-hour time strings."""
         # Morning hours
@@ -38,7 +43,7 @@ class TestTimeFormatting:
         assert parse_time_12hour("01AM") == 1
         assert parse_time_12hour("09AM") == 9
         assert parse_time_12hour("11AM") == 11
-        
+
         # Afternoon hours
         assert parse_time_12hour("12PM") == 12
         assert parse_time_12hour("01PM") == 13

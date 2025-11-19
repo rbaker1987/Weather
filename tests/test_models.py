@@ -8,7 +8,7 @@ from weather.models import Location
 @pytest.mark.django_db
 class TestLocation:
     """Test the Location model."""
-    
+
     def test_location_creation(self):
         """Test basic location creation."""
         location = Location.objects.create(
@@ -16,7 +16,7 @@ class TestLocation:
             latitude=Decimal("30.2672"),
             longitude=Decimal("-97.7431")
         )
-        
+
         assert location.name == "Austin, TX"
         assert location.latitude == Decimal("30.2672")
         assert location.longitude == Decimal("-97.7431")
@@ -30,7 +30,7 @@ class TestLocation:
             latitude=Decimal("30.2672"),
             longitude=Decimal("-97.7431")
         )
-        
+
         assert location.display_name == "Home"
     
     def test_location_display_name_fallback(self):
@@ -40,5 +40,5 @@ class TestLocation:
             latitude=Decimal("30.2672"),
             longitude=Decimal("-97.7431")
         )
-        
+
         assert location.display_name == "Austin, TX"

@@ -80,21 +80,21 @@ class LocationDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         location = self.object
-        
+
         # Get forecasts for next 7 days
         end_date = timezone.now().date() + timedelta(days=7)
         context['forecasts'] = DailyForecast.objects.filter(
             location=location,
             forecast_date__lte=end_date
         ).order_by('forecast_date')
-        
+
         # Get active alerts
         context['alerts'] = WeatherAlert.objects.filter(
             location=location,
             is_active=True,
             expires__gt=timezone.now()
         ).order_by('-severity')
-        
+
         return context
 
 
@@ -103,16 +103,16 @@ def location_forecast_api(request, location_id):
     """API endpoint for getting location forecast data."""
     location = get_object_or_404(Location, id=location_id)
     days = int(request.GET.get('days', 7))
-    
+
     end_date = timezone.now().date() + timedelta(days=days)
     forecasts = DailyForecast.objects.filter(
         location=location,
         forecast_date__lte=end_date
     ).order_by('forecast_date')
-    
+
     data = {
         'location': LocationSerializer(location).data,
         'forecasts': DailyForecastSerializer(forecasts, many=True).data
     }
-    
+
     return JsonResponse(data)
