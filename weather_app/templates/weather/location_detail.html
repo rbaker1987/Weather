@@ -120,6 +120,48 @@
     </div>
 </div>
 
+            {% comment %} Active Alerts moved above Current Conditions {% endcomment %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card weather-card">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-exclamation-triangle"></i> Active Weather Alerts
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if active_alerts %}
+                            {% for alert in active_alerts %}
+                            <div class="alert mb-2 {% if alert.severity == 'extreme' or alert.severity == 'severe' %}alert-danger{% elif alert.severity == 'moderate' %}alert-warning{% else %}alert-info{% endif %}">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="mb-1">
+                                            <span class="badge {% if alert.severity == 'extreme' or alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ alert.severity|upper }}</span>
+                                            <strong class="ms-2">{{ alert.event }}</strong>
+                                        </div>
+                                        {% if alert.headline %}
+                                        <p class="mb-1">{{ alert.headline }}</p>
+                                        {% endif %}
+                                        <div class="small text-muted border-top pt-2 mt-2">
+                                            {% if alert.onset %}<strong>Onset:</strong> <span class="js-localtime" data-dt="{{ alert.onset|date:'c' }}"></span>{% endif %}
+                                            {% if alert.expires %} <span class="ms-2"><strong>Expires:</strong> <span class="js-localtime" data-dt="{{ alert.expires|date:'c' }}"></span></span>{% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                                <h5>No Active Alerts</h5>
+                                <p class="mb-0">This location is clear of weather alerts</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 <!-- Current Conditions -->
 {% if location.current_temp %}
 <div class="row mb-4">
@@ -169,42 +211,29 @@
 </div>
 {% endif %}
 
-<!-- Active Alerts -->
-{% if active_alerts %}
+
+<!-- Next 24 Hours -->
 <div class="row mb-4">
     <div class="col-12">
-        <div class="card border-danger">
-            <div class="card-header bg-danger text-white">
+        <div class="card weather-card">
+            <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="fas fa-exclamation-triangle"></i> Active Weather Alerts
+                    <i class="fas fa-clock"></i> Next 24 Hours
                 </h5>
             </div>
-            <div class="card-body">
-                {% for alert in active_alerts %}
-                <div class="alert mb-2 {% if alert.severity == 'extreme' or alert.severity == 'severe' %}alert-danger{% elif alert.severity == 'moderate' %}alert-warning{% else %}alert-info{% endif %}">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="mb-1">
-                                <span class="badge {% if alert.severity == 'extreme' or alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ alert.severity|upper }}</span>
-                                <strong class="ms-2">{{ alert.event }}</strong>
-                            </div>
-                            {% if alert.headline %}
-                            <p class="mb-1">{{ alert.headline }}</p>
-                            {% endif %}
-                            <div class="small text-muted border-top pt-2 mt-2">
-                                {% if alert.onset %}<strong>Onset:</strong> <span class="js-localtime" data-dt="{{ alert.onset|date:'c' }}"></span>{% endif %}
-                                {% if alert.expires %} <span class="ms-2"><strong>Expires:</strong> <span class="js-localtime" data-dt="{{ alert.expires|date:'c' }}"></span></span>{% endif %}
-                            </div>
-                        </div>
+            <div class="card-body" id="next24HoursBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
                     </div>
+                    <p class="mt-3 text-muted">Loading hourly forecast...</p>
                 </div>
-                {% endfor %}
             </div>
         </div>
     </div>
 </div>
-{% endif %}
 
+        
 <!-- Daily Forecasts -->
 {% if daily_forecasts %}
 <div class="row mb-4">
@@ -504,7 +533,64 @@ document.addEventListener('DOMContentLoaded', function () {
             hour: 'numeric', minute: '2-digit'
         });
     });
+    
+    // Load next 24 hours forecast
+    loadNext24Hours();
 });
+
+// Load next 24 hours forecast for location
+async function loadNext24Hours() {
+    const next24Body = document.getElementById('next24HoursBody');
+    if (!next24Body) {
+        console.warn('next24HoursBody element not found');
+        return;
+    }
+    
+    next24Body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading hourly forecast...</p></div>';
+    
+    try {
+        const lat = {{ location.latitude }};
+        const lon = {{ location.longitude }};
+        
+        // Use apiRequest if available, otherwise fetch
+        let resp;
+        if (window.apiRequest) {
+            resp = await window.apiRequest(`/api/hourly_forecast/?lat=${lat}&lon=${lon}&hours=24`);
+        } else {
+            const response = await fetch(`/api/hourly_forecast/?lat=${lat}&lon=${lon}&hours=24`, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+            resp = await response.json();
+        }
+        
+        if (resp && resp.hours && resp.hours.length > 0) {
+            let html = '<div class="row g-2">';
+            resp.hours.forEach(hour => {
+                const tempClass = `temp-bg-${hour.temp}`;
+                html += `
+                    <div class="col-6 col-md-4 col-lg-3 col-xl-2">
+                        <div class="card h-100 border-0">
+                            <div class="card-body p-2 text-center ${tempClass}">
+                                <div class="fw-bold mb-1">${hour.time}</div>
+                                <i class="fas fa-${hour.icon} mb-2" style="font-size: 1.5rem;"></i>
+                                <div class="h5 mb-1">${hour.temp}&deg;F</div>
+                                <small class="d-block mb-1" style="opacity: 0.9;">${hour.condition}</small>
+                                ${hour.wind ? `<small style="opacity: 0.8;"><i class="fas fa-wind"></i> ${hour.wind}</small>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            next24Body.innerHTML = html;
+        } else {
+            next24Body.innerHTML = '<p class="text-center text-muted">No hourly data available.</p>';
+        }
+    } catch (err) {
+        console.error('Error loading next 24 hours:', err);
+        next24Body.innerHTML = '<p class="text-danger text-center">Unable to load hourly forecast.</p>';
+    }
+}
 
 // NWS forecast data from Django template
 const nwsForecasts = [

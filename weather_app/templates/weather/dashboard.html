@@ -21,6 +21,81 @@
 </style>
 {% endblock %} {% block content %}
 
+<!-- Active Alerts (moved to very top) -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-header bg-light">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-bell text-warning"></i> Active Alerts
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if active_alerts and active_alerts|length == 1 %} {# Single alert - show full details #}
+        {% for alert in active_alerts %}
+        <div class="alert mb-3 {% if alert.severity == 'extreme' %}alert-danger border-danger{% elif alert.severity == 'severe' %}alert-danger border-warning{% elif alert.severity == 'moderate' %}alert-warning border-warning{% else %}alert-info border-info{% endif %}">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h5 class="alert-heading mb-2"><strong>{{ alert.event }}</strong></h5>
+              <div class="mb-2"><i class="fas fa-map-marker-alt"></i> <strong>{{ alert.location.display_name }}</strong></div>
+            </div>
+            <span class="badge {% if alert.severity == 'extreme' %}bg-danger{% elif alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %} fs-6">{{ alert.severity|upper }}</span>
+          </div>
+          {% if alert.headline %}<p class="mb-3"><strong>{{ alert.headline }}</strong></p>{% endif %}
+          {% if alert.description %}<p class="mb-3">{{ alert.description }}</p>{% endif %}
+          <div class="small">
+            {% if alert.sender_name %}<div class="mb-1"><i class="fas fa-broadcast-tower"></i> <strong>Issued by:</strong> {{ alert.sender_name }}</div>{% endif %}
+          </div>
+          <div class="small text-muted border-top pt-2 mt-2">
+            {% if alert.onset %}<div class="mb-1"><i class="fas fa-clock"></i> <strong>Onset:</strong> <span class="js-localtime" data-dt="{{ alert.onset|date:'c' }}"></span></div>{% endif %}
+            {% if alert.expires %}<div class="mb-1"><i class="fas fa-hourglass-end"></i> <strong>Expires:</strong> <span class="js-localtime" data-dt="{{ alert.expires|date:'c' }}"></span></div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        {% else %} {# Multiple alerts - condensed #}
+        {% for alert in active_alerts %}
+        <div class="alert py-2 mb-2 {% if alert.severity == 'extreme' %}alert-danger border-danger{% elif alert.severity == 'severe' %}alert-danger border-warning{% elif alert.severity == 'moderate' %}alert-warning border-warning{% else %}alert-info border-info{% endif %}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="flex-grow-1">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge {% if alert.severity == 'extreme' %}bg-danger{% elif alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ alert.severity|upper }}</span>
+                <strong>{{ alert.event }}</strong>
+              </div>
+              <div class="small mb-1"><i class="fas fa-map-marker-alt"></i> {{ alert.location.display_name }}</div>
+              {% if alert.headline %}<p class="mb-1 small">{{ alert.headline|truncatechars:80 }}</p>{% endif %}
+            </div>
+            <small class="text-muted ms-2">{{ alert.onset|timesince }} ago</small>
+          </div>
+        </div>
+        {% endfor %}
+        {% elif active_alerts %} {# Multiple alerts - condensed #}
+        {% for alert in active_alerts %}
+        <div class="alert py-2 mb-2 {% if alert.severity == 'extreme' %}alert-danger border-danger{% elif alert.severity == 'severe' %}alert-danger border-warning{% elif alert.severity == 'moderate' %}alert-warning border-warning{% else %}alert-info border-info{% endif %}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="flex-grow-1">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge {% if alert.severity == 'extreme' %}bg-danger{% elif alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ alert.severity|upper }}</span>
+                <strong>{{ alert.event }}</strong>
+              </div>
+              <div class="small mb-1"><i class="fas fa-map-marker-alt"></i> {{ alert.location.display_name }}</div>
+              {% if alert.headline %}<p class="mb-1 small">{{ alert.headline|truncatechars:80 }}</p>{% endif %}
+            </div>
+            <small class="text-muted ms-2">{{ alert.onset|timesince }} ago</small>
+          </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+          <h5>No Active Alerts</h5>
+          <p class="mb-0">All locations are clear of weather alerts</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Your Locations - Current Conditions -->
 <div class="row mb-4">
   <div class="col-12">
@@ -57,124 +132,53 @@
   </div>
 </div>
 
-<div class="row">
-  <!-- Recent Forecasts -->
-  <div class="col-lg-8 mb-4">
-    <div class="card weather-card">
-      <div class="card-header bg-light">
-        <h5 class="card-title mb-0">
-          <i class="fas fa-location-arrow text-info"></i>
-          <span id="forecastLocationTitle">Forecast for Your Location</span>
-        </h5>
+
+      <!-- Forecast & Hourly (Next 6 Hours placed above daily forecast) -->
+      <div class="row">
+        <div class="col-12 mb-4">
+          <!-- Next 6 Hours Forecast (moved above daily forecast) -->
+          <div class="card weather-card mb-4">
+            <div class="card-header bg-light">
+              <h5 class="card-title mb-0"><i class="fas fa-clock text-info"></i> Next 6 Hours</h5>
+            </div>
+            <div class="card-body" id="next6HoursBody">
+              <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                <p class="mt-3 text-muted">Loading next 6 hours...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily Forecast Cards -->
+          <div class="card weather-card">
+            <div class="card-header bg-light">
+              <h5 class="card-title mb-0"><i class="fas fa-location-arrow text-info"></i> <span id="forecastLocationTitle">Forecast for Your Location</span></h5>
+            </div>
+            <div class="card-body" id="forecastCardBody">
+              <div class="text-center py-5">
+                  <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                  <p class="mt-3 text-muted">Loading forecast for your location...</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="card-body" id="forecastCardBody">
-        <div class="text-center py-5">
+
+<!-- Hourly Forecast Modal -->
+<div class="modal fade" id="hourlyForecastModal" tabindex="-1" aria-labelledby="hourlyForecastModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="hourlyForecastModalLabel">Hourly Forecast</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="hourlyForecastModalBody">
+        <div class="text-center py-4">
           <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
           </div>
-          <p class="mt-3 text-muted">Loading forecast for your location...</p>
+          <p class="mt-3 text-muted">Loading hourly forecast...</p>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Sidebar -->
-  <div class="col-lg-4">
-    <!-- Active Alerts -->
-    <div class="card weather-card mb-4">
-      <div class="card-header bg-light">
-        <h5 class="card-title mb-0">
-          <i class="fas fa-bell text-warning"></i> Active Alerts
-        </h5>
-      </div>
-      <div class="card-body">
-        {% if active_alerts %} {% if active_alerts|length == 1 %} {# Single
-        alert - show full details #} {% for alert in active_alerts %}
-        <div
-          class="alert mb-3 {% if alert.severity == 'extreme' %}alert-danger border-danger{% elif alert.severity == 'severe' %}alert-danger border-warning{% elif alert.severity == 'moderate' %}alert-warning border-warning{% else %}alert-info border-info{% endif %}"
-        >
-          <div class="d-flex justify-content-between align-items-start mb-2">
-            <div>
-              <h5 class="alert-heading mb-2">
-                <strong>{{ alert.event }}</strong>
-              </h5>
-              <div class="mb-2">
-                <i class="fas fa-map-marker-alt"></i>
-                <strong>{{ alert.location.display_name }}</strong>
-              </div>
-            </div>
-            <span
-              class="badge {% if alert.severity == 'extreme' %}bg-danger{% elif alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %} fs-6"
-              >{{ alert.severity|upper }}</span
-            >
-          </div>
-          {% if alert.headline %}
-          <p class="mb-3"><strong>{{ alert.headline }}</strong></p>
-          {% endif %} {% if alert.description %}
-          <p class="mb-3">{{ alert.description }}</p>
-          {% endif %}
-          <div class="small">
-            {% if alert.sender_name %}
-            <div class="mb-1">
-              <i class="fas fa-broadcast-tower"></i>
-              <strong>Issued by:</strong> {{ alert.sender_name }}
-            </div>
-            {% endif %}
-          </div>
-          <div class="small text-muted border-top pt-2 mt-2">
-            {% if alert.onset %}
-            <div class="mb-1">
-              <i class="fas fa-clock"></i> <strong>Onset:</strong>
-              <span
-                class="js-localtime"
-                data-dt="{{ alert.onset|date:'c' }}"
-              ></span>
-            </div>
-            {% endif %} {% if alert.expires %}
-            <div class="mb-1">
-              <i class="fas fa-hourglass-end"></i> <strong>Expires:</strong>
-              <span
-                class="js-localtime"
-                data-dt="{{ alert.expires|date:'c' }}"
-              ></span>
-            </div>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %} {% else %} {# Multiple alerts - show condensed version #}
-        {% for alert in active_alerts %}
-        <div
-          class="alert py-2 mb-2 {% if alert.severity == 'extreme' %}alert-danger border-danger{% elif alert.severity == 'severe' %}alert-danger border-warning{% elif alert.severity == 'moderate' %}alert-warning border-warning{% else %}alert-info border-info{% endif %}"
-        >
-          <div class="d-flex justify-content-between align-items-start">
-            <div class="flex-grow-1">
-              <div class="d-flex align-items-center gap-2 mb-1">
-                <span
-                  class="badge {% if alert.severity == 'extreme' %}bg-danger{% elif alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}"
-                  >{{ alert.severity|upper }}</span
-                >
-                <strong>{{ alert.event }}</strong>
-              </div>
-              <div class="small mb-1">
-                <i class="fas fa-map-marker-alt"></i> {{
-                alert.location.display_name }}
-              </div>
-              {% if alert.headline %}
-              <p class="mb-1 small">{{ alert.headline|truncatechars:80 }}</p>
-              {% endif %}
-            </div>
-            <small class="text-muted ms-2"
-              >{{ alert.onset|timesince }} ago</small
-            >
-          </div>
-        </div>
-        {% endfor %} {% endif %} {% else %}
-        <div class="text-center text-muted py-4">
-          <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
-          <h5>No Active Alerts</h5>
-          <p class="mb-0">All locations are clear of weather alerts</p>
-        </div>
-        {% endif %}
       </div>
     </div>
   </div>
@@ -202,6 +206,61 @@
   // Global variables for radar map
   let radarMap = null;
   let radarMarker = null;
+
+  // Load next 6 hours for dashboard - defined here for immediate availability
+  async function loadNext6Hours(lat, lon) {
+    const next6Body = document.getElementById('next6HoursBody');
+    if (!next6Body) {
+      console.warn('next6HoursBody element not found');
+      return;
+    }
+    
+    next6Body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading next 6 hours...</p></div>';
+    
+    try {
+      // Use the apiRequest function from weather.js if available, otherwise use fetch
+      const fetchFunc = window.apiRequest || fetch;
+      let resp;
+      
+      if (window.apiRequest) {
+        resp = await window.apiRequest(`/api/hourly_forecast/?lat=${lat}&lon=${lon}&hours=6`);
+      } else {
+        const response = await fetch(`/api/hourly_forecast/?lat=${lat}&lon=${lon}&hours=6`, {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        resp = await response.json();
+      }
+      
+      if (resp && resp.hours && resp.hours.length > 0) {
+        let html = '<div class="row g-2">';
+        resp.hours.forEach(hour => {
+          const tempClass = `temp-bg-${hour.temp}`;
+          html += `
+            <div class="col-6 col-md-4">
+              <div class="card h-100 border-0">
+                <div class="card-body p-3 text-center ${tempClass}">
+                  <div class="fw-bold mb-2">${hour.time}</div>
+                  <i class="fas fa-${hour.icon} mb-2" style="font-size: 2rem;"></i>
+                  <div class="h4 mb-2">${hour.temp}&deg;F</div>
+                  <small class="d-block mb-1" style="opacity: 0.9;">${hour.condition}</small>
+                  ${hour.wind ? `<small class="mt-1 d-block" style="opacity: 0.8;"><i class="fas fa-wind"></i> ${hour.wind} ${hour.windDir}</small>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div>';
+        next6Body.innerHTML = html;
+      } else {
+        next6Body.innerHTML = '<p class="text-center text-muted">No hourly data available.</p>';
+      }
+    } catch (err) {
+      console.error('Error loading next 6 hours:', err);
+      next6Body.innerHTML = '<p class="text-danger text-center">Unable to load hourly forecast.</p>';
+    }
+  }
 
   // Initialize dashboard radar map with browser location
   function initializeRadarMap(lat, lon, locationName) {
@@ -707,6 +766,14 @@
       html += "</div>";
 
       forecastBody.innerHTML = html;
+      
+      // Re-attach click handlers to forecast cards
+      reInitializeWeatherCards();
+      
+      // Load next 6 hours after forecast is loaded
+      console.log('About to load next 6 hours for lat:', lat, 'lon:', lon);
+      loadNext6Hours(lat, lon);
+      
       console.log("Forecast loaded successfully");
     } catch (error) {
       console.error("Forecast error:", error);
@@ -724,9 +791,10 @@
       month: "short",
       day: "numeric",
     });
+    const isoDate = dayGroup.date.toISOString().split('T')[0];
     let html = `
         <div class="col-lg-4 col-md-6 mb-3">
-            <div class="card border-0 h-100">
+            <div class="card border-0 h-100 forecast-card" data-forecast-date="${isoDate}" style="cursor: pointer;">
                 <div class="card-header text-center py-2">
                     <strong>${dateStr}</strong>
                 </div>
@@ -779,5 +847,17 @@
 
     return html;
   }
+
+  // Re-initialize weather cards after forecast loads
+  function reInitializeWeatherCards() {
+    if (typeof initializeWeatherCards === 'function') {
+      initializeWeatherCards();
+    }
+  }
+
+  // Call after forecast is rendered
+  window.addEventListener('load', function() {
+    setTimeout(reInitializeWeatherCards, 1000);
+  });
 </script>
 {% endblock %}

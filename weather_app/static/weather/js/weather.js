@@ -117,17 +117,124 @@ function performSearch(searchTerm) {
 
 // Weather card functionality
 function initializeWeatherCards() {
-    // Add click handlers for weather cards
+    // Add click handlers for forecast cards (show hourly modal)
+    document.querySelectorAll('.forecast-card[data-forecast-date]').forEach(card => {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', function(e) {
+            if (e.target.closest('.dropdown') || e.target.closest('button')) {
+                return;
+            }
+            const forecastDate = this.dataset.forecastDate;
+            showHourlyForecastModal(forecastDate);
+        });
+    });
+    // Existing location card click (unchanged)
     document.querySelectorAll('.weather-card[data-location-id]').forEach(card => {
         card.style.cursor = 'pointer';
         card.addEventListener('click', function(e) {
             if (e.target.closest('.dropdown') || e.target.closest('button')) {
-                return; // Don't trigger if clicking dropdown or button
+                return;
             }
             const locationId = this.dataset.locationId;
             window.location.href = `/weather/locations/${locationId}/`;
         });
     });
+}
+
+// Show hourly forecast modal for a given date
+async function showHourlyForecastModal(forecastDate) {
+    const modalBody = document.getElementById('hourlyForecastModalBody');
+    const modalTitle = document.getElementById('hourlyForecastModalLabel');
+    
+    // Format date for display
+    const dateObj = new Date(forecastDate + 'T12:00:00');
+    const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    modalTitle.textContent = `Hourly Forecast - ${dateStr}`;
+    
+    modalBody.innerHTML = `<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading hourly forecast...</p></div>`;
+    const modal = new bootstrap.Modal(document.getElementById('hourlyForecastModal'));
+    modal.show();
+    
+    try {
+        // Get current location coords from browser location
+        if (!browserLocationCoords) {
+            modalBody.innerHTML = '<p class="text-center text-warning">Location not available. Please enable location access.</p>';
+            return;
+        }
+        
+        // Fetch hourly forecast for the selected date
+        const resp = await apiRequest(`/api/hourly_forecast/?lat=${browserLocationCoords.lat}&lon=${browserLocationCoords.lon}&date=${encodeURIComponent(forecastDate)}&hours=24`);
+        
+        if (resp && resp.hours && resp.hours.length > 0) {
+            let html = '<div class="row g-2">';
+            resp.hours.forEach(hour => {
+                const tempClass = `temp-bg-${hour.temp}`;
+                html += `
+                    <div class="col-6 col-md-4 col-lg-3">
+                        <div class="card h-100 border-0">
+                            <div class="card-body p-2 text-center ${tempClass}">
+                                <div class="fw-bold mb-1">${hour.time}</div>
+                                <i class="fas fa-${hour.icon} mb-2" style="font-size: 1.5rem;"></i>
+                                <div class="h5 mb-1">${hour.temp}&deg;F</div>
+                                <small class="d-block mb-1" style="opacity: 0.9;">${hour.condition}</small>
+                                ${hour.wind ? `<small style="opacity: 0.8;"><i class="fas fa-wind"></i> ${hour.wind}</small>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            modalBody.innerHTML = html;
+        } else {
+            modalBody.innerHTML = '<p class="text-center text-muted">No hourly data available for this date.</p>';
+        }
+    } catch (err) {
+        console.error('Error loading hourly forecast:', err);
+        modalBody.innerHTML = `<p class="text-danger text-center">Error loading hourly forecast. Please try again.</p>`;
+    }
+}
+
+// Load next 6 hours for dashboard
+window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
+    const next6Body = document.getElementById('next6HoursBody');
+    if (!next6Body) {
+        console.warn('next6HoursBody element not found');
+        return;
+    }
+    
+    next6Body.innerHTML = `<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading next 6 hours...</p></div>`;
+    
+    try {
+        // Fetch next 6 hours
+        const resp = await apiRequest(`/api/hourly_forecast/?lat=${lat}&lon=${lon}&hours=6`);
+        
+        if (resp && resp.hours && resp.hours.length > 0) {
+            let html = '<div class="row g-2">';
+            resp.hours.forEach(hour => {
+                html += `
+                    <div class="col-6 col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body p-3 text-center">
+                                <div class="fw-bold mb-2">${hour.time}</div>
+                                <i class="fas fa-${hour.icon} mb-2" style="font-size: 2rem;"></i>
+                                <div class="h4 mb-2">${hour.temp}&deg;F</div>
+                                <small class="text-muted d-block">${hour.condition}</small>
+                                ${hour.wind ? `<small class="text-muted mt-1 d-block"><i class="fas fa-wind"></i> ${hour.wind} ${hour.windDir}</small>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            next6Body.innerHTML = html;
+        } else {
+            next6Body.innerHTML = '<p class="text-center text-muted">No hourly data available.</p>';
+        }
+    } catch (err) {
+        console.error('Error loading next 6 hours:', err);
+        next6Body.innerHTML = `<p class="text-danger text-center">Unable to load hourly forecast.</p>`;
+    }
+};
 }
 
 // Location management functions
