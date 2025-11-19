@@ -4,6 +4,8 @@ This module provides Django-specific services that integrate with
 the weather application components now contained within the Django app.
 """
 
+from __future__ import annotations
+
 import asyncio
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -62,7 +64,7 @@ class WeatherIntegrationService:
         return list(Location.objects.filter(is_active=True))
 
     async def create_location_from_input(self, location_input: str) -> Optional[Location]:
-        """Create a Django location from string input using existing geocoding logic.\"\"\""
+        """Create a Django location from string input using existing geocoding logic."""
         if not WEATHER_BACKEND_AVAILABLE:
             logger.error("Weather backend components not available")
             return None
@@ -274,7 +276,7 @@ class SyncWeatherService:
         """Sync version of create_location_from_input."""
         async def _async_create():
             async with WeatherIntegrationService() as service:
-                return await service.create_location_from_input(location_input, user)
+                return await service.create_location_from_input(location_input)
         
         return async_to_sync(_async_create)()
     
