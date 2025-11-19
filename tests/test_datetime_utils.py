@@ -12,6 +12,11 @@ from weather.utils.datetime_utils import (
     normalize_weather_description,
     parse_time_12hour,
     round_temperature_description,
+    parse_nws_datetime,
+    ensure_utc_datetime,
+    format_date_for_display,
+    days_relative_name,
+    is_dst_aware_datetime,
 )
 
 
@@ -116,3 +121,52 @@ class TestWeatherDescriptions:
         assert normalize_weather_description("Sunny") == "Sunny"
         assert normalize_weather_description("AM Rain PM Sunny") == "Morning rain afternoon sunny"
         assert normalize_weather_description("PARTLY CLOUDY") == "Partly cloudy"
+
+
+class TestAdditionalDateTimeFunctions:
+    """Tests for remaining datetime utility functions."""
+
+    def test_parse_nws_datetime_z_suffix(self):
+        dt = parse_nws_datetime("2025-11-17T18:00:00Z")
+        assert dt.tzinfo is not None
+        assert dt.isoformat().endswith("+00:00")
+
+    def test_parse_nws_datetime_offset(self):
+        dt = parse_nws_datetime("2025-11-17T12:30:00-06:00")
+        assert dt.tzinfo is not None
+        assert dt.hour == 12
+        assert dt.minute == 30
+
+    def test_ensure_utc_datetime_from_string(self):
+        dt = ensure_utc_datetime("2025-11-17T12:30:00-06:00")
+        assert dt.tzinfo is not None
+        # Converted to UTC (18:30)
+        assert dt.hour == 18
+        assert dt.minute == 30
+
+    def test_ensure_utc_datetime_naive(self):
+        naive = parse_nws_datetime("2025-11-17T12:30:00Z").replace(tzinfo=None)
+        utc_dt = ensure_utc_datetime(naive)
+        assert utc_dt.tzinfo is not None
+        assert utc_dt.hour == 12
+
+    def test_format_date_for_display(self):
+        sample = parse_nws_datetime("2025-11-17T00:00:00Z")
+        with_day = format_date_for_display(sample, include_day_name=True)
+        no_day = format_date_for_display(sample, include_day_name=False)
+        assert "," in with_day  # Includes weekday
+        assert with_day.endswith("2025")
+        assert no_day.startswith("November")
+
+    def test_days_relative_name(self):
+        assert days_relative_name(0) == "Today"
+        assert days_relative_name(1) == "Tomorrow"
+        assert days_relative_name(-1) == "Yesterday"
+        assert days_relative_name(3) == "In 3 days"
+        assert days_relative_name(-4) == "4 days ago"
+
+    def test_is_dst_aware_datetime(self):
+        aware = parse_nws_datetime("2025-11-17T12:30:00Z")
+        naive = aware.replace(tzinfo=None)
+        assert is_dst_aware_datetime(aware) is True
+        assert is_dst_aware_datetime(naive) is False
