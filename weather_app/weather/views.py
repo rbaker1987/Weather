@@ -193,19 +193,32 @@ class LocationViewSet(viewsets.ModelViewSet):
             
             if forecast_date:
                 from datetime import datetime, time
+                from django.utils import timezone as dj_timezone
                 data['forecast_date'] = forecast_date
                 
                 # Calculate period_start and period_end
                 forecast_date_obj = datetime.strptime(forecast_date, '%Y-%m-%d').date()
                 if is_daytime:
                     # Day period: 6 AM to 6 PM
-                    period_start = datetime.combine(forecast_date_obj, time(6, 0))
-                    period_end = datetime.combine(forecast_date_obj, time(18, 0))
+                    period_start = dj_timezone.make_aware(
+                        datetime.combine(forecast_date_obj, time(6, 0)),
+                        dj_timezone.get_current_timezone()
+                    )
+                    period_end = dj_timezone.make_aware(
+                        datetime.combine(forecast_date_obj, time(18, 0)),
+                        dj_timezone.get_current_timezone()
+                    )
                 else:
                     # Night period: 6 PM to 6 AM next day
-                    period_start = datetime.combine(forecast_date_obj, time(18, 0))
+                    period_start = dj_timezone.make_aware(
+                        datetime.combine(forecast_date_obj, time(18, 0)),
+                        dj_timezone.get_current_timezone()
+                    )
                     from datetime import timedelta
-                    period_end = datetime.combine(forecast_date_obj + timedelta(days=1), time(6, 0))
+                    period_end = dj_timezone.make_aware(
+                        datetime.combine(forecast_date_obj + timedelta(days=1), time(6, 0)),
+                        dj_timezone.get_current_timezone()
+                    )
                 
                 data['period_start'] = period_start.isoformat()
                 data['period_end'] = period_end.isoformat()

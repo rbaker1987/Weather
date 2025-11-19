@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 from typing import Union, Optional
 import re
+from django.utils import timezone as dj_timezone
 
 
 def parse_nws_datetime(date_string: str) -> datetime:
@@ -74,11 +75,12 @@ def create_datetime_from_date_and_time(date_str: str, time_str: str) -> datetime
         time_str: Time in 12-hour format like "02PM"
     
     Returns:
-        datetime object (naive, local time)
+        timezone-aware datetime in current timezone
     """
     hour_24 = parse_time_12hour(time_str)
     date_part = datetime.strptime(date_str, "%Y-%m-%d").date()
-    return datetime.combine(date_part, datetime.min.time().replace(hour=hour_24))
+    naive_dt = datetime.combine(date_part, datetime.min.time().replace(hour=hour_24))
+    return dj_timezone.make_aware(naive_dt, dj_timezone.get_current_timezone())
 
 
 def format_temperature_trend(am_temp: int, pm_temp: int) -> str:

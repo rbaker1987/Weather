@@ -33,7 +33,8 @@ class LocationSerializer(ModelSerializer):
         
     def get_forecast_count(self, obj):
         """Get count of forecasts for this location."""
-        return obj.forecasts.filter(period_start__gte=timezone.now().date()).count()
+        # Compare using date to avoid naive/aware mismatches
+        return obj.forecasts.filter(forecast_date__gte=timezone.localdate()).count()
     
     def get_display_name(self, obj):
         """Get the display name for the location."""
