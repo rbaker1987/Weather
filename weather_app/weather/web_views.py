@@ -1,27 +1,27 @@
 """Basic web views for Django weather app (to be expanded)."""
 
-from django.shortcuts import render, get_object_or_404
-from django.views.generic import ListView, DetailView, TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import JsonResponse
-from django.utils import timezone
-from datetime import timedelta
 import logging
+from datetime import timedelta
 
-from .models import Location, DailyForecast, WeatherAlert
-from .serializers import LocationSerializer, DailyForecastSerializer
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.views.generic import DetailView, ListView, TemplateView
+
+from .models import DailyForecast, Location, WeatherAlert
+from .serializers import DailyForecastSerializer, LocationSerializer
 from .views import fetch_current_conditions
 
-logger = logging.getLogger('weather')
+logger = logging.getLogger("weather")
 
 
 class DashboardView(TemplateView):
     """Main dashboard view."""
     template_name = 'weather/dashboard.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
         # Get recent locations and forecasts
         context['locations'] = Location.objects.filter(is_active=True)[:10]
         context['recent_forecasts'] = DailyForecast.objects.select_related('location').order_by('-created_at')[:5]
@@ -29,7 +29,7 @@ class DashboardView(TemplateView):
             is_active=True,
             expires__gt=timezone.now()
         ).select_related('location').order_by('-severity')[:5]
-        
+
         # Statistics
         context['stats'] = {
             'total_locations': Location.objects.filter(is_active=True).count(),
@@ -39,7 +39,7 @@ class DashboardView(TemplateView):
                 expires__gt=timezone.now()
             ).count(),
         }
-        
+
         return context
 
 
@@ -49,15 +49,15 @@ class LocationListView(ListView):
     template_name = 'weather/location_list.html'
     context_object_name = 'locations'
     paginate_by = 20
-    
+
     def get_queryset(self):
         return Location.objects.filter(is_active=True).order_by('name')
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
         # Fetch current conditions for all locations
-        locations = context['locations'] if 'locations' in context else self.object_list
+        locations = context.get('locations', self.object_list)
         for location in locations:
             if location.latitude and location.longitude:
                 try:
@@ -67,7 +67,7 @@ class LocationListView(ListView):
                         fetch_current_conditions(location)
                 except Exception as e:
                     logger.warning(f"Failed to fetch conditions for {location.name}: {str(e)}")
-        
+
         return context
 
 
@@ -76,7 +76,7 @@ class LocationDetailView(DetailView):
     model = Location
     template_name = 'weather/location_detail.html'
     context_object_name = 'location'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         location = self.object
@@ -94,7 +94,6 @@ class LocationDetailView(DetailView):
             is_active=True,
             expires__gt=timezone.now()
         ).order_by('-severity')
-
         return context
 
 
@@ -114,5 +113,4 @@ def location_forecast_api(request, location_id):
         'location': LocationSerializer(location).data,
         'forecasts': DailyForecastSerializer(forecasts, many=True).data
     }
-
     return JsonResponse(data)

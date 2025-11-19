@@ -1014,13 +1014,8 @@ class AlertListView(ListView):
             expires__gt=timezone.now()
         ).select_related('location').order_by('-severity', '-onset')
 
-        # If session tracks specific locations, limit to them
-        try:
-            location_ids = self.request.session.get('location_ids', [])
-            if location_ids:
-                qs = qs.filter(location_id__in=location_ids)
-        except Exception:
-            pass
+            if self.request.session.get('location_ids'):
+                qs = qs.filter(location_id__in=self.request.session['location_ids'])
 
         return qs
 
@@ -1420,12 +1415,14 @@ def _refresh_forecasts_for_location(location: Location):
         DailyForecast.objects.filter(location=location).delete()
         from datetime import datetime
         def parse_ws(ws):
-            if not ws: return 0
+            if not ws:
+                return 0
             import re
             nums = re.findall(r'\d+', str(ws))
-            if not nums: return 0
+            if not nums:
+                return 0
             if len(nums) > 1:
-                return int((int(nums[0]) + int(nums[1]))/2)
+                return int((int(nums[0]) + int(nums[1])) / 2)
             return int(nums[0])
         for p in periods[:14]:
             DailyForecast.objects.create(
@@ -1521,7 +1518,7 @@ class ForecastListView(ListView):
         
         # Group forecasts by date first, then by location
         from collections import defaultdict
-        dates_forecasts = defaultdict(lambda: {})
+        dates_forecasts = defaultdict(dict)
         
         for forecast in context['forecasts']:
             date = forecast.forecast_date
@@ -1562,21 +1559,4 @@ class ForecastListView(ListView):
         return context
 
 
-class AlertListView(ListView):
-    """List view for weather alerts."""
-    model = WeatherAlert
-    template_name = 'weather/alert_list.html'
-    context_object_name = 'alerts'
-    paginate_by = 20
-    
-    def get_queryset(self):
-        """Get active alerts for active locations."""
-        return WeatherAlert.objects.select_related('location').filter(
-            location__is_active=True,
-            is_active=True
-        ).order_by('-onset')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['page_title'] = 'Weather Alerts'
-        return context
+# Duplicate AlertListView removed to avoid F811 redefinition; earlier definition retained.
