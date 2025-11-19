@@ -1,14 +1,14 @@
 // Weather App JavaScript
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    const tooltipTriggerList = [].slice.call(
+        document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    );
+    tooltipTriggerList.forEach((el) => new bootstrap.Tooltip(el));
 
     // Initialize modals
-    var modalList = [].slice.call(document.querySelectorAll('.modal'));
-    modalList.forEach(function(modal) {
+    const modalList = [].slice.call(document.querySelectorAll('.modal'));
+    modalList.forEach(function (modal) {
         new bootstrap.Modal(modal);
     });
 
