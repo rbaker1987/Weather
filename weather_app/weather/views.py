@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from django.db.models import Avg, Case, Count, IntegerField, Q, When
 from django.http import HttpResponse
@@ -198,7 +198,6 @@ class LocationViewSet(viewsets.ModelViewSet):
             is_daytime = data.get('is_daytime', True)
 
             if forecast_date:
-                from datetime import datetime, time
                 data['forecast_date'] = forecast_date
 
                 # Calculate period_start and period_end
@@ -210,7 +209,6 @@ class LocationViewSet(viewsets.ModelViewSet):
                 else:
                     # Night period: 6 PM to 6 AM next day
                     period_start = datetime.combine(forecast_date_obj, time(18, 0))
-                    from datetime import timedelta
                     period_end = datetime.combine(forecast_date_obj + timedelta(days=1), time(6, 0))
 
                 data['period_start'] = period_start.isoformat()
