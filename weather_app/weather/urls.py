@@ -3,6 +3,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .api.hourly_forecast_api import HourlyForecastForLocationAPIView
 
 # DRF Router for ViewSets
 router = DefaultRouter()
@@ -18,6 +19,7 @@ urlpatterns = [
     path('api/bulk-forecast/', views.BulkForecastAPIView.as_view(), name='bulk-forecast'),
     path('api/stats/', views.WeatherStatsAPIView.as_view(), name='weather-stats'),
     path('api/export/', views.ExportAPIView.as_view(), name='weather-export'),
+    path('api/hourly_forecast/', HourlyForecastForLocationAPIView.as_view(), name='hourly-forecast-location'),
     
     # Web interface
     path('', views.DashboardView.as_view(), name='dashboard'),
