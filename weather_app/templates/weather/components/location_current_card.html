@@ -1,0 +1,48 @@
+{% load ui_tags %}
+{# Reusable current-conditions card. Expects: location, colorize (bool), show_link (bool), show_footer (bool) #}
+{% with temp_class=location.current_temp|temp_bg_class %}
+{% if show_link %}<a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none text-dark">{% endif %}
+  <div class="card weather-card h-100 {% if colorize and temp_class %}border-0 {{ temp_class }}{% endif %}">
+    <div class="card-body p-3">
+      <div class="mb-3">
+        <h6 class="card-title mb-0">
+          {% if location.is_current_location %}<i class="fas fa-home text-info me-1" title="Current Location"></i>{% endif %}
+          {% if location.location_type == 'home' %}<i class="fas fa-home text-secondary me-1" title="Home"></i>
+          {% elif location.location_type == 'work' %}<i class="fas fa-briefcase text-secondary me-1" title="Work"></i>
+          {% elif location.location_type == 'school' %}<i class="fas fa-school text-secondary me-1" title="School"></i>
+          {% endif %}
+          {{ location.display_name|default:location.name }}
+        </h6>
+      </div>
+
+      {% if location.current_temp %}
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <h2 class="mb-0">{{ location.current_temp }}°F</h2>
+          <p class="mb-0"><small>{{ location.current_conditions }}</small></p>
+          {% if location.current_humidity %}
+          <p class="mb-0"><small><i class="fas fa-tint"></i> {{ location.current_humidity }}%</small></p>
+          {% endif %}
+          {% if location.current_wind_speed %}
+          <p class="mb-0"><small><i class="fas fa-wind"></i> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}</small></p>
+          {% endif %}
+        </div>
+        <div>
+          <i class="fas fa-{{ location.current_conditions|condition_icon }} fa-2x"></i>
+        </div>
+      </div>
+      {% else %}
+      <div class="alert alert-info mb-0" role="alert">
+        <small><i class="fas fa-info-circle"></i> No current conditions</small>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if show_footer and location.last_observation_time %}
+    <div class="card-footer small text-muted">
+      <i class="fas fa-clock"></i> Observed <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
+    </div>
+    {% endif %}
+  </div>
+{% if show_link %}</a>{% endif %}
+{% endwith %}

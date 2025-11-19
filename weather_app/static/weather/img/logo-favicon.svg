@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Weather Favicon">
+  <defs>
+    <style>
+      .fav-bg { fill: #4169E1; }
+      .cold-front-curve { fill: none; stroke: #ffffff; stroke-width: 4; stroke-linecap: round; }
+      .logo-text { font-family: 'Arial', sans-serif; fill: #ffffff; font-size: 11px; font-weight: bold; }
+    </style>
+    <path id="textCurveFav" d="M 12,39 Q 32,49 52,39"/>
+  </defs>
+  <rect class="fav-bg" width="64" height="64" rx="8"/>
+  <!-- Downward curve -->
+  <path class="cold-front-curve" d="M 12,22 Q 32,34 52,22"/>
+  <!-- RW text following curve -->
+  <text class="logo-text">
+    <textPath href="#textCurveFav" startOffset="50%" text-anchor="middle">
+      RW
+    </textPath>
+  </text>
+</svg>

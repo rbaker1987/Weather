@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 100" role="img" aria-label="Ralph's Weather Logo">
+  <defs>
+    <style>
+      .cold-front-curve { fill: none; stroke: #ffffff; stroke-width: 5; stroke-linecap: round; }
+      .logo-text { font-family: 'Arial', 'Segoe UI', sans-serif; fill: #ffffff; font-size: 20px; }
+    </style>
+    <!-- Path for text to follow (positioned below the visible curve) -->
+    <path id="textCurve" d="M 30,47 Q 160,90 290,47"/>
+  </defs>
+  <!-- Downward-facing curve -->
+  <path class="cold-front-curve" d="M 30,30 Q 160,75 290,30"/>
+  <!-- Text following just below the curve -->
+  <text class="logo-text">
+    <textPath href="#textCurve" startOffset="50%" text-anchor="middle">
+      Ralph's Weather
+    </textPath>
+  </text>
+</svg>

@@ -1,0 +1,22 @@
+{% load ui_tags %}
+{# Inline current conditions snippet without card wrapper. Expects: location #}
+<div class="d-flex align-items-center justify-content-between">
+  <div>
+    <h2 class="mb-0">{{ location.current_temp }}°F</h2>
+    <p class="mb-0"><small>{{ location.current_conditions }}</small></p>
+    {% if location.current_humidity %}
+    <p class="mb-0"><small><i class="fas fa-tint"></i> {{ location.current_humidity }}%</small></p>
+    {% endif %}
+    {% if location.current_wind_speed %}
+    <p class="mb-0"><small><i class="fas fa-wind"></i> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}</small></p>
+    {% endif %}
+  </div>
+  <div class="text-end">
+    <i class="fas fa-{{ location.current_conditions|condition_icon }} fa-2x"></i>
+  </div>
+  </div>
+{% if location.last_observation_time %}
+<div class="small text-muted mt-2">
+  <i class="fas fa-clock"></i> Observed <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
+  </div>
+{% endif %}

@@ -1,4 +1,5 @@
 {% extends "weather/base.html" %}
+{% load ui_tags %}
 
 {% block title %}Weather Forecasts{% endblock %}
 
@@ -27,94 +28,11 @@
                 <div class="row">
                     <!-- Browser Location Card (Always First) -->
                     <div class="col-xl-3 col-lg-4 col-md-6 mb-3">
-                        <div class="card weather-card h-100 border-0" id="browserLocationCard" style="display: none;">
-                            <div class="card-body p-3">
-                                <div class="mb-3">
-                                    <h6 class="card-title mb-0">
-                                        <i class="fas fa-location-arrow text-info me-1" title="Your Location"></i>
-                                        <span id="browserLocationName">Your Location</span>
-                                    </h6>
-                                </div>
-                                <div id="browserLocationContent" style="display: none;">
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <div>
-                                            <h2 class="mb-0" id="browserTemp">--°F</h2>
-                                            <p class="mb-0"><small id="browserConditions">--</small></p>
-                                            <p class="mb-0" id="browserHumidity" style="display: none;"><small><i class="fas fa-tint"></i> <span></span>%</small></p>
-                                            <p class="mb-0" id="browserWind" style="display: none;"><small><i class="fas fa-wind"></i> <span></span></small></p>
-                                        </div>
-                                        <div>
-                                            <i class="fas fa-cloud-sun fa-2x" id="browserWeatherIcon"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div id="browserLocationLoading" style="display: none;" class="text-center py-3">
-                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
-                                        <span class="visually-hidden">Loading...</span>
-                                    </div>
-                                    <p class="small mt-2 mb-0">Getting location...</p>
-                                </div>
-                                <div id="browserLocationError" style="display: none;" class="alert alert-warning mb-0 py-2">
-                                    <small><i class="fas fa-exclamation-triangle"></i> <span></span></small>
-                                </div>
-                            </div>
-                            <div class="card-footer small text-muted" id="browserLocationFooter" style="display: none;">
-                                <i class="fas fa-clock"></i> Just now
-                            </div>
-                        </div>
+                        {% include "weather/components/browser_location_card.html" %}
                     </div>
                     {% for location in locations_with_current %}
                     <div class="col-xl-3 col-lg-4 col-md-6 mb-3">
-                        <a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none text-dark">
-                            {% if location.current_temp %}
-                            <div class="card weather-card h-100 border-0 temp-bg-{{ location.current_temp }}">
-                                <div class="card-body p-3">
-                                    <div class="mb-3">
-                                        <h6 class="card-title mb-0">
-                                            {% if location.is_current_location %}<i class="fas fa-home text-info me-1" title="Current Location"></i>{% endif %}
-                                            {% if location.location_type == 'home' %}<i class="fas fa-home text-secondary me-1" title="Home"></i>{% elif location.location_type == 'work' %}<i class="fas fa-briefcase text-secondary me-1" title="Work"></i>{% elif location.location_type == 'school' %}<i class="fas fa-school text-secondary me-1" title="School"></i>{% endif %}
-                                            {{ location.display_name|default:location.name }}
-                                        </h6>
-                                    </div>
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <div>
-                                            <h2 class="mb-0">{{ location.current_temp }}°F</h2>
-                                            <p class="mb-0"><small>{{ location.current_conditions }}</small></p>
-                                            {% if location.current_humidity %}
-                                            <p class="mb-0"><small><i class="fas fa-tint"></i> {{ location.current_humidity }}%</small></p>
-                                            {% endif %}
-                                            {% if location.current_wind_speed %}
-                                            <p class="mb-0"><small><i class="fas fa-wind"></i> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}</small></p>
-                                            {% endif %}
-                                        </div>
-                                        <div>
-                                            <i class="fas fa-{% if 'storm' in location.current_conditions|lower or 'thunder' in location.current_conditions|lower or 't-storm' in location.current_conditions|lower %}bolt{% elif 'ice' in location.current_conditions|lower or 'icy' in location.current_conditions|lower or 'freezing' in location.current_conditions|lower or 'sleet' in location.current_conditions|lower %}icicles{% elif 'snow' in location.current_conditions|lower or 'flurries' in location.current_conditions|lower or 'blizzard' in location.current_conditions|lower %}snowflake{% elif 'fog' in location.current_conditions|lower or 'mist' in location.current_conditions|lower or 'haze' in location.current_conditions|lower %}smog{% elif 'rain' in location.current_conditions|lower or 'shower' in location.current_conditions|lower or 'drizzle' in location.current_conditions|lower %}cloud-rain{% elif 'wind' in location.current_conditions|lower and 'cloudy' not in location.current_conditions|lower %}wind{% elif 'partly' in location.current_conditions|lower %}cloud-sun{% elif 'sunny' in location.current_conditions|lower or 'clear' in location.current_conditions|lower or 'fair' in location.current_conditions|lower %}sun{% elif 'cloud' in location.current_conditions|lower or 'overcast' in location.current_conditions|lower %}cloud{% else %}cloud-sun{% endif %} fa-2x"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% if location.last_observation_time %}
-                                <div class="card-footer small text-muted">
-                                    <i class="fas fa-clock"></i> Observed <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
-                                </div>
-                                {% endif %}
-                            </div>
-                            {% else %}
-                            <div class="card weather-card h-100">
-                                <div class="card-body p-3">
-                                    <div class="mb-3">
-                                        <h6 class="card-title mb-0">
-                                            {% if location.is_current_location %}<i class="fas fa-home text-info me-1" title="Current Location"></i>{% endif %}
-                                            {% if location.location_type == 'home' %}<i class="fas fa-home text-secondary me-1" title="Home"></i>{% elif location.location_type == 'work' %}<i class="fas fa-briefcase text-secondary me-1" title="Work"></i>{% elif location.location_type == 'school' %}<i class="fas fa-school text-secondary me-1" title="School"></i>{% endif %}
-                                            {{ location.display_name|default:location.name }}
-                                        </h6>
-                                    </div>
-                                    <div class="alert alert-info mb-0" role="alert">
-                                        <small><i class="fas fa-info-circle"></i> No current conditions</small>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endif %}
-                        </a>
+                        {% include "weather/components/location_current_card.html" with location=location colorize=True show_link=True show_footer=True %}
                     </div>
                     {% endfor %}
                 </div>
@@ -155,27 +73,7 @@
                                         <div class="mb-2">
                                             <span class="badge bg-warning text-dark"><i class="fas fa-sun"></i> Day</span>
                                         </div>
-                                        {% if "Thunder" in location_forecast.day.short_forecast or "Storm" in location_forecast.day.short_forecast or "storm" in location_forecast.day.short_forecast|lower %}
-                                            <i class="fas fa-bolt mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Ice" in location_forecast.day.short_forecast or "Icy" in location_forecast.day.short_forecast or "Freezing" in location_forecast.day.short_forecast or "Sleet" in location_forecast.day.short_forecast %}
-                                            <i class="fas fa-icicles mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Snow" in location_forecast.day.short_forecast or "Flurries" in location_forecast.day.short_forecast or "Blizzard" in location_forecast.day.short_forecast %}
-                                            <i class="fas fa-snowflake mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Rain" in location_forecast.day.short_forecast or "Showers" in location_forecast.day.short_forecast %}
-                                            <i class="fas fa-cloud-rain mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Fog" in location_forecast.day.short_forecast or "Mist" in location_forecast.day.short_forecast or "Haze" in location_forecast.day.short_forecast %}
-                                            <i class="fas fa-smog mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Wind" in location_forecast.day.short_forecast and "Cloudy" not in location_forecast.day.short_forecast %}
-                                            <i class="fas fa-wind mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Partly" in location_forecast.day.short_forecast or "Partly Clear" in location_forecast.day.short_forecast %}
-                                            <i class="fas fa-cloud-sun mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Cloudy" in location_forecast.day.short_forecast %}
-                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Clear" in location_forecast.day.short_forecast or "Sunny" in location_forecast.day.short_forecast %}
-                                            <i class="fas fa-sun mb-2" style="font-size: 2rem;"></i>
-                                        {% else %}
-                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
-                                        {% endif %}
+                                        <i class="fas fa-{{ location_forecast.day.short_forecast|condition_icon }} mb-2" style="font-size: 2rem;"></i>
                                         <div class="mb-2">
                                             <h4 class="mb-0">{{ location_forecast.day.temperature }}°{{ location_forecast.day.temperature_unit }}</h4>
                                         </div>
@@ -191,27 +89,7 @@
                                         <div class="mb-2">
                                             <span class="badge bg-secondary"><i class="fas fa-moon"></i> Night</span>
                                         </div>
-                                        {% if "Thunder" in location_forecast.night.short_forecast or "Storm" in location_forecast.night.short_forecast or "storm" in location_forecast.night.short_forecast|lower %}
-                                            <i class="fas fa-bolt mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Ice" in location_forecast.night.short_forecast or "Icy" in location_forecast.night.short_forecast or "Freezing" in location_forecast.night.short_forecast or "Sleet" in location_forecast.night.short_forecast %}
-                                            <i class="fas fa-icicles mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Snow" in location_forecast.night.short_forecast or "Flurries" in location_forecast.night.short_forecast or "Blizzard" in location_forecast.night.short_forecast %}
-                                            <i class="fas fa-snowflake mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Rain" in location_forecast.night.short_forecast or "Showers" in location_forecast.night.short_forecast %}
-                                            <i class="fas fa-cloud-rain mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Fog" in location_forecast.night.short_forecast or "Mist" in location_forecast.night.short_forecast or "Haze" in location_forecast.night.short_forecast %}
-                                            <i class="fas fa-smog mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Wind" in location_forecast.night.short_forecast and "Cloudy" not in location_forecast.night.short_forecast %}
-                                            <i class="fas fa-wind mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Partly" in location_forecast.night.short_forecast or "Partly Clear" in location_forecast.night.short_forecast %}
-                                            <i class="fas fa-cloud-moon mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Cloudy" in location_forecast.night.short_forecast %}
-                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
-                                        {% elif "Clear" in location_forecast.night.short_forecast %}
-                                            <i class="fas fa-moon mb-2" style="font-size: 2rem;"></i>
-                                        {% else %}
-                                            <i class="fas fa-cloud mb-2" style="font-size: 2rem;"></i>
-                                        {% endif %}
+                                        <i class="fas fa-{{ location_forecast.night.short_forecast|condition_icon }} mb-2" style="font-size: 2rem;"></i>
                                         <div class="mb-2">
                                             <h4 class="mb-0">{{ location_forecast.night.temperature }}°{{ location_forecast.night.temperature_unit }}</h4>
                                         </div>

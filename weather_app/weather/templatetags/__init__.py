@@ -1,0 +1,1 @@
+# Makes 'templatetags' a Python package so Django can discover custom tags.

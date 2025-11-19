@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 45" role="img" aria-label="Weather Mark">
+  <defs>
+    <style>
+      .cold-front-curve { fill: none; stroke: #ffffff; stroke-width: 3; stroke-linecap: round; }
+      .logo-text { font-family: 'Arial', sans-serif; fill: #ffffff; font-size: 8px; }
+    </style>
+    <path id="textCurveMark" d="M 10,25 Q 50,37 90,25"/>
+  </defs>
+  <!-- Downward curve -->
+  <path class="cold-front-curve" d="M 10,10 Q 50,25 90,10"/>
+  <!-- Text following curve -->
+  <text class="logo-text">
+    <textPath href="#textCurveMark" startOffset="50%" text-anchor="middle">
+      Ralph's Weather
+    </textPath>
+  </text>
+</svg>
