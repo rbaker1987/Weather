@@ -1,14 +1,16 @@
 // Weather App JavaScript
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+    const tooltipTriggerList = [].slice.call(
+        document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    );
+    tooltipTriggerList.forEach(function (el) {
+        new bootstrap.Tooltip(el);
     });
 
     // Initialize modals
-    var modalList = [].slice.call(document.querySelectorAll('.modal'));
-    modalList.forEach(function(modal) {
+    const modalList = [].slice.call(document.querySelectorAll('.modal'));
+    modalList.forEach(function (modal) {
         new bootstrap.Modal(modal);
     });
 
@@ -28,7 +30,9 @@ document.addEventListener('DOMContentLoaded', function() {
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
+    if (parts.length === 2) {
+        return parts.pop().split(';').shift();
+    }
     return '';
 }
 
@@ -151,7 +155,7 @@ async function showHourlyForecastModal(forecastDate) {
     const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     modalTitle.textContent = `Hourly Forecast - ${dateStr}`;
     
-    modalBody.innerHTML = `<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading hourly forecast...</p></div>`;
+    modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading hourly forecast...</p></div>';
     const modal = new bootstrap.Modal(document.getElementById('hourlyForecastModal'));
     modal.show();
     
@@ -190,7 +194,7 @@ async function showHourlyForecastModal(forecastDate) {
         }
     } catch (err) {
         console.error('Error loading hourly forecast:', err);
-        modalBody.innerHTML = `<p class="text-danger text-center">Error loading hourly forecast. Please try again.</p>`;
+        modalBody.innerHTML = '<p class="text-danger text-center">Error loading hourly forecast. Please try again.</p>';
     }
 }
 
@@ -202,7 +206,7 @@ window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
         return;
     }
     
-    next6Body.innerHTML = `<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading next 6 hours...</p></div>`;
+    next6Body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading next 6 hours...</p></div>';
     
     try {
         // Fetch next 6 hours
@@ -232,10 +236,9 @@ window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
         }
     } catch (err) {
         console.error('Error loading next 6 hours:', err);
-        next6Body.innerHTML = `<p class="text-danger text-center">Unable to load hourly forecast.</p>`;
+        next6Body.innerHTML = '<p class="text-danger text-center">Unable to load hourly forecast.</p>';
     }
 };
-}
 
 // Location management functions
 async function addLocation(formData) {

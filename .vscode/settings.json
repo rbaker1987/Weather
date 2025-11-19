@@ -46,5 +46,10 @@
     "**/.pytest_cache": true,
     "**/.ruff_cache": true,
     "**/node_modules": true
-  }
+  },
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }

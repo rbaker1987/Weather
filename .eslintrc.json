@@ -12,12 +12,13 @@
   "globals": {
     "L": "readonly",
     "bootstrap": "readonly",
-    "weatherApp": "writable"
+    "weatherApp": "writable",
+    "browserLocationCoords": "readonly"
   },
   "rules": {
-    "indent": ["error", 2],
-    "linebreak-style": ["error", "windows"],
-    "quotes": ["error", "single", { "avoidEscape": true }],
+    "indent": ["error", 4],
+    "linebreak-style": ["error", "unix"],
+    "quotes": ["error", "single", { "avoidEscape": true, "allowTemplateLiterals": true }],
     "semi": ["error", "always"],
     "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
     "no-console": ["warn", { "allow": ["warn", "error", "debug"] }],
