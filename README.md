@@ -56,6 +56,10 @@ npm install
 # Install pre-commit hooks (optional but recommended)
 pip install pre-commit
 pre-commit install
+
+# Optional: ensure Node-based hooks work
+# (ESLint runs via pre-commit; requires Node installed)
+npm install
 ```
 
 **Usage:**
@@ -75,6 +79,8 @@ make lint                 # Check all
 make lint-fix             # Fix all
 make format               # Format all
 ```
+
+Pre-commit will run Ruff, Prettier, and ESLint automatically on `git commit`.
 
 **VS Code Integration:**
 1. Install recommended extensions (see `.vscode/extensions.json`)

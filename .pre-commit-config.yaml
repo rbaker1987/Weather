@@ -46,6 +46,15 @@ repos:
         types_or: [javascript, json, css, markdown]
         exclude: '(package-lock\.json|\.min\.(js|css))'
 
+  # JavaScript linting (ESLint)
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.57.0
+    hooks:
+      - id: eslint
+        name: eslint (static JS)
+        files: ^weather_app/static/weather/js/.*\.js$
+        args: ["--fix"]
+
   # Secret detection
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.4.0
