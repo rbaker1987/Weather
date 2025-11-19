@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime
 
-from weather_app.utils.datetime_utils import (
+from weather.utils.datetime_utils import (
     format_time_12hour, parse_time_12hour, create_datetime_from_date_and_time,
     format_temperature_trend, round_temperature_description, 
     describe_temperature_range, normalize_weather_description

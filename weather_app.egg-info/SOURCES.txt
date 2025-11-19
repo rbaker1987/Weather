@@ -28,6 +28,7 @@ weather_app/weather/urls.py
 weather_app/weather/views.py
 weather_app/weather/web_views.py
 weather_app/weather/api/__init__.py
+weather_app/weather/api/hourly_forecast_api.py
 weather_app/weather/api/nws_client.py
 weather_app/weather/core/__init__.py
 weather_app/weather/core/config.py

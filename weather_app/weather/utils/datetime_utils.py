@@ -50,6 +50,10 @@ def parse_time_12hour(time_str: str) -> int:
     hour_str, period = match.groups()
     hour = int(hour_str)
     
+    # Validate hour range
+    if hour < 1 or hour > 12:
+        raise ValueError(f"Invalid hour value: {hour}. Hour must be between 1 and 12")
+    
     if period == "AM":
         if hour == 12:
             return 0
