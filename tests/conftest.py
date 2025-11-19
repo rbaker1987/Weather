@@ -2,8 +2,9 @@
 
 import os
 import sys
-import django
 from pathlib import Path
+
+import django
 
 # Add the weather_app directory to the Python path
 weather_app_dir = Path(__file__).parent.parent / "weather_app"

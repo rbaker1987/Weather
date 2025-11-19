@@ -10,7 +10,7 @@ from .models import Location, HourlyForecast, DailyForecast, WeatherAlert, Forec
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     """Admin interface for locations."""
-    
+
     list_display = ['name', 'zip_code', 'coordinates_display', 'forecast_count', 'last_update', 'is_active']
     list_filter = ['is_active', 'created_at', 'nws_office']
     search_fields = ['name', 'zip_code', 'nws_office']

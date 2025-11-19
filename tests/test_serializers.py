@@ -1,12 +1,13 @@
 """Tests for serializers."""
 
-import pytest
+from datetime import date
 from decimal import Decimal
-from datetime import date, datetime
+
+import pytest
 from django.utils import timezone
 
-from weather.models import Location, DailyForecast
-from weather.serializers import LocationSerializer, DailyForecastSerializer
+from weather.models import DailyForecast, Location
+from weather.serializers import DailyForecastSerializer, LocationSerializer
 
 
 @pytest.mark.django_db
