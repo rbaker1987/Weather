@@ -84,7 +84,7 @@ class WeatherIntegrationService:
 
     @sync_to_async
     def pydantic_to_django_location(self, pydantic_location: PydanticLocation) -> Location:
-        """Convert Pydantic location to Django model.\"\"\""
+        """Convert Pydantic location to Django model."""
         
         # Check if location already exists
         existing = Location.objects.filter(

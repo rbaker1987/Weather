@@ -781,7 +781,7 @@ class BulkForecastAPIView(APIView):
 
         # Create forecast request record
         forecast_request = ForecastRequest.objects.create(
-            user=request.user if request.user.is_authenticated else None,
+            session_key=request.session.session_key or '',
             request_type='bulk_forecast',
             status=ForecastRequest.RequestStatus.PENDING
         )
@@ -949,11 +949,14 @@ class ExportAPIView(APIView):
 
         for location in locations:
             for forecast in location.forecasts.all()[:7]:
+                # Handle both DailyForecast (has high/low) and base ForecastPeriod
+                high_temp = getattr(forecast, 'high_temperature', None) or forecast.temperature
+                low_temp = getattr(forecast, 'low_temperature', None) or forecast.temperature
                 writer.writerow([
                     location.name,
                     forecast.forecast_date,
-                    forecast.high_temperature or forecast.temperature,
-                    forecast.low_temperature or forecast.temperature,
+                    high_temp,
+                    low_temp,
                     forecast.short_forecast,
                     forecast.wind_speed,
                     forecast.wind_direction

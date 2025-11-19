@@ -4,7 +4,6 @@ import json
 from datetime import datetime, time, timedelta
 
 import pytest
-from django.http import HttpResponse
 from django.utils import timezone
 
 from weather.models import DailyForecast, Location, WeatherAlert
@@ -27,12 +26,7 @@ class TestLocationAPI:
         names = {item["name"] for item in data}
         assert names == {"A", "B"}
 
-    def test_ensure_browser_location_creates_and_sets_session(self, client, monkeypatch):
-        # Avoid background network calls
-        def _no_refresh(_loc):
-            return True
-        monkeypatch.setattr("weather.views._refresh_forecasts_for_location", _no_refresh, raising=False)
-
+    def test_ensure_browser_location_creates_and_sets_session(self, client):
         payload = {
             "name": "My Location",
             "latitude": 30.1,
@@ -61,16 +55,10 @@ class TestExportAPI:
             wind_speed=5,
         )
 
-    def test_export_json(self, client, monkeypatch):
+    def test_export_json(self, client):
         loc = Location.objects.create(name="Austin")
         today = timezone.now().date()
         self._make_forecast(loc, today)
-
-        # Patch export method to avoid serializer mismatch on base model
-        def _stub_json(self, locations):
-            data = [{"id": str(x.id), "name": x.name, "forecasts": []} for x in locations]
-            return HttpResponse(json.dumps(data), content_type="application/json")
-        monkeypatch.setattr("weather.views.ExportAPIView._export_json", _stub_json, raising=True)
 
         payload = {"format": "json", "locations": [str(loc.id)]}
         resp = client.post("/api/export/", data=json.dumps(payload), content_type="application/json")
@@ -81,16 +69,10 @@ class TestExportAPI:
         assert data[0]["name"] == "Austin"
         assert isinstance(data[0].get("forecasts"), list)
 
-    def test_export_csv(self, client, monkeypatch):
+    def test_export_csv(self, client):
         loc = Location.objects.create(name="Austin")
         today = timezone.now().date()
         self._make_forecast(loc, today)
-
-        # Patch CSV export to avoid attribute access on base model
-        def _stub_csv(self, locations):
-            content = "Location,Date,High Temp,Low Temp,Forecast,Wind Speed,Wind Direction\nAustin,2025-01-01,70,50,Clear,5,N\n"
-            return HttpResponse(content, content_type="text/csv")
-        monkeypatch.setattr("weather.views.ExportAPIView._export_csv", _stub_csv, raising=True)
 
         payload = {"format": "csv", "locations": [str(loc.id)]}
         resp = client.post("/api/export/", data=json.dumps(payload), content_type="application/json")
@@ -105,12 +87,13 @@ class TestExportAPI:
 class TestStatsAPI:
     def test_stats_counts(self, client):
         loc = Location.objects.create(name="StatsVille")
+        today = timezone.now().date()
         # Seed data for counts
         DailyForecast.objects.create(
             location=loc,
-            forecast_date=timezone.now().date(),
-            period_start=timezone.now(),
-            period_end=timezone.now() + timedelta(hours=12),
+            forecast_date=today,
+            period_start=timezone.make_aware(datetime.combine(today, time(6, 0))),
+            period_end=timezone.make_aware(datetime.combine(today, time(18, 0))),
             is_daytime=True,
             temperature=70,
             short_forecast="Cloudy",
@@ -139,41 +122,19 @@ class TestStatsAPI:
 
 @pytest.mark.django_db
 class TestBulkForecastAPI:
-    def test_bulk_forecast_with_existing_location(self, client, monkeypatch):
+    def test_bulk_forecast_with_existing_location(self, client):
         loc = Location.objects.create(name="BulkCity")
+        today = timezone.now().date()
         # Seed a forecast so the response has payload
         DailyForecast.objects.create(
             location=loc,
-            forecast_date=timezone.now().date(),
-            period_start=timezone.now(),
-            period_end=timezone.now() + timedelta(hours=12),
+            forecast_date=today,
+            period_start=timezone.make_aware(datetime.combine(today, time(6, 0))),
+            period_end=timezone.make_aware(datetime.combine(today, time(18, 0))),
             is_daytime=True,
             temperature=75,
             short_forecast="Windy",
             wind_speed=8,
-        )
-
-        # Patch ForecastRequest creation to avoid missing 'user' field on model
-        class _DummyFR:
-            def __init__(self):
-                self.id = "req-1"
-                self.status = None
-                self.error_message = ""
-            def save(self):
-                return None
-        def _create_fr(**_kwargs):
-            return _DummyFR()
-        monkeypatch.setattr(
-            "weather.views.ForecastRequest",
-            type(
-                "FRProxy",
-                (),
-                {
-                    "RequestStatus": type("RS", (), {"PENDING": "pending", "SUCCESS": "success", "FAILED": "failed"}),
-                    "objects": type("Mgr", (), {"create": staticmethod(_create_fr)}),
-                },
-            ),
-            raising=True,
         )
 
         payload = {
