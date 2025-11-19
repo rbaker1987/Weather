@@ -30,6 +30,64 @@ python manage.py runserver
 - Admin Panel: http://localhost:8000/admin
 - API Documentation: http://localhost:8000/api
 
+## Development
+
+### Code Quality & Linting
+
+This project uses modern linting and formatting tools for code quality:
+
+**Python (Ruff)**
+- Fast linter and formatter written in Rust
+- Replaces Black, isort, Flake8, and more
+- Django-aware linting rules
+
+**JavaScript (ESLint + Prettier)**
+- ESLint for error detection and code quality
+- Prettier for consistent formatting
+
+**Setup:**
+```bash
+# Install Python dev dependencies
+pip install -e ".[dev]"
+
+# Install JavaScript dependencies
+npm install
+
+# Install pre-commit hooks (optional but recommended)
+pip install pre-commit
+pre-commit install
+```
+
+**Usage:**
+```bash
+# Python linting
+ruff check .              # Check for issues
+ruff check --fix .        # Auto-fix issues
+ruff format .             # Format code
+
+# JavaScript linting
+npm run lint:js           # Check JavaScript
+npm run lint:js:fix       # Auto-fix JavaScript
+npm run format            # Format all JS/CSS/JSON
+
+# Or use Makefile shortcuts
+make lint                 # Check all
+make lint-fix             # Fix all
+make format               # Format all
+```
+
+**VS Code Integration:**
+1. Install recommended extensions (see `.vscode/extensions.json`)
+2. Code will auto-format on save
+3. Linting errors shown inline
+
+**Configuration Files:**
+- `.ruff.toml` - Ruff Python linter configuration
+- `.eslintrc.json` - ESLint JavaScript configuration
+- `.prettierrc.json` - Prettier formatter configuration
+- `.pre-commit-config.yaml` - Pre-commit hooks
+- `package.json` - Node.js dependencies and scripts
+
 ## Data Persistence
 
 **Important:** This application uses SQLite for local development. Data persistence behavior:

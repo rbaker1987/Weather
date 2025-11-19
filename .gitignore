@@ -18,6 +18,15 @@ db.sqlite3-journal
 *.pyc
 local_settings.py
 
+# Linting and formatting
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+node_modules/
+package-lock.json
+.eslintcache
+.prettierignore
+
 # Distribution / packaging
 build/
 dist/
@@ -26,4 +35,3 @@ vflask/
 .venv/
 s/
 ~/
-.vscode/

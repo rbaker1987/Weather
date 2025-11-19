@@ -1,0 +1,19 @@
+{
+  "name": "weather-app",
+  "version": "0.2.0",
+  "description": "Weather forecasting application",
+  "private": true,
+  "scripts": {
+    "lint:js": "eslint weather_app/static/weather/js/*.js",
+    "lint:js:fix": "eslint --fix weather_app/static/weather/js/*.js",
+    "format": "prettier --write \"weather_app/static/**/*.{js,css,json}\"",
+    "format:check": "prettier --check \"weather_app/static/**/*.{js,css,json}\""
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
