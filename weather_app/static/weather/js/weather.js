@@ -235,7 +235,6 @@ window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
         next6Body.innerHTML = `<p class="text-danger text-center">Unable to load hourly forecast.</p>`;
     }
 };
-}
 
 // Location management functions
 async function addLocation(formData) {
