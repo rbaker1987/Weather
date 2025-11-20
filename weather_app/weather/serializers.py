@@ -110,8 +110,11 @@ class DailyForecastSerializer(ModelSerializer):
 
     def get_temperature_range(self, obj):
         """Get formatted temperature range."""
-        if obj.high_temperature and obj.low_temperature:
-            return f"{obj.low_temperature}°{obj.temperature_unit} - {obj.high_temperature}°{obj.temperature_unit}"
+        # Handle both DailyForecast (has high/low) and base ForecastPeriod
+        high_temp = getattr(obj, 'high_temperature', None)
+        low_temp = getattr(obj, 'low_temperature', None)
+        if high_temp and low_temp:
+            return f"{low_temp}°{obj.temperature_unit} - {high_temp}°{obj.temperature_unit}"
         return None
 
 

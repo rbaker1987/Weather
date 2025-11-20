@@ -209,11 +209,8 @@ class ForecastPeriod(TimeStampedModel):
         return f"{self.location.name} - {self.forecast_date} - {self.short_forecast}"
 
     def save(self, *args, **kwargs):
-        """Auto-calculate apparent temperature if not provided."""
-        if not self.apparent_temperature and self.temperature:
-            # Simple apparent temperature calculation
-            # In reality, you'd use the existing logic from your weather_app
-            self.apparent_temperature = self.temperature
+        """Save the forecast period."""
+        # Don't set apparent_temperature here - let the signal handle it
         super().save(*args, **kwargs)
 
 

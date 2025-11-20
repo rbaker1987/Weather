@@ -2,7 +2,7 @@
 
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from .models import Location, ForecastPeriod
+from .models import Location, ForecastPeriod, DailyForecast, HourlyForecast
 
 
 @receiver(pre_save, sender=Location)
@@ -27,6 +27,8 @@ def location_post_save(sender, instance, created, **kwargs):
 
 
 @receiver(pre_save, sender=ForecastPeriod)
+@receiver(pre_save, sender=DailyForecast)
+@receiver(pre_save, sender=HourlyForecast)
 def calculate_apparent_temperature(sender, instance, **kwargs):
     """Calculate apparent temperature if not provided."""
     if not instance.apparent_temperature and instance.temperature is not None:

@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from django.db.models import Avg, Case, Count, IntegerField, Q, When
 from django.http import HttpResponse
@@ -198,7 +198,6 @@ class LocationViewSet(viewsets.ModelViewSet):
             is_daytime = data.get('is_daytime', True)
 
             if forecast_date:
-                from datetime import datetime, time
                 data['forecast_date'] = forecast_date
 
                 # Calculate period_start and period_end
@@ -210,7 +209,6 @@ class LocationViewSet(viewsets.ModelViewSet):
                 else:
                     # Night period: 6 PM to 6 AM next day
                     period_start = datetime.combine(forecast_date_obj, time(18, 0))
-                    from datetime import timedelta
                     period_end = datetime.combine(forecast_date_obj + timedelta(days=1), time(6, 0))
 
                 data['period_start'] = period_start.isoformat()
@@ -781,7 +779,7 @@ class BulkForecastAPIView(APIView):
 
         # Create forecast request record
         forecast_request = ForecastRequest.objects.create(
-            user=request.user if request.user.is_authenticated else None,
+            session_key=request.session.session_key or '',
             request_type='bulk_forecast',
             status=ForecastRequest.RequestStatus.PENDING
         )
@@ -949,11 +947,14 @@ class ExportAPIView(APIView):
 
         for location in locations:
             for forecast in location.forecasts.all()[:7]:
+                # Handle both DailyForecast (has high/low) and base ForecastPeriod
+                high_temp = getattr(forecast, 'high_temperature', None) or forecast.temperature
+                low_temp = getattr(forecast, 'low_temperature', None) or forecast.temperature
                 writer.writerow([
                     location.name,
                     forecast.forecast_date,
-                    forecast.high_temperature or forecast.temperature,
-                    forecast.low_temperature or forecast.temperature,
+                    high_temp,
+                    low_temp,
                     forecast.short_forecast,
                     forecast.wind_speed,
                     forecast.wind_direction
