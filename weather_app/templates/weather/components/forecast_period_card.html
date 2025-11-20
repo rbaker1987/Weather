@@ -1,0 +1,21 @@
+{% load ui_tags %}
+{# Reusable forecast period card for day or night. Expects: period, period_type (day|night) #}
+<div class="p-3 text-center {% if period_type == 'day' %}border-bottom{% endif %} flex-fill d-flex flex-column justify-content-between {% if period_type == 'day' %}temp-bg-{{ period.temperature|floatformat:"0" }}{% else %}night-temp-bg-{{ period.temperature|floatformat:"0" }}{% endif %}" style="min-height: 180px;">
+    <div>
+        <div class="mb-2">
+            {% if period_type == 'day' %}
+            <span class="badge bg-warning text-dark"><i class="fas fa-sun"></i> Day</span>
+            {% else %}
+            <span class="badge bg-secondary"><i class="fas fa-moon"></i> Night</span>
+            {% endif %}
+        </div>
+        <i class="fas fa-{{ period.short_forecast|condition_icon }} mb-2" style="font-size: 2rem;"></i>
+        <div class="mb-2">
+            <h4 class="mb-0">{{ period.temperature }}°{{ period.temperature_unit }}</h4>
+            {% if period|should_show_feels_like %}
+            <small class="text-muted d-block"><i class="fas fa-temperature-high"></i> Feels like {{ period.apparent_temperature }}°{{ period.temperature_unit }}</small>
+            {% endif %}
+        </div>
+    </div>
+    <p class="small mb-0" style="min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ period.short_forecast }}</p>
+</div>
