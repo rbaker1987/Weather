@@ -68,6 +68,7 @@ class Location(TimeStampedModel):
     
     # Current conditions (cached)
     current_temp = models.IntegerField(null=True, blank=True, help_text="Current temperature")
+    current_apparent_temp = models.IntegerField(null=True, blank=True, help_text="Current apparent temperature (feels like)")
     current_conditions = models.CharField(max_length=200, blank=True, help_text="Current weather conditions")
     current_humidity = models.IntegerField(null=True, blank=True, help_text="Current humidity percentage")
     current_wind_speed = models.IntegerField(null=True, blank=True, help_text="Current wind speed in mph")
