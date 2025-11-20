@@ -27,35 +27,22 @@ jobs:
             const labels = [];
             
             // Auto-detect labels based on file changes
-            if (changedFiles.some(f => f.includes('weather_app/weather/models.py') || f.includes('migrations/'))) {
-              labels.push('database');
-            }
-            if (changedFiles.some(f => f.includes('.github/workflows/') || f.includes('.yml') || f.includes('.yaml'))) {
-              labels.push('ci/cd');
-            }
-            if (changedFiles.some(f => f.includes('templates/') || f.includes('static/'))) {
-              labels.push('ui');
-            }
-            if (changedFiles.some(f => f.includes('.js') || f.includes('.css'))) {
-              labels.push('frontend');
-            }
-            if (changedFiles.some(f => f.includes('views.py') || f.includes('api/') || f.includes('serializers.py'))) {
-              labels.push('backend');
-            }
             if (changedFiles.some(f => f.includes('test_') || f.includes('tests/'))) {
               labels.push('tests');
             }
-            if (changedFiles.some(f => f.includes('README') || f.includes('.md'))) {
+            if (changedFiles.some(f => f.includes('README') || f.includes('.md') || f.includes('docs/'))) {
               labels.push('documentation');
             }
-            if (pr.head.ref.startsWith('chore/') || pr.title.toLowerCase().startsWith('chore')) {
-              labels.push('chore');
-            }
+            
+            // Branch/PR title based labels
             if (pr.head.ref.startsWith('feature/') || pr.title.toLowerCase().startsWith('feat')) {
-              labels.push('enhancement');
+              labels.push('feature');
             }
             if (pr.head.ref.startsWith('fix/') || pr.title.toLowerCase().startsWith('fix')) {
               labels.push('bug');
+            }
+            if (pr.head.ref.includes('update') || pr.title.toLowerCase().includes('update')) {
+              labels.push('update');
             }
             
             // Add labels if any were detected
