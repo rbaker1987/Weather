@@ -1,26 +1,24 @@
-## Description
-<!-- Brief summary of what this PR does -->
+﻿# Pull Request Checklist
 
-## Changes
-<!-- List key changes made in this PR -->
-- 
-- 
+## PR Checklist
 
-## Screenshots (if UI changes)
-<!-- Add screenshots or GIFs showing UI changes -->
+Core validation before requesting review:
 
-## Testing
-<!-- Describe how you tested these changes -->
-- [ ] Ran locally and verified functionality
-- [ ] Checked browser console for errors
-- [ ] Tested on mobile/responsive layout (if applicable)
+- [ ] Ran app locally: `python manage.py runserver` (no startup errors)
+- [ ] Browser console clean (no uncaught errors; benign 404s reviewed)
+- [ ] Python lint: `ruff check .` passes
+- [ ] Python format applied: `ruff format .` (no pending diffs)
+- [ ] JS lint: `npm run lint:js` passes
+- [ ] JS format: `npm run format` (no pending diffs)
+- [ ] Tests: `pytest` all pass
+- [ ] Migrations: created & applied (`python manage.py makemigrations` if needed, then `python manage.py migrate`)
+- [ ] Documentation updated (README / relevant docstrings) if feature or behavior changed
+- [ ] No secrets / credentials added
+- [ ] Reviewed diff for accidental large deletions / noise
+- [ ] Forecast/UI components render new data (if UI-related change)
 
-## Checklist
-- [ ] Lint passed (Ruff for Python, ESLint/Prettier for JS)
-- [ ] Tests passed (pytest)
-- [ ] No console errors
-- [ ] Updated documentation (if needed)
-- [ ] Database migrations created (if needed)
+Optional considerations (tick if applicable):
 
-## Notes
-<!-- Any additional context, deployment notes, or follow-up tasks -->
+- [ ] Added / updated management command
+- [ ] Added new environment variable (documented in README Configuration)
+- [ ] Backward compatibility confirmed (no breaking API/schema changes)
