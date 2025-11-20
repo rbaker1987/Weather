@@ -48,10 +48,9 @@ class TestConditionIcon:
         """Test wind keyword returns wind icon."""
         assert condition_icon("Windy") == "wind"
 
-    def test_windy_and_cloudy_not_wind_icon(self):
-        """Test that 'windy and cloudy' doesn't return wind icon."""
-        # "wind" + "cloudy" should skip wind icon check
-        assert condition_icon("Windy and cloudy") == "cloud"
+    def test_windy_and_cloudy_returns_wind_icon(self):
+        """Test that 'windy and cloudy' returns wind icon (wind has priority)."""
+        assert condition_icon("Windy and cloudy") == "wind"
 
     def test_partly_keyword(self):
         """Test partly keyword returns cloud-sun icon."""

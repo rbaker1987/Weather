@@ -22,7 +22,7 @@ def condition_icon(text):
         return "smog"
     if any(k in cond for k in ("rain", "shower", "drizzle")):
         return "cloud-rain"
-    if "wind" in cond and "cloudy" not in cond:
+    if "wind" in cond:
         return "wind"
     if "partly" in cond:
         return "cloud-sun"
