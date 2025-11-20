@@ -8,21 +8,67 @@ jobs:
   label_assign:
     runs-on: ubuntu-latest
     steps:
-      - name: Add label and assign PR author
+      - name: Add labels and assign PR author
         uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request;
-            const author = pr.user.login; // PR author (branch owner)
-            const fallback = pr.base.repo.owner.login; // repo owner fallback
-            // Ensure label exists; uses standard addLabels
-            await github.rest.issues.addLabels({
+            const author = pr.user.login;
+            const fallback = pr.base.repo.owner.login;
+            
+            // Fetch changed files to determine labels
+            const files = await github.rest.pulls.listFiles({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: pr.number,
-              labels: ['auto']
+              pull_number: pr.number
             });
-            // Try assigning to author; if fails (e.g. permissions), assign repo owner
+            
+            const changedFiles = files.data.map(f => f.filename);
+            const labels = [];
+            
+            // Auto-detect labels based on file changes
+            if (changedFiles.some(f => f.includes('weather_app/weather/models.py') || f.includes('migrations/'))) {
+              labels.push('database');
+            }
+            if (changedFiles.some(f => f.includes('.github/workflows/') || f.includes('.yml') || f.includes('.yaml'))) {
+              labels.push('ci/cd');
+            }
+            if (changedFiles.some(f => f.includes('templates/') || f.includes('static/'))) {
+              labels.push('ui');
+            }
+            if (changedFiles.some(f => f.includes('.js') || f.includes('.css'))) {
+              labels.push('frontend');
+            }
+            if (changedFiles.some(f => f.includes('views.py') || f.includes('api/') || f.includes('serializers.py'))) {
+              labels.push('backend');
+            }
+            if (changedFiles.some(f => f.includes('test_') || f.includes('tests/'))) {
+              labels.push('tests');
+            }
+            if (changedFiles.some(f => f.includes('README') || f.includes('.md'))) {
+              labels.push('documentation');
+            }
+            if (pr.head.ref.startsWith('chore/') || pr.title.toLowerCase().startsWith('chore')) {
+              labels.push('chore');
+            }
+            if (pr.head.ref.startsWith('feature/') || pr.title.toLowerCase().startsWith('feat')) {
+              labels.push('enhancement');
+            }
+            if (pr.head.ref.startsWith('fix/') || pr.title.toLowerCase().startsWith('fix')) {
+              labels.push('bug');
+            }
+            
+            // Add labels if any were detected
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: labels
+              });
+            }
+            
+            // Assign to author with fallback
             try {
               await github.rest.issues.addAssignees({
                 owner: context.repo.owner,
