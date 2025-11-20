@@ -98,6 +98,16 @@ def fetch_current_conditions(location):
         else:
             location.current_wind_speed = 0
 
+        # Wind gust
+        wind_gust_kmh = obs_props.get('windGust', {}).get('value')
+        if wind_gust_kmh is not None:
+            try:
+                location.current_wind_gust = int(wind_gust_kmh * 0.621371)
+            except (ValueError, TypeError):
+                location.current_wind_gust = None
+        else:
+            location.current_wind_gust = None
+
         wind_dir_deg = obs_props.get('windDirection', {}).get('value')
         if wind_dir_deg is not None:
             try:
@@ -427,6 +437,16 @@ class LocationViewSet(viewsets.ModelViewSet):
                                     location.current_wind_speed = 0
                             else:
                                 location.current_wind_speed = 0
+
+                            # Wind gust
+                            wind_gust_kmh = obs_props.get('windGust', {}).get('value')
+                            if wind_gust_kmh is not None:
+                                try:
+                                    location.current_wind_gust = int(wind_gust_kmh * 0.621371)
+                                except (ValueError, TypeError):
+                                    location.current_wind_gust = None
+                            else:
+                                location.current_wind_gust = None
 
                             wind_dir_deg = obs_props.get('windDirection', {}).get('value')
                             if wind_dir_deg is not None:

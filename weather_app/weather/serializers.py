@@ -26,6 +26,7 @@ class LocationSerializer(ModelSerializer):
         fields = [
             'id', 'name', 'custom_name', 'display_name', 'latitude', 'longitude', 'zip_code', 'location_type',
             'nws_office', 'grid_x', 'grid_y', 'is_active', 'is_favorite', 'is_current_location',
+            'current_temp', 'current_apparent_temp', 'current_conditions', 'current_humidity', 'current_wind_speed', 'current_wind_direction', 'current_wind_gust', 'last_observation_time',
             'created_at', 'updated_at', 'last_forecast_update',
             'forecast_count'
         ]

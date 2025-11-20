@@ -27,7 +27,7 @@
           <p class="mb-0"><small><i class="fas fa-tint"></i> {{ location.current_humidity }}%</small></p>
           {% endif %}
           {% if location.current_wind_speed %}
-          <p class="mb-0"><small><i class="fas fa-wind"></i> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}</small></p>
+          <p class="mb-0"><small><i class="fas fa-wind"></i> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}{% if location.current_wind_gust %} (gust {{ location.current_wind_gust }} mph){% endif %}</small></p>
           {% endif %}
         </div>
         <div>

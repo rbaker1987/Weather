@@ -68,6 +68,29 @@ class HourlyForecastForLocationAPIView(APIView):
             hours_data = []
             for period in periods:
                 start_time = datetime.fromisoformat(period['startTime'].replace('Z', '+00:00'))
+                
+                # Extract wind gust
+                wind_gust = None
+                gust_str = period.get('windGust')
+                if gust_str:
+                    gust_parts = gust_str.split()
+                    if gust_parts:
+                        try:
+                            wind_gust = int(gust_parts[0])
+                        except (ValueError, IndexError):
+                            wind_gust = None
+                
+                # Extract precipitation probability
+                precip_prob = None
+                pop = period.get('probabilityOfPrecipitation')
+                if isinstance(pop, dict):
+                    value = pop.get('value')
+                    if value is not None:
+                        try:
+                            precip_prob = int(value)
+                        except (ValueError, TypeError):
+                            precip_prob = None
+                
                 hours_data.append({
                     'time': start_time.strftime('%I %p').lstrip('0'),
                     'temp': period.get('temperature', 'N/A'),
@@ -75,6 +98,8 @@ class HourlyForecastForLocationAPIView(APIView):
                     'icon': self._get_weather_icon(period.get('shortForecast', '')),
                     'wind': period.get('windSpeed', ''),
                     'windDir': period.get('windDirection', ''),
+                    'windGust': wind_gust,
+                    'pop': precip_prob,
                 })
             
             return Response({'hours': hours_data}, status=status.HTTP_200_OK)

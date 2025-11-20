@@ -181,7 +181,8 @@ async function showHourlyForecastModal(forecastDate) {
                                 <i class="fas fa-${hour.icon} mb-2" style="font-size: 1.5rem;"></i>
                                 <div class="h5 mb-1">${hour.temp}&deg;F</div>
                                 <small class="d-block mb-1" style="opacity: 0.9;">${hour.condition}</small>
-                                ${hour.wind ? `<small style="opacity: 0.8;"><i class="fas fa-wind"></i> ${hour.wind}</small>` : ''}
+                                ${hour.wind ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
+                                ${hour.pop !== null && hour.pop !== undefined ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-cloud-rain"></i> ${hour.pop}%</small>` : ''}
                             </div>
                         </div>
                     </div>
@@ -215,15 +216,17 @@ window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
         if (resp && resp.hours && resp.hours.length > 0) {
             let html = '<div class="row g-2">';
             resp.hours.forEach(hour => {
+                const tempClass = `temp-bg-${hour.temp}`;
                 html += `
                     <div class="col-6 col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body p-3 text-center">
+                        <div class="card h-100 border-0">
+                            <div class="card-body p-3 text-center ${tempClass}">
                                 <div class="fw-bold mb-2">${hour.time}</div>
                                 <i class="fas fa-${hour.icon} mb-2" style="font-size: 2rem;"></i>
                                 <div class="h4 mb-2">${hour.temp}&deg;F</div>
-                                <small class="text-muted d-block">${hour.condition}</small>
-                                ${hour.wind ? `<small class="text-muted mt-1 d-block"><i class="fas fa-wind"></i> ${hour.wind} ${hour.windDir}</small>` : ''}
+                                <small class="d-block mb-1" style="opacity: 0.9;">${hour.condition}</small>
+                                ${hour.wind ? `<small class="mt-1 d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind} ${hour.windDir}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
+                                ${hour.pop !== null && hour.pop !== undefined ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-cloud-rain"></i> ${hour.pop}%</small>` : ''}
                             </div>
                         </div>
                     </div>

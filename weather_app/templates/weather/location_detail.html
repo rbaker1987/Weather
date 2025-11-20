@@ -237,9 +237,9 @@
                 {% include "weather/components/section_header.html" with icon="calendar-alt" title="7-Day Forecast" %}
             </div>
             <div class="card-body">
-                <div class="row">
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
                     {% for day_group in daily_forecasts %}
-                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                    <div class="col">
                         <div class="card border-0 h-100">
                             <div class="card-header text-center py-2">
                                 <strong>{{ day_group.date|date:"D, M j" }}</strong>
@@ -501,7 +501,8 @@ async function loadNext24Hours() {
                                 <i class="fas fa-${hour.icon} mb-2" style="font-size: 1.5rem;"></i>
                                 <div class="h5 mb-1">${hour.temp}&deg;F</div>
                                 <small class="d-block mb-1" style="opacity: 0.9;">${hour.condition}</small>
-                                ${hour.wind ? `<small style="opacity: 0.8;"><i class="fas fa-wind"></i> ${hour.wind}</small>` : ''}
+                                ${hour.wind ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
+                                ${hour.pop !== null && hour.pop !== undefined ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-cloud-rain"></i> ${hour.pop}%</small>` : ''}
                             </div>
                         </div>
                     </div>
