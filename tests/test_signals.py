@@ -75,7 +75,9 @@ class TestForecastSignals:
             wind_speed=5,
         )
         assert forecast.apparent_temperature is not None
+        # Heat index at 85°F with 50% RH should be noticeably higher
         assert forecast.apparent_temperature >= 85
+        assert forecast.apparent_temperature <= 90
 
     def test_heat_index_at_exactly_80f(self):
         loc = Location.objects.create(name="HotLocation")
@@ -91,7 +93,9 @@ class TestForecastSignals:
             short_forecast="Hot",
             wind_speed=5,
         )
-        assert forecast.apparent_temperature == 80
+        # At 80°F with 50% RH, heat index is slightly higher than actual temp
+        assert forecast.apparent_temperature >= 80
+        assert forecast.apparent_temperature <= 82
 
     def test_heat_index_above_80f(self):
         loc = Location.objects.create(name="VeryHot")
@@ -171,8 +175,10 @@ class TestForecastSignals:
             short_forecast="Hot",
             wind_speed=5,
         )
+        # 32°C = 89.6°F, so heat index should be in Fahrenheit
         assert forecast.apparent_temperature is not None
-        assert forecast.apparent_temperature >= 32
+        assert forecast.apparent_temperature >= 90  # Should be around 93-95°F
+        assert forecast.apparent_temperature <= 98
 
     def test_celsius_conversion_to_wind_chill(self):
         loc = Location.objects.create(name="CelsiusCold")
