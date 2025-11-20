@@ -92,6 +92,32 @@ class HourlyForecast(BaseModel):
     wind: WindCondition
     weather: WeatherCondition
     alerts: List[WeatherAlert] = Field(default_factory=list)
+    precipitation_probability: Optional[int] = Field(None, ge=0, le=100, description="Chance of precipitation (%)")
+
+    @property
+    def wind_condition(self) -> WindCondition:
+        """Alias used by Django service layer."""
+        return self.wind
+
+    @property
+    def period_start(self) -> datetime:
+        return self.forecast_time
+
+    @property
+    def period_end(self) -> datetime:
+        return self.forecast_time + timedelta(hours=1)
+
+    @property
+    def date(self) -> date_type:
+        return self.forecast_time.date()
+
+    @property
+    def short_forecast(self) -> str:
+        return self.weather.short_forecast
+
+    @property
+    def detailed_forecast(self) -> Optional[str]:
+        return self.weather.detailed_forecast
     
     @property
     def apparent_temperature(self) -> int:

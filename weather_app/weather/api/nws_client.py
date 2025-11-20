@@ -198,17 +198,40 @@ class NWSClient:
             if alert.start_time <= start_time <= (alert.end_time or start_time + timedelta(hours=1))
         ]
         
+        # Wind gust
+        wind_gust = None
+        gust_str = period.get("windGust")
+        if gust_str:
+            gust_parts = gust_str.split()
+            if gust_parts:
+                try:
+                    wind_gust = int(gust_parts[0])
+                except (ValueError, IndexError):
+                    wind_gust = None
+
+        # Precipitation probability
+        precip_prob = None
+        pop = period.get("probabilityOfPrecipitation")
+        if isinstance(pop, dict):
+            value = pop.get("value")
+            if value is not None:
+                try:
+                    precip_prob = int(value)
+                except (ValueError, TypeError):
+                    precip_prob = None
+
         return HourlyForecast(
             location=location,
             forecast_time=start_time,
             temperature=Temperature(value=temp_value),
-            wind=WindCondition(speed=wind_speed, direction=wind_direction),
+            wind=WindCondition(speed=wind_speed, direction=wind_direction, gust=wind_gust),
             weather=WeatherCondition(
                 short_forecast=period.get("shortForecast", "Unknown"),
                 detailed_forecast=period.get("detailedForecast"),
                 icon_url=period.get("icon")
             ),
-            alerts=relevant_alerts
+            alerts=relevant_alerts,
+            precipitation_probability=precip_prob
         )
     
     def _parse_alert(self, alert_data: Dict[str, Any]) -> WeatherAlert:

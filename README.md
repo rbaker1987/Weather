@@ -1,16 +1,15 @@
 # Ralph's Weather Django Application
 
-A Django web application for weather forecasting with REST API and web interface.
+A Django web application for weather forecasting using the National Weather Service API.
 
 ## Features
 
-- **Web Interface**: Weather dashboard with location management
+- **Web Interface**: Dashboard with browser geolocation and location management
 - **REST API**: Full CRUD operations for locations and forecasts
-- **Admin Panel**: Django admin for data management
-- **Background Tasks**: Automatic forecast updates (optional)
-- **Geographic Support**: Location coordinates and mapping
-- **Session-based Storage**: All locations stored in session only (non-persistent across sessions)
-- **Component-based Templates**: Reusable forecast & header components for DRY UI
+- **Real-time Data**: Current conditions, hourly/daily forecasts, and weather alerts from NWS
+- **Session Storage**: Locations stored per browser session (no user accounts)
+- **Component-based UI**: Reusable Django template components
+- **Responsive Design**: Bootstrap 5 with temperature-based color coding
 
 ## Quick Start
 
@@ -18,163 +17,61 @@ A Django web application for weather forecasting with REST API and web interface
 # Install dependencies
 pip install -e ".[django]"
 
-# Setup database
+# Setup database and run migrations
 cd weather_app
 python manage.py migrate
 
-# Run the application
+# Start development server
 python manage.py runserver
 ```
 
-**Access Points:**
-
-- Web Dashboard: <http://localhost:8000>
-- Admin Panel: <http://localhost:8000/admin>
-- API Documentation: <http://localhost:8000/api>
+Visit <http://localhost:8000> to access the dashboard.
 
 ## Development
 
-### Code Quality & Linting
+### Code Quality Tools
 
-This project uses modern linting and formatting tools for code quality:
-
-#### Python (Ruff)
-
-- Fast linter and formatter written in Rust
-- Replaces Black, isort, Flake8, and more
-- Django-aware linting rules
-
-#### JavaScript (ESLint + Prettier)
-
-- ESLint for error detection and code quality
-- Prettier for consistent formatting
-
-**Setup:**
+**Python (Ruff):**
 
 ```bash
-# Install Python dev dependencies
 pip install -e ".[dev]"
+ruff check .              # Lint
+ruff check --fix .        # Auto-fix
+ruff format .             # Format
+```
 
-# Install JavaScript dependencies
+**JavaScript (ESLint + Prettier):**
+
+```bash
 npm install
+npm run lint:js           # Lint
+npm run lint:js:fix       # Auto-fix
+npm run format            # Format
+```
 
-# Install pre-commit hooks (optional but recommended)
+**Pre-commit Hooks (Optional):**
+
+```bash
 pip install pre-commit
 pre-commit install
 ```
 
-**Usage:**
+### VS Code Setup
 
-```bash
-# Python linting
-ruff check .              # Check for issues
-ruff check --fix .        # Auto-fix issues
-ruff format .             # Format code
-
-# JavaScript linting
-npm run lint:js           # Check JavaScript
-npm run lint:js:fix       # Auto-fix JavaScript
-npm run format            # Format all JS/CSS/JSON
-
-# Or use Makefile shortcuts
-make lint                 # Check all
-make lint-fix             # Fix all
-make format               # Format all
-```
-
-**VS Code Integration:**
-
-1. Install recommended extensions (see `.vscode/extensions.json`)
-2. Code will auto-format on save
-3. Linting errors shown inline
-
-**Configuration Files:**
-
-- `.ruff.toml` - Ruff Python linter configuration
-- `.eslintrc.json` - ESLint JavaScript configuration
-- `.prettierrc.json` - Prettier formatter configuration
-- `.pre-commit-config.yaml` - Pre-commit hooks
-- `package.json` - Node.js dependencies and scripts
-
-## Recent Enhancements
-
-### Apparent Temperature ("Feels Like")
-
-Centralized calculation in `weather/utils/apparent_temperature.py`:
-
-1. Heat Index (Rothfusz regression) used when temp ≥ 80°F.
-2. Wind Chill (NWS formula) used when temp ≤ 50°F and wind ≥ 3 mph.
-3. Otherwise apparent temperature equals actual.
-
-Humidity source priority: explicit relative humidity → dew point (Magnus-Tetens) → fallback 50%.
-Display appears only when the difference is ≥ 3°F (via `should_show_feels_like` filter).
-New model field: `Location.current_apparent_temp` (run `python manage.py migrate`).
-
-### Template Component Refactor
-
-New reusable components under `templates/weather/components/`:
-
-- `forecast_period_card.html` – Renders a day or night period (badge, icon, temp, feels-like, description).
-- `section_header.html` – Standardizes card headers with an icon + title.
-
-Benefits: ~200 lines of duplicated template markup removed; easier future styling changes.
-
-### Template Filters
-
-Defined in `weather/templatetags/ui_tags.py`:
-
-| Filter | Purpose |
-|--------|---------|
-| `condition_icon` | Maps forecast text to a Font Awesome icon |
-| `temp_bg_class` | Returns background class based on temperature |
-| `should_show_feels_like` | Decides if feels-like should render (≥3°F diff) |
-
-Usage example:
-
-```django
-{% if period|should_show_feels_like %}
-  <small>Feels like {{ period.apparent_temperature }}°{{ period.temperature_unit }}</small>
-{% endif %}
-```
-
-### Migration Note
-
-If updating from a version before this enhancement:
-
-```bash
-python manage.py migrate  # Adds current_apparent_temp field
-```
-
-Existing locations populate `current_apparent_temp` on next current-conditions update.
-
-## Data Persistence
-
-**Important:** This application uses SQLite for local development. Data persistence behavior:
-
-- **Database File**: `weather_app/db.sqlite3` (excluded from git)
-- **Location Storage**: All locations stored in session only (cleared when session expires or browser closes)
-- **Forecast Data**: Cached in SQLite for performance, refreshed automatically from NWS API
-- **If Database Deleted**: Forecast cache will be lost, but will be re-fetched from NWS API on next request
-- **No User Accounts**: Authentication system not implemented - all users are anonymous
-
-**Recommendations:**
-
-- For production deployment, migrate to PostgreSQL or MySQL for better performance
-- Consider implementing user authentication if persistent location storage is needed
-
+Install recommended extensions (`.vscode/extensions.json`) for auto-formatting on save.
 
 ## Usage
 
 ### Web Interface
 
-- Visit the dashboard to view your browser's current location weather
-- Add saved locations by name or zip code
-- View detailed forecasts and current conditions
-- Check weather alerts for your locations
+- **Dashboard**: Browser location weather with automatic geolocation
+- **Locations**: Add locations by name/zip code, view detailed forecasts
+- **Forecasts**: 7-day forecasts with hourly breakdowns
+- **Alerts**: Active weather alerts for your locations
 
-**Note:** All locations are stored in your browser session only. When you close your browser or the session expires, your saved locations will be cleared.
+**Note:** Locations are session-only and clear when browser closes.
 
-### REST API
+### REST API Examples
 
 ```bash
 # Create location
@@ -183,7 +80,7 @@ curl -X POST http://localhost:8000/api/locations/ \
   -d '{"name": "Austin, TX"}'
 
 # Get forecasts
-curl "http://localhost:8000/api/locations/{id}/forecasts/"
+curl http://localhost:8000/api/locations/{id}/forecasts/
 ```
 
 ### Management Commands
@@ -196,102 +93,118 @@ python manage.py update_forecasts
 python manage.py update_forecasts --locations uuid1 uuid2
 ```
 
+## Architecture
+
+### Data Flow
+
+1. User adds location (geolocation or manual entry)
+2. Coordinates geocoded via Nominatim API (if needed)
+3. Location ID stored in session
+4. NWS API provides forecasts/alerts
+5. Apparent temperature calculated (heat index/wind chill)
+6. Data cached in SQLite, refreshed automatically
+
+### Key Components
+
+**Backend:**
+
+- `weather/models.py` - Location, Forecast, Alert models
+- `weather/views.py` - Django views and DRF API endpoints
+- `weather/services.py` - NWS API integration
+- `weather/utils/` - Geocoding, apparent temperature calculations
+- `weather/middleware.py` - Session location management
+
+**Frontend:**
+
+- `templates/weather/components/` - Reusable template fragments
+- `static/weather/js/weather.js` - Dynamic UI interactions
+- `static/weather/css/style.css` - Temperature-based styling
+
+**Template Filters (`weather/templatetags/ui_tags.py`):**
+
+- `condition_icon` - Maps forecast text to Font Awesome icons
+- `temp_bg_class` - Returns temperature-based background class
+- `should_show_feels_like` - Shows feels-like when ≥3°F difference
+
+### Session Storage
+
+- All location IDs stored in `request.session['location_ids']`
+- No authentication system
+- Locations cleared on session expiry/browser close
+- Views automatically filter by session IDs
+
+### Database
+
+- **Development**: SQLite (`db.sqlite3`, excluded from git)
+- **Production**: PostgreSQL/MySQL recommended
+- **Persistence**: Forecast cache only; locations are session-based
+
 ## Optional: Background Tasks
 
-For automatic forecast updates:
+Enable automatic forecast updates with Celery:
 
 ```bash
-# Install Redis and start
+# Install and start Redis
 redis-server
 
-# Start Celery worker (separate terminal)
+# Start Celery worker (terminal 1)
 cd weather_app
 celery -A config worker --loglevel=info
 
-# Start Celery beat scheduler (separate terminal)
+# Start Celery beat scheduler (terminal 2)
 celery -A config beat --loglevel=info
 ```
 
 ## Configuration
 
-Optional environment variables:
+Environment variables (optional):
 
 ```bash
 DJANGO_SECRET_KEY=your-secret-key
 DJANGO_DEBUG=False
-DATABASE_URL=postgresql://user:pass@localhost/weather  # Optional
-REDIS_URL=redis://localhost:6379/0  # For caching/Celery
+DATABASE_URL=postgresql://user:pass@localhost/weather
+REDIS_URL=redis://localhost:6379/0
 ```
 
 ## Project Structure
 
 ```text
-Weather/
-├── weather_app/             # Django project
-│   ├── config/              # Settings and configuration
-│   │   ├── settings.py      # Django settings
-│   │   ├── urls.py          # URL routing
-│   │   └── wsgi.py          # WSGI entry point
-│   ├── weather/             # Main weather app
-│   │   ├── models.py        # Database models (Location, Forecast, Alert)
-│   │   ├── views.py         # API ViewSets and web views
-│   │   ├── middleware.py    # Session location storage middleware
-│   │   ├── services.py      # Business logic and NWS API integration
-│   │   ├── serializers.py   # DRF serializers
-│   │   ├── admin.py         # Django admin interface
-│   │   ├── api/             # External API clients (NWS)
-│   │   ├── utils/           # Helper functions (datetime, geocoding, logging, apparent temperature)
-│   │   ├── templatetags/    # Template filters (icons, feels-like logic)
-│   │   └── management/      # Custom management commands
-│   │       └── commands/
-│   │           └── update_forecasts.py
-│   ├── templates/           # HTML templates
-│   │   └── weather/
-│   │       ├── components/          # Reusable template fragments
-│   │       │   ├── forecast_period_card.html
-│   │       │   └── section_header.html
-│   │       ├── dashboard.html      # Main dashboard with browser location
-│   │       ├── location_list.html  # Saved locations management
-│   │       ├── location_detail.html # Individual location details
-│   │       ├── forecast_list.html  # Forecast overview
-│   │       └── alert_list.html     # Weather alerts
-│   ├── static/              # CSS/JS assets
-│   │   └── weather/
-│   │       ├── css/style.css
-│   │       └── js/weather.js
-│   ├── db.sqlite3           # SQLite database (excluded from git)
-│   └── manage.py            # Django management script
-├── tests/                   # Unit tests
-│   ├── test_models.py
-│   └── test_datetime_utils.py
-├── pyproject.toml           # Python packaging and dependencies
-├── README.md                # This file
-└── .gitignore               # Git ignore patterns (includes db.sqlite3)
+weather_app/
+├── config/                  # Django settings
+├── weather/                 # Main app
+│   ├── api/                 # NWS API client
+│   ├── utils/               # Helpers (geocoding, apparent temp)
+│   ├── templatetags/        # Custom filters
+│   ├── management/commands/ # CLI commands
+│   └── migrations/          # Database migrations
+├── templates/weather/       # HTML templates
+│   └── components/          # Reusable fragments
+└── static/weather/          # CSS/JS assets
+tests/                       # Unit tests
 ```
 
-## Architecture
+## Recent Enhancements
 
-**Session Management:**
+### Apparent Temperature
 
-- All users: `SessionLocationMiddleware` initializes `request.session['location_ids']` list
-- No user authentication system implemented
-- All location storage is session-based and temporary
+- Centralized calculation in `weather/utils/apparent_temperature.py`
+- Heat Index (≥80°F) and Wind Chill (≤50°F, wind ≥3mph)
+- Only displayed when difference ≥3°F
+- New field: `Location.current_wind_gust` (requires migration)
 
+### Component-Based Templates
 
-**Data Flow:**
+- `forecast_period_card.html` - Day/night forecast display
+- `section_header.html` - Standardized card headers
+- Eliminated ~200 lines of duplicate markup
 
-1. User adds location (browser geolocation or manual entry)
-2. Location geocoded via Nominatim API (if coordinates missing)
-3. Location ID saved to session storage
-4. Views filter locations by session IDs
-5. NWS API fetches forecasts/alerts for displayed locations
-6. Apparent temperature computed (heat index / wind chill) where applicable
-7. Current conditions updated every ~30 minutes (including feels-like)
+## Contributing
 
+Run tests before committing:
 
-**Key Features:**
+```bash
+pytest tests/
+ruff check .
+npm run lint:js
+```
 
-- Browser geolocation integration on all pages
-- Real-time weather from NWS API
-- Automatic forecast updates
-- Session-only storage (no persistence across sessions)

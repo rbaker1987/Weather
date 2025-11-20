@@ -73,6 +73,7 @@ class Location(TimeStampedModel):
     current_humidity = models.IntegerField(null=True, blank=True, help_text="Current humidity percentage")
     current_wind_speed = models.IntegerField(null=True, blank=True, help_text="Current wind speed in mph")
     current_wind_direction = models.CharField(max_length=10, blank=True, help_text="Current wind direction")
+    current_wind_gust = models.IntegerField(null=True, blank=True, help_text="Current wind gust in mph")
     last_observation_time = models.DateTimeField(null=True, blank=True, help_text="Last observation timestamp")
     is_favorite = models.BooleanField(default=False, help_text="Mark as favorite location")
     
