@@ -27,6 +27,8 @@ from .serializers import (
     LocationSerializer,
     WeatherAlertSerializer,
 )
+from .utils.apparent_temperature import calculate_apparent_temperature
+
 
 logger = logging.getLogger('weather')
 
@@ -88,13 +90,13 @@ def fetch_current_conditions(location):
             location.current_humidity = int(humidity)
 
         wind_speed_kmh = obs_props.get('windSpeed', {}).get('value')
-        if wind_speed_kmh is not None and wind_speed_kmh != 0:
+        if wind_speed_kmh is not None:
             try:
                 location.current_wind_speed = int(wind_speed_kmh * 0.621371)
             except (ValueError, TypeError):
-                location.current_wind_speed = None
+                location.current_wind_speed = 0
         else:
-            location.current_wind_speed = None
+            location.current_wind_speed = 0
 
         wind_dir_deg = obs_props.get('windDirection', {}).get('value')
         if wind_dir_deg is not None:
@@ -106,6 +108,16 @@ def fetch_current_conditions(location):
                 location.current_wind_direction = ''
         else:
             location.current_wind_direction = ''
+
+        # Calculate apparent temperature
+        if location.current_temp is not None:
+            dew_point_c = obs_props.get('dewpoint', {}).get('value')
+            location.current_apparent_temp = calculate_apparent_temperature(
+                temp_f=location.current_temp,
+                humidity_pct=location.current_humidity,
+                wind_speed_mph=location.current_wind_speed or 0,
+                dew_point_c=dew_point_c
+            )
 
         timestamp = obs_props.get('timestamp')
         if timestamp:
@@ -407,14 +419,14 @@ class LocationViewSet(viewsets.ModelViewSet):
                                 location.current_humidity = int(humidity)
 
                             wind_speed_kmh = obs_props.get('windSpeed', {}).get('value')
-                            if wind_speed_kmh is not None and wind_speed_kmh != 0:
+                            if wind_speed_kmh is not None:
                                 try:
                                     # Wind speed from NWS is in km/h, convert to mph
                                     location.current_wind_speed = int(wind_speed_kmh * 0.621371)
                                 except (ValueError, TypeError):
-                                    location.current_wind_speed = None
+                                    location.current_wind_speed = 0
                             else:
-                                location.current_wind_speed = None
+                                location.current_wind_speed = 0
 
                             wind_dir_deg = obs_props.get('windDirection', {}).get('value')
                             if wind_dir_deg is not None:
@@ -428,9 +440,22 @@ class LocationViewSet(viewsets.ModelViewSet):
                             else:
                                 location.current_wind_direction = ''
 
+                            # Calculate apparent temperature
+                            if location.current_temp is not None:
+                                dew_point_c = obs_props.get('dewpoint', {}).get('value')
+                                location.current_apparent_temp = calculate_apparent_temperature(
+                                    temp_f=location.current_temp,
+                                    humidity_pct=location.current_humidity,
+                                    wind_speed_mph=location.current_wind_speed or 0,
+                                    dew_point_c=dew_point_c
+                                )
+
                             timestamp = obs_props.get('timestamp')
                             if timestamp:
                                 location.last_observation_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            
+                            # Save current conditions including apparent temperature
+                            location.save()
             except Exception as e:
                 print(f"Warning: Could not fetch current conditions: {str(e)}")
 

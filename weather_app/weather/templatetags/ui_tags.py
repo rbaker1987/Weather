@@ -41,3 +41,38 @@ def temp_bg_class(value):
     except (TypeError, ValueError):
         return ""
     return f"temp-bg-{v}"
+
+
+@register.filter(name="should_show_feels_like")
+def should_show_feels_like(forecast_or_temp, apparent_temp=None):
+    """Determine if apparent temperature should be displayed.
+    
+    Returns True if apparent temperature differs significantly from actual temperature.
+    Can be called with a forecast object or with actual_temp and apparent_temp separately.
+    
+    Usage:
+        {% if forecast|should_show_feels_like %}
+        or
+        {% if actual_temp|should_show_feels_like:apparent_temp %}
+    """
+    # If called with a forecast object
+    if hasattr(forecast_or_temp, 'temperature') and hasattr(forecast_or_temp, 'apparent_temperature'):
+        actual = forecast_or_temp.temperature
+        apparent = forecast_or_temp.apparent_temperature
+    # If called with separate values
+    else:
+        actual = forecast_or_temp
+        apparent = apparent_temp
+    
+    # Check if both values are valid
+    if actual is None or apparent is None:
+        return False
+    
+    try:
+        actual_val = int(actual)
+        apparent_val = int(apparent)
+    except (TypeError, ValueError):
+        return False
+    
+    # Show if difference is 3 degrees or more
+    return abs(actual_val - apparent_val) >= 3

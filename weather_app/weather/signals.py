@@ -3,6 +3,7 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from .models import Location, ForecastPeriod, DailyForecast, HourlyForecast
+from .utils.apparent_temperature import calculate_apparent_temperature as calc_apparent_temp
 
 
 @receiver(pre_save, sender=Location)
@@ -30,21 +31,34 @@ def location_post_save(sender, instance, created, **kwargs):
 @receiver(pre_save, sender=DailyForecast)
 @receiver(pre_save, sender=HourlyForecast)
 def calculate_apparent_temperature(sender, instance, **kwargs):
-    """Calculate apparent temperature if not provided."""
-    if not instance.apparent_temperature and instance.temperature is not None:
-        # Simple heat index calculation (you can replace with your existing logic)
-        temp_f = instance.temperature
-        if instance.temperature_unit == 'C':
-            temp_f = (instance.temperature * 9/5) + 32
+    """Calculate apparent temperature if not provided by NWS.
+    
+    Uses proper heat index formula for hot conditions (≥80°F) and
+    wind chill formula for cold conditions (≤50°F with wind).
+    If NWS already provided apparent_temperature, it's preserved.
+    For heat index, uses humidity from dew point if available.
+    """
+    # If NWS already provided apparent_temperature, don't override it
+    if instance.apparent_temperature is not None:
+        return
+    
+    if instance.temperature is None:
+        return
         
-        # Basic apparent temperature calculation
-        # Replace this with your existing weather_app logic
-        if temp_f >= 80:
-            # Simple heat index approximation
-            instance.apparent_temperature = int(temp_f + (temp_f - 80) * 0.1)
-        elif temp_f <= 50:
-            # Simple wind chill approximation  
-            wind_speed = getattr(instance, 'wind_speed', 0)
-            instance.apparent_temperature = int(temp_f - (wind_speed * 0.2))
-        else:
-            instance.apparent_temperature = instance.temperature
+    # Convert to Fahrenheit if needed
+    temp_f = instance.temperature
+    if instance.temperature_unit == 'C':
+        temp_f = (instance.temperature * 9/5) + 32
+    
+    wind_speed = getattr(instance, 'wind_speed', 0)
+    dew_point = getattr(instance, 'dew_point', None)
+    humidity_value = getattr(instance, 'humidity', None)
+    
+    # Calculate using shared utility
+    instance.apparent_temperature = calc_apparent_temp(
+        temp_f=temp_f,
+        humidity_pct=humidity_value,
+        wind_speed_mph=wind_speed,
+        dew_point_f=dew_point if instance.temperature_unit == 'F' else None,
+        dew_point_c=dew_point if instance.temperature_unit == 'C' else None,
+    )

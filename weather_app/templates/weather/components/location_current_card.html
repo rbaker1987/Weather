@@ -19,6 +19,9 @@
       <div class="d-flex align-items-center justify-content-between">
         <div>
           <h2 class="mb-0">{{ location.current_temp }}°F</h2>
+          {% if location.current_temp|should_show_feels_like:location.current_apparent_temp %}
+          <p class="mb-0"><small class="text-muted"><i class="fas fa-temperature-high"></i> Feels like {{ location.current_apparent_temp }}°F</small></p>
+          {% endif %}
           <p class="mb-0"><small>{{ location.current_conditions }}</small></p>
           {% if location.current_humidity %}
           <p class="mb-0"><small><i class="fas fa-tint"></i> {{ location.current_humidity }}%</small></p>
