@@ -2,27 +2,40 @@ name: Auto Label and Assign
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, reopened, ready_for_review, synchronize]
 
 jobs:
   label_assign:
     runs-on: ubuntu-latest
     steps:
-      - name: Add label and assign owner
+      - name: Add label and assign PR author
         uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request;
-            const owner = pr.base.repo.owner.login;
+            const author = pr.user.login; // PR author (branch owner)
+            const fallback = pr.base.repo.owner.login; // repo owner fallback
+            // Ensure label exists; uses standard addLabels
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: pr.number,
               labels: ['auto']
             });
-            await github.rest.issues.addAssignees({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr.number,
-              assignees: [owner]
-            });
+            // Try assigning to author; if fails (e.g. permissions), assign repo owner
+            try {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                assignees: [author]
+              });
+            } catch (e) {
+              console.log(`Primary assign failed for ${author}, falling back to ${fallback}:`, e.message);
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                assignees: [fallback]
+              });
+            }
