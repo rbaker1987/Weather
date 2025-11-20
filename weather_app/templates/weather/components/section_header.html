@@ -1,0 +1,4 @@
+{# Reusable section header for card headers. Expects: icon, title, optional: title_class #}
+<h5 class="mb-0 {% if title_class %}{{ title_class }}{% endif %}">
+    <i class="fas fa-{{ icon }}{% if icon_class %} {{ icon_class }}{% endif %}"></i> {{ title }}
+</h5>

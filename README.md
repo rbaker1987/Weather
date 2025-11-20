@@ -10,6 +10,7 @@ A Django web application for weather forecasting with REST API and web interface
 - **Background Tasks**: Automatic forecast updates (optional)
 - **Geographic Support**: Location coordinates and mapping
 - **Session-based Storage**: All locations stored in session only (non-persistent across sessions)
+- **Component-based Templates**: Reusable forecast & header components for DRY UI
 
 ## Quick Start
 
@@ -26,9 +27,10 @@ python manage.py runserver
 ```
 
 **Access Points:**
-- Web Dashboard: http://localhost:8000
-- Admin Panel: http://localhost:8000/admin
-- API Documentation: http://localhost:8000/api
+
+- Web Dashboard: <http://localhost:8000>
+- Admin Panel: <http://localhost:8000/admin>
+- API Documentation: <http://localhost:8000/api>
 
 ## Development
 
@@ -36,16 +38,19 @@ python manage.py runserver
 
 This project uses modern linting and formatting tools for code quality:
 
-**Python (Ruff)**
+#### Python (Ruff)
+
 - Fast linter and formatter written in Rust
 - Replaces Black, isort, Flake8, and more
 - Django-aware linting rules
 
-**JavaScript (ESLint + Prettier)**
+#### JavaScript (ESLint + Prettier)
+
 - ESLint for error detection and code quality
 - Prettier for consistent formatting
 
 **Setup:**
+
 ```bash
 # Install Python dev dependencies
 pip install -e ".[dev]"
@@ -59,6 +64,7 @@ pre-commit install
 ```
 
 **Usage:**
+
 ```bash
 # Python linting
 ruff check .              # Check for issues
@@ -77,16 +83,69 @@ make format               # Format all
 ```
 
 **VS Code Integration:**
+
 1. Install recommended extensions (see `.vscode/extensions.json`)
 2. Code will auto-format on save
 3. Linting errors shown inline
 
 **Configuration Files:**
+
 - `.ruff.toml` - Ruff Python linter configuration
 - `.eslintrc.json` - ESLint JavaScript configuration
 - `.prettierrc.json` - Prettier formatter configuration
 - `.pre-commit-config.yaml` - Pre-commit hooks
 - `package.json` - Node.js dependencies and scripts
+
+## Recent Enhancements
+
+### Apparent Temperature ("Feels Like")
+
+Centralized calculation in `weather/utils/apparent_temperature.py`:
+
+1. Heat Index (Rothfusz regression) used when temp ≥ 80°F.
+2. Wind Chill (NWS formula) used when temp ≤ 50°F and wind ≥ 3 mph.
+3. Otherwise apparent temperature equals actual.
+
+Humidity source priority: explicit relative humidity → dew point (Magnus-Tetens) → fallback 50%.
+Display appears only when the difference is ≥ 3°F (via `should_show_feels_like` filter).
+New model field: `Location.current_apparent_temp` (run `python manage.py migrate`).
+
+### Template Component Refactor
+
+New reusable components under `templates/weather/components/`:
+
+- `forecast_period_card.html` – Renders a day or night period (badge, icon, temp, feels-like, description).
+- `section_header.html` – Standardizes card headers with an icon + title.
+
+Benefits: ~200 lines of duplicated template markup removed; easier future styling changes.
+
+### Template Filters
+
+Defined in `weather/templatetags/ui_tags.py`:
+
+| Filter | Purpose |
+|--------|---------|
+| `condition_icon` | Maps forecast text to a Font Awesome icon |
+| `temp_bg_class` | Returns background class based on temperature |
+| `should_show_feels_like` | Decides if feels-like should render (≥3°F diff) |
+
+Usage example:
+
+```django
+{% if period|should_show_feels_like %}
+  <small>Feels like {{ period.apparent_temperature }}°{{ period.temperature_unit }}</small>
+{% endif %}
+```
+
+### Migration Note
+
+If updating from a version before this enhancement:
+
+```bash
+python manage.py migrate  # Adds current_apparent_temp field
+```
+
+Existing locations populate `current_apparent_temp` on next current-conditions update.
 
 ## Data Persistence
 
@@ -99,8 +158,10 @@ make format               # Format all
 - **No User Accounts**: Authentication system not implemented - all users are anonymous
 
 **Recommendations:**
+
 - For production deployment, migrate to PostgreSQL or MySQL for better performance
 - Consider implementing user authentication if persistent location storage is needed
+
 
 ## Usage
 
@@ -114,6 +175,7 @@ make format               # Format all
 **Note:** All locations are stored in your browser session only. When you close your browser or the session expires, your saved locations will be cleared.
 
 ### REST API
+
 ```bash
 # Create location
 curl -X POST http://localhost:8000/api/locations/ \
@@ -125,6 +187,7 @@ curl "http://localhost:8000/api/locations/{id}/forecasts/"
 ```
 
 ### Management Commands
+
 ```bash
 # Update all forecasts
 python manage.py update_forecasts
@@ -136,6 +199,7 @@ python manage.py update_forecasts --locations uuid1 uuid2
 ## Optional: Background Tasks
 
 For automatic forecast updates:
+
 ```bash
 # Install Redis and start
 redis-server
@@ -151,6 +215,7 @@ celery -A config beat --loglevel=info
 ## Configuration
 
 Optional environment variables:
+
 ```bash
 DJANGO_SECRET_KEY=your-secret-key
 DJANGO_DEBUG=False
@@ -175,12 +240,16 @@ Weather/
 │   │   ├── serializers.py   # DRF serializers
 │   │   ├── admin.py         # Django admin interface
 │   │   ├── api/             # External API clients (NWS)
-│   │   ├── utils/           # Helper functions (datetime, geocoding, logging)
+│   │   ├── utils/           # Helper functions (datetime, geocoding, logging, apparent temperature)
+│   │   ├── templatetags/    # Template filters (icons, feels-like logic)
 │   │   └── management/      # Custom management commands
 │   │       └── commands/
 │   │           └── update_forecasts.py
 │   ├── templates/           # HTML templates
 │   │   └── weather/
+│   │       ├── components/          # Reusable template fragments
+│   │       │   ├── forecast_period_card.html
+│   │       │   └── section_header.html
 │   │       ├── dashboard.html      # Main dashboard with browser location
 │   │       ├── location_list.html  # Saved locations management
 │   │       ├── location_detail.html # Individual location details
@@ -203,19 +272,25 @@ Weather/
 ## Architecture
 
 **Session Management:**
+
 - All users: `SessionLocationMiddleware` initializes `request.session['location_ids']` list
 - No user authentication system implemented
 - All location storage is session-based and temporary
 
+
 **Data Flow:**
+
 1. User adds location (browser geolocation or manual entry)
 2. Location geocoded via Nominatim API (if coordinates missing)
 3. Location ID saved to session storage
 4. Views filter locations by session IDs
 5. NWS API fetches forecasts/alerts for displayed locations
-6. Current conditions updated every 30 minutes
+6. Apparent temperature computed (heat index / wind chill) where applicable
+7. Current conditions updated every ~30 minutes (including feels-like)
+
 
 **Key Features:**
+
 - Browser geolocation integration on all pages
 - Real-time weather from NWS API
 - Automatic forecast updates
