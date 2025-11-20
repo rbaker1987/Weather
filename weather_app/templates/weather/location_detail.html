@@ -613,6 +613,7 @@ function generateCustomForecastGrid() {
                                    data-card="${dayCardId}"
                                    placeholder="Forecast" 
                                    value="${dayForecast}"
+                                   maxlength="70"
                                    style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.85rem;">
                             <div class="row g-1 mb-2">
                                 <div class="col-6">
@@ -665,6 +666,7 @@ function generateCustomForecastGrid() {
                                    data-card="${nightCardId}"
                                    placeholder="Forecast" 
                                    value="${nightForecast}"
+                                   maxlength="70"
                                    style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.85rem;">
                             <div class="row g-1 mb-2">
                                 <div class="col-6">
@@ -769,11 +771,14 @@ function saveAllCustomForecasts() {
         ['day', 'night'].forEach(period => {
             const cardId = `forecast-${i}-${period}`;
             const temp = document.getElementById(`${cardId}-temp`).value;
-            const shortForecast = document.getElementById(`${cardId}-short`).value;
+            const shortForecastEl = document.getElementById(`${cardId}-short`);
+            const shortForecast = shortForecastEl ? shortForecastEl.value.trim() : '';
             const date = document.getElementById(`${cardId}-date`).value;
             const wind = document.getElementById(`${cardId}-wind`).value;
             const gust = document.getElementById(`${cardId}-gust`).value;
             const pop = document.getElementById(`${cardId}-pop`).value;
+            
+            console.log(`${cardId}: temp=${temp}, shortForecast="${shortForecast}"`);
             
             // Only save if temperature and forecast are provided
             if (temp && shortForecast) {
