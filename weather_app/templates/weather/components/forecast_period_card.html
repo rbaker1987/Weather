@@ -23,5 +23,9 @@
             {% endif %}
         </div>
     </div>
+    {% if period.detailed_forecast %}
+    <p class="small mb-0" style="min-height: 3em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ period.detailed_forecast }}</p>
+    {% else %}
     <p class="small mb-0" style="min-height: 3em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ period.short_forecast }}</p>
+    {% endif %}
 </div>
