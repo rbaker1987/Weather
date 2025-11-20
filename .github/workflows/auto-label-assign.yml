@@ -1,0 +1,28 @@
+name: Auto Label and Assign
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  label_assign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add label and assign owner
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const owner = pr.base.repo.owner.login;
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['auto']
+            });
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              assignees: [owner]
+            });
