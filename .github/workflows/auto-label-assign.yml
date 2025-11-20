@@ -34,14 +34,19 @@ jobs:
               labels.push('documentation');
             }
             
-            // Branch/PR title based labels
-            if (pr.head.ref.startsWith('feature/') || pr.title.toLowerCase().startsWith('feat')) {
+            // Branch/PR title/body based labels
+            const branchName = pr.head.ref.toLowerCase();
+            const prTitle = pr.title.toLowerCase();
+            const prBody = (pr.body || '').toLowerCase();
+            const prText = `${branchName} ${prTitle} ${prBody}`;
+            
+            if (branchName.startsWith('feature/') || prText.includes('feature') || prText.includes('feat:')) {
               labels.push('feature');
             }
-            if (pr.head.ref.startsWith('fix/') || pr.title.toLowerCase().startsWith('fix')) {
+            if (branchName.startsWith('fix/') || prText.includes('fix') || prText.includes('bug')) {
               labels.push('bug');
             }
-            if (pr.head.ref.includes('update') || pr.title.toLowerCase().includes('update')) {
+            if (branchName.includes('update') || prText.includes('update') || prText.includes('upgrade')) {
               labels.push('update');
             }
             
