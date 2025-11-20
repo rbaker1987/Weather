@@ -1,6 +1,7 @@
 """Core weather data models using Pydantic for validation and serialization."""
 
-from datetime import datetime, date
+from datetime import datetime
+from datetime import date as date_type
 from typing import Optional, List, Union
 from enum import Enum
 from pydantic import BaseModel, Field, validator, ConfigDict
@@ -117,7 +118,7 @@ class HourlyForecast(BaseModel):
 
 class DailyForecast(BaseModel):
     """Daily weather forecast containing multiple hourly forecasts."""
-    date: date = Field(..., description="Forecast date")
+    date: date_type = Field(..., description="Forecast date")
     location: Location
     hourly_forecasts: List[HourlyForecast] = Field(default_factory=list)
     
