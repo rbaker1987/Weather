@@ -399,7 +399,7 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="addCustomForecastModalLabel">Add Custom Forecast - 7 Days</h5>
+                <h5 class="modal-title" id="addCustomForecastModalLabel">Add Custom Forecast - 8 Days</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -542,7 +542,7 @@ const nwsForecasts = [
     {% endfor %}
 ];
 
-// Initialize 7-day custom forecast grid
+// Initialize 8-day custom forecast grid
 document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('addCustomForecastModal');
     
@@ -557,7 +557,7 @@ function generateCustomForecastGrid() {
     
     const today = new Date();
     
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() + i);
         const dateStr = date.toISOString().split('T')[0];
@@ -712,7 +712,7 @@ function generateCustomForecastGrid() {
         });
         
         // Update icons for pre-filled forecasts
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 8; i++) {
             updateForecastCard(`forecast-${i}-day`);
             updateForecastCard(`forecast-${i}-night`);
         }
@@ -765,9 +765,10 @@ function updateForecastCard(cardId) {
 function saveAllCustomForecasts() {
     const locationId = '{{ location.id }}';
     const forecasts = [];
+    const skipped = [];
     
     // Collect all forecast data
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
         ['day', 'night'].forEach(period => {
             const cardId = `forecast-${i}-${period}`;
             const temp = document.getElementById(`${cardId}-temp`).value;
@@ -804,14 +805,34 @@ function saveAllCustomForecasts() {
                     forecastData.precipitation_probability = parseInt(pop);
                 }
                 
+                console.log('Queueing forecast for save:', forecastData);
                 forecasts.push(forecastData);
+            } else {
+                if (!temp || !shortForecast) {
+                    console.warn(`Skipping ${cardId} - missing ${!temp ? 'temperature' : 'forecast text'}`);
+                    skipped.push({ cardId, missing: !temp ? 'temperature' : 'forecast text' });
+                    // Add visual invalid state
+                    const tempEl = document.getElementById(`${cardId}-temp`);
+                    const shortEl = document.getElementById(`${cardId}-short`);
+                    if (!temp && tempEl) tempEl.classList.add('is-invalid');
+                    if (!shortForecast && shortEl) shortEl.classList.add('is-invalid');
+                }
             }
         });
     }
     
     if (forecasts.length === 0) {
-        alert('Please enter at least one forecast with temperature and description.');
+        alert('No forecasts saved. Please enter at least one forecast with temperature and description.');
         return;
+    }
+
+    if (skipped.length > 0) {
+        const summary = skipped.map(s => `${s.cardId} (${s.missing})`).join('\n');
+        console.warn('Skipped forecasts due to missing data:\n' + summary);
+        // Non-blocking notice to user
+        setTimeout(() => {
+            alert('Some periods were skipped due to missing data:\n' + summary);
+        }, 50);
     }
     
     // Save all forecasts
