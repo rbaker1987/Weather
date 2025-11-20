@@ -526,11 +526,17 @@ const nwsForecasts = [
         date: '{{ day_group.date|date:"Y-m-d" }}',
         day: {% if day_group.day %}{ 
             temperature: {{ day_group.day.temperature }}, 
-            short_forecast: '{{ day_group.day.short_forecast|escapejs }}' 
+            short_forecast: '{{ day_group.day.short_forecast|escapejs }}',
+            wind_speed: {{ day_group.day.wind_speed|default:'null' }},
+            wind_gust: {{ day_group.day.wind_gust|default:'null' }},
+            precipitation_probability: {{ day_group.day.precipitation_probability|default:'null' }}
         }{% else %}null{% endif %},
         night: {% if day_group.night %}{ 
             temperature: {{ day_group.night.temperature }}, 
-            short_forecast: '{{ day_group.night.short_forecast|escapejs }}' 
+            short_forecast: '{{ day_group.night.short_forecast|escapejs }}',
+            wind_speed: {{ day_group.night.wind_speed|default:'null' }},
+            wind_gust: {{ day_group.night.wind_gust|default:'null' }},
+            precipitation_probability: {{ day_group.night.precipitation_probability|default:'null' }}
         }{% else %}null{% endif %}
     }{% if not forloop.last %},{% endif %}
     {% endfor %}
@@ -564,8 +570,14 @@ function generateCustomForecastGrid() {
         const nwsForecast = nwsForecasts[i] || {};
         const dayTemp = nwsForecast.day?.temperature || '';
         const dayForecast = nwsForecast.day?.short_forecast || '';
+        const dayWind = nwsForecast.day?.wind_speed || '';
+        const dayGust = nwsForecast.day?.wind_gust || '';
+        const dayPop = nwsForecast.day?.precipitation_probability || '';
         const nightTemp = nwsForecast.night?.temperature || '';
         const nightForecast = nwsForecast.night?.short_forecast || '';
+        const nightWind = nwsForecast.night?.wind_speed || '';
+        const nightGust = nwsForecast.night?.wind_gust || '';
+        const nightPop = nwsForecast.night?.precipitation_probability || '';
         
         // Determine background classes
         const dayBgClass = dayTemp ? `temp-bg-${dayTemp}` : 'temp-bg-70';
@@ -596,12 +608,37 @@ function generateCustomForecastGrid() {
                                            style="width: 70px; font-size: 1.1rem;">
                                 </div>
                             </div>
-                            <input type="text" class="form-control form-control-sm text-center" 
+                            <input type="text" class="form-control form-control-sm text-center mb-2" 
                                    id="${dayCardId}-short" 
                                    data-card="${dayCardId}"
                                    placeholder="Forecast" 
                                    value="${dayForecast}"
+                                   maxlength="70"
                                    style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.85rem;">
+                            <div class="row g-1 mb-2">
+                                <div class="col-6">
+                                    <input type="number" class="form-control form-control-sm text-center" 
+                                           id="${dayCardId}-wind" 
+                                           placeholder="Wind (mph)" 
+                                           value="${dayWind}"
+                                           min="0" max="200"
+                                           style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
+                                </div>
+                                <div class="col-6">
+                                    <input type="number" class="form-control form-control-sm text-center" 
+                                           id="${dayCardId}-gust" 
+                                           placeholder="Gust (mph)" 
+                                           value="${dayGust}"
+                                           min="0" max="200"
+                                           style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
+                                </div>
+                            </div>
+                            <input type="number" class="form-control form-control-sm text-center" 
+                                   id="${dayCardId}-pop" 
+                                   placeholder="PoP (%)" 
+                                   value="${dayPop}"
+                                   min="0" max="100"
+                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
                             <input type="hidden" id="${dayCardId}-date" value="${dateStr}">
                             <input type="hidden" id="${dayCardId}-period" value="day">
                         </div>
@@ -624,12 +661,37 @@ function generateCustomForecastGrid() {
                                            style="width: 70px; font-size: 1.1rem;">
                                 </div>
                             </div>
-                            <input type="text" class="form-control form-control-sm text-center" 
+                            <input type="text" class="form-control form-control-sm text-center mb-2" 
                                    id="${nightCardId}-short" 
                                    data-card="${nightCardId}"
                                    placeholder="Forecast" 
                                    value="${nightForecast}"
+                                   maxlength="70"
                                    style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.85rem;">
+                            <div class="row g-1 mb-2">
+                                <div class="col-6">
+                                    <input type="number" class="form-control form-control-sm text-center" 
+                                           id="${nightCardId}-wind" 
+                                           placeholder="Wind (mph)" 
+                                           value="${nightWind}"
+                                           min="0" max="200"
+                                           style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
+                                </div>
+                                <div class="col-6">
+                                    <input type="number" class="form-control form-control-sm text-center" 
+                                           id="${nightCardId}-gust" 
+                                           placeholder="Gust (mph)" 
+                                           value="${nightGust}"
+                                           min="0" max="200"
+                                           style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
+                                </div>
+                            </div>
+                            <input type="number" class="form-control form-control-sm text-center" 
+                                   id="${nightCardId}-pop" 
+                                   placeholder="PoP (%)" 
+                                   value="${nightPop}"
+                                   min="0" max="100"
+                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
                             <input type="hidden" id="${nightCardId}-date" value="${dateStr}">
                             <input type="hidden" id="${nightCardId}-period" value="night">
                         </div>
@@ -709,12 +771,18 @@ function saveAllCustomForecasts() {
         ['day', 'night'].forEach(period => {
             const cardId = `forecast-${i}-${period}`;
             const temp = document.getElementById(`${cardId}-temp`).value;
-            const shortForecast = document.getElementById(`${cardId}-short`).value;
+            const shortForecastEl = document.getElementById(`${cardId}-short`);
+            const shortForecast = shortForecastEl ? shortForecastEl.value.trim() : '';
             const date = document.getElementById(`${cardId}-date`).value;
+            const wind = document.getElementById(`${cardId}-wind`).value;
+            const gust = document.getElementById(`${cardId}-gust`).value;
+            const pop = document.getElementById(`${cardId}-pop`).value;
+            
+            console.log(`${cardId}: temp=${temp}, shortForecast="${shortForecast}"`);
             
             // Only save if temperature and forecast are provided
             if (temp && shortForecast) {
-                forecasts.push({
+                const forecastData = {
                     location: locationId,
                     date: date,
                     is_daytime: period === 'day',
@@ -723,7 +791,20 @@ function saveAllCustomForecasts() {
                     short_forecast: shortForecast,
                     detailed_forecast: shortForecast,
                     name: period === 'day' ? 'Custom Day' : 'Custom Night'
-                });
+                };
+                
+                // Add wind data if provided
+                if (wind) {
+                    forecastData.wind_speed = parseInt(wind);
+                }
+                if (gust) {
+                    forecastData.wind_gust = parseInt(gust);
+                }
+                if (pop) {
+                    forecastData.precipitation_probability = parseInt(pop);
+                }
+                
+                forecasts.push(forecastData);
             }
         });
     }

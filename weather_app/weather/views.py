@@ -242,11 +242,26 @@ class LocationViewSet(viewsets.ModelViewSet):
                 if 'wind_direction' not in data:
                     data['wind_direction'] = ''
 
-            serializer = DailyForecastSerializer(data=data)
-            if serializer.is_valid():
-                serializer.save(location=location)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                # Check if forecast already exists and update it
+                existing_forecast = DailyForecast.objects.filter(
+                    location=location,
+                    forecast_date=forecast_date_obj,
+                    is_daytime=is_daytime
+                ).first()
+
+                if existing_forecast:
+                    # Update existing forecast
+                    serializer = DailyForecastSerializer(existing_forecast, data=data, partial=True)
+                else:
+                    # Create new forecast
+                    serializer = DailyForecastSerializer(data=data)
+
+                if serializer.is_valid():
+                    serializer.save(location=location)
+                    return Response(serializer.data, status=status.HTTP_200_OK if existing_forecast else status.HTTP_201_CREATED)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({'error': 'forecast_date is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         # GET request - return forecasts
         forecast_type = request.query_params.get('type', 'daily')
