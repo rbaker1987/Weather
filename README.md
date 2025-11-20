@@ -27,9 +27,10 @@ python manage.py runserver
 ```
 
 **Access Points:**
-- Web Dashboard: http://localhost:8000
-- Admin Panel: http://localhost:8000/admin
-- API Documentation: http://localhost:8000/api
+
+- Web Dashboard: <http://localhost:8000>
+- Admin Panel: <http://localhost:8000/admin>
+- API Documentation: <http://localhost:8000/api>
 
 ## Development
 
@@ -37,16 +38,19 @@ python manage.py runserver
 
 This project uses modern linting and formatting tools for code quality:
 
-**Python (Ruff)**
+#### Python (Ruff)
+
 - Fast linter and formatter written in Rust
 - Replaces Black, isort, Flake8, and more
 - Django-aware linting rules
 
-**JavaScript (ESLint + Prettier)**
+#### JavaScript (ESLint + Prettier)
+
 - ESLint for error detection and code quality
 - Prettier for consistent formatting
 
 **Setup:**
+
 ```bash
 # Install Python dev dependencies
 pip install -e ".[dev]"
@@ -60,6 +64,7 @@ pre-commit install
 ```
 
 **Usage:**
+
 ```bash
 # Python linting
 ruff check .              # Check for issues
@@ -78,11 +83,13 @@ make format               # Format all
 ```
 
 **VS Code Integration:**
+
 1. Install recommended extensions (see `.vscode/extensions.json`)
 2. Code will auto-format on save
 3. Linting errors shown inline
 
 **Configuration Files:**
+
 - `.ruff.toml` - Ruff Python linter configuration
 - `.eslintrc.json` - ESLint JavaScript configuration
 - `.prettierrc.json` - Prettier formatter configuration
@@ -92,6 +99,7 @@ make format               # Format all
 ## Recent Enhancements
 
 ### Apparent Temperature ("Feels Like")
+
 Centralized calculation in `weather/utils/apparent_temperature.py`:
 
 1. Heat Index (Rothfusz regression) used when temp ≥ 80°F.
