@@ -1,8 +1,9 @@
 """Date and time parsing utilities for weather data."""
 
-from datetime import datetime, timezone as dt_timezone
-from typing import Union, Optional
 import re
+from datetime import datetime
+from datetime import timezone as dt_timezone
+from typing import Union
 
 
 def parse_nws_datetime(date_string: str) -> datetime:
@@ -10,9 +11,9 @@ def parse_nws_datetime(date_string: str) -> datetime:
     # NWS typically returns ISO 8601 format with timezone
     # Examples: "2025-11-17T12:00:00-06:00" or "2025-11-17T18:00:00Z"
 
-    if date_string.endswith('Z'):
+    if date_string.endswith("Z"):
         # UTC timezone
-        date_string = date_string[:-1] + '+00:00'
+        date_string = date_string[:-1] + "+00:00"
 
     try:
         return datetime.fromisoformat(date_string)
@@ -26,22 +27,21 @@ def format_time_12hour(dt: datetime) -> str:
 
     if hour == 0:
         return "12AM"
-    elif hour < 10:
+    if hour < 10:
         return f"0{hour}AM"
-    elif hour < 12:
+    if hour < 12:
         return f"{hour}AM"
-    elif hour == 12:
+    if hour == 12:
         return "12PM"
-    elif hour < 22:
-        return f"0{hour-12}PM"
-    else:
-        return f"{hour-12}PM"
+    if hour < 22:
+        return f"0{hour - 12}PM"
+    return f"{hour - 12}PM"
 
 
 def parse_time_12hour(time_str: str) -> int:
     """Parse 12-hour time string to hour (24-hour format)."""
     # Examples: "02PM" -> 14, "11AM" -> 11, "12AM" -> 0
-    pattern = r'^(\d{1,2})(AM|PM)$'
+    pattern = r"^(\d{1,2})(AM|PM)$"
     match = re.match(pattern, time_str.upper())
 
     if not match:
@@ -57,13 +57,11 @@ def parse_time_12hour(time_str: str) -> int:
     if period == "AM":
         if hour == 12:
             return 0
-        else:
-            return hour
-    else:  # PM
-        if hour == 12:
-            return 12
-        else:
-            return hour + 12
+        return hour
+    # PM
+    if hour == 12:
+        return 12
+    return hour + 12
 
 
 def create_datetime_from_date_and_time(date_str: str, time_str: str) -> datetime:
@@ -87,10 +85,9 @@ def format_temperature_trend(am_temp: int, pm_temp: int) -> str:
 
     if diff <= 2:
         return "steady"
-    elif am_temp < pm_temp:
+    if am_temp < pm_temp:
         return "rising"
-    else:
-        return "falling"
+    return "falling"
 
 
 def round_temperature_description(temp: int) -> str:
@@ -100,9 +97,9 @@ def round_temperature_description(temp: int) -> str:
 
     if last_digit in [0, 1, 2]:
         return f"around {temp_str[:-1]}0"
-    elif last_digit in [8, 9]:
-        return f"around {str(int(temp_str[:-1])+1)}0"
-    elif last_digit in [3, 4, 5, 6, 7]:
+    if last_digit in [8, 9]:
+        return f"around {str(int(temp_str[:-1]) + 1)}0"
+    if last_digit in [3, 4, 5, 6, 7]:
         return f"the mid {temp_str[:-1]}0s"
 
 
@@ -115,13 +112,10 @@ def describe_temperature_range(am_temp: int, pm_temp: int) -> str:
     if trend == "steady":
         if am_temp < pm_temp:
             return f"holding steady {pm_desc}"
-        else:
-            return f"holding steady {am_desc}"
-    else:
-        if "the" in am_desc:
-            return f"starting in {am_desc} and {trend} to {pm_desc}"
-        else:
-            return f"starting {am_desc} and {trend} to {pm_desc}"
+        return f"holding steady {am_desc}"
+    if "the" in am_desc:
+        return f"starting in {am_desc} and {trend} to {pm_desc}"
+    return f"starting {am_desc} and {trend} to {pm_desc}"
 
 
 def normalize_weather_description(weather: str) -> str:
@@ -165,17 +159,19 @@ def format_date_for_display(dt: datetime, include_day_name: bool = True) -> str:
     """Format date for user display."""
     if include_day_name:
         return dt.strftime("%A, %B %d, %Y")
-    else:
-        return dt.strftime("%B %d, %Y")
+    return dt.strftime("%B %d, %Y")
 
 
 def days_relative_name(days_from_today: int) -> str:
     """Get relative day name (Today, Tomorrow, etc.)."""
     if days_from_today == 0:
         return "Today"
-    elif days_from_today == 1:
+    if days_from_today == 1:
         return "Tomorrow"
-    elif days_from_today == -1:
+    if days_from_today == -1:
         return "Yesterday"
-    else:
-        return f"In {days_from_today} days" if days_from_today > 0 else f"{abs(days_from_today)} days ago"
+    return (
+        f"In {days_from_today} days"
+        if days_from_today > 0
+        else f"{abs(days_from_today)} days ago"
+    )
