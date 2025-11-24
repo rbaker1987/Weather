@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initialize search functionality
     initializeSearch();
-    
+
     // Initialize weather cards
     initializeWeatherCards();
 });
@@ -54,11 +54,11 @@ async function apiRequest(url, options = {}) {
     };
 
     const response = await fetch(url, { ...defaultOptions, ...options });
-    
+
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     return response.json();
 }
 
@@ -96,7 +96,7 @@ function initializeSearch() {
     const searchInput = document.getElementById('search-locations');
     if (searchInput) {
         let searchTimeout;
-        
+
         searchInput.addEventListener('input', function(e) {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
@@ -149,26 +149,26 @@ function initializeWeatherCards() {
 async function showHourlyForecastModal(forecastDate) {
     const modalBody = document.getElementById('hourlyForecastModalBody');
     const modalTitle = document.getElementById('hourlyForecastModalLabel');
-    
+
     // Format date for display
     const dateObj = new Date(forecastDate + 'T12:00:00');
     const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     modalTitle.textContent = `Hourly Forecast - ${dateStr}`;
-    
+
     modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading hourly forecast...</p></div>';
     const modal = new bootstrap.Modal(document.getElementById('hourlyForecastModal'));
     modal.show();
-    
+
     try {
         // Get current location coords from browser location
         if (!browserLocationCoords) {
             modalBody.innerHTML = '<p class="text-center text-warning">Location not available. Please enable location access.</p>';
             return;
         }
-        
+
         // Fetch hourly forecast for the selected date
         const resp = await apiRequest(`/api/hourly_forecast/?lat=${browserLocationCoords.lat}&lon=${browserLocationCoords.lon}&date=${encodeURIComponent(forecastDate)}&hours=24`);
-        
+
         if (resp && resp.hours && resp.hours.length > 0) {
             let html = '<div class="row g-2">';
             resp.hours.forEach(hour => {
@@ -206,13 +206,13 @@ window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
         console.warn('next6HoursBody element not found');
         return;
     }
-    
+
     next6Body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading next 6 hours...</p></div>';
-    
+
     try {
         // Fetch next 6 hours
         const resp = await apiRequest(`/api/hourly_forecast/?lat=${lat}&lon=${lon}&hours=6`);
-        
+
         if (resp && resp.hours && resp.hours.length > 0) {
             let html = '<div class="row g-2">';
             resp.hours.forEach(hour => {
@@ -247,20 +247,20 @@ window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
 async function addLocation(formData) {
     try {
         showLoading('Adding location...');
-        
+
         const data = await apiRequest('/api/locations/', {
             method: 'POST',
             body: JSON.stringify(formData)
         });
-        
+
         hideLoading();
         showNotification('Location added successfully!', 'success');
-        
+
         // Reload page after a short delay
         setTimeout(() => {
             window.location.reload();
         }, 1000);
-        
+
         return data;
     } catch (error) {
         hideLoading();
@@ -272,19 +272,19 @@ async function addLocation(formData) {
 async function updateForecast(locationId) {
     try {
         showLoading('Updating forecast...');
-        
+
         const data = await apiRequest(`/api/locations/${locationId}/update_forecast/`, {
             method: 'POST'
         });
-        
+
         hideLoading();
         showNotification('Forecast update triggered successfully!', 'success');
-        
+
         // Refresh forecast data
         setTimeout(() => {
             window.location.reload();
         }, 2000);
-        
+
         return data;
     } catch (error) {
         hideLoading();
@@ -297,25 +297,25 @@ async function deleteLocation(locationId) {
     if (!confirm('Are you sure you want to remove this location?')) {
         return;
     }
-    
+
     try {
         showLoading('Removing location...');
-        
+
         await fetch(`/api/locations/${locationId}/`, {
             method: 'DELETE',
             headers: {
                 'X-CSRFToken': getCsrfToken()
             }
         });
-        
+
         hideLoading();
         showNotification('Location removed successfully!', 'success');
-        
+
         // Remove the card from DOM or reload page
         setTimeout(() => {
             window.location.reload();
         }, 1000);
-        
+
     } catch (error) {
         hideLoading();
         showNotification('Error removing location: ' + error.message, 'error');
@@ -325,7 +325,7 @@ async function deleteLocation(locationId) {
 async function toggleLocationEnabled(locationId, currentState) {
     try {
         showLoading(currentState ? 'Disabling location...' : 'Enabling location...');
-        
+
         const response = await fetch(`/api/locations/${locationId}/toggle_enabled/`, {
             method: 'POST',
             headers: {
@@ -333,13 +333,13 @@ async function toggleLocationEnabled(locationId, currentState) {
                 'X-CSRFToken': getCsrfToken()
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (data.status === 'success') {
             hideLoading();
             showNotification(data.message, 'success');
-            
+
             // Reload the page to reflect the updated state
             setTimeout(() => {
                 window.location.reload();
@@ -347,7 +347,7 @@ async function toggleLocationEnabled(locationId, currentState) {
         } else {
             throw new Error(data.message || 'Failed to toggle location');
         }
-        
+
     } catch (error) {
         hideLoading();
         showNotification('Error toggling location: ' + error.message, 'error');
@@ -382,14 +382,14 @@ function showNotification(message, type = 'info') {
         min-width: 300px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     `;
-    
+
     notification.innerHTML = `
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     // Auto remove after 5 seconds
     setTimeout(() => {
         if (notification.parentNode) {
@@ -452,14 +452,14 @@ function getWeatherIcon(condition) {
         'cloudy': 'fas fa-cloud',
         'overcast': 'fas fa-cloud'
     };
-    
+
     const key = condition.toLowerCase();
     for (const [keyword, icon] of Object.entries(iconMap)) {
         if (key.includes(keyword)) {
             return icon;
         }
     }
-    
+
     return 'fas fa-cloud'; // default icon
 }
 

@@ -214,6 +214,12 @@ class LocationViewSet(viewsets.ModelViewSet):
             # Create a custom forecast
             data = request.data.copy()
             data['location'] = location.id
+            
+            # Check if this is the first forecast in a batch (indicated by a special header or parameter)
+            # If so, clear all existing forecasts to start fresh
+            is_batch_start = request.data.get('_batch_start', False)
+            if is_batch_start:
+                DailyForecast.objects.filter(location=location).delete()
 
             # Parse the date and period
             forecast_date = data.get('date')
@@ -296,6 +302,55 @@ class LocationViewSet(viewsets.ModelViewSet):
 
         serializer = WeatherAlertSerializer(alerts, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='hourly-forecasts')
+    def hourly_forecasts(self, request, pk=None):
+        """Create custom hourly forecast for a location."""
+        location = self.get_object()
+        data = request.data.copy()
+        data['location'] = location.id
+
+        # Check if this is the first forecast in a batch
+        is_batch_start = request.data.get('_batch_start', False)
+        if is_batch_start:
+            HourlyForecast.objects.filter(location=location).delete()
+
+        # Parse forecast_time
+        forecast_time = data.get('forecast_time')
+        if not forecast_time:
+            return Response({'error': 'forecast_time is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Convert to datetime
+        from dateutil import parser as date_parser
+        forecast_time_obj = date_parser.isoparse(forecast_time)
+        
+        # Set period_start and period_end (1-hour window)
+        data['period_start'] = forecast_time_obj.isoformat()
+        period_end = forecast_time_obj + timedelta(hours=1)
+        data['period_end'] = period_end.isoformat()
+        data['forecast_date'] = forecast_time_obj.date().isoformat()
+        
+        # Set default values
+        if 'wind_speed' not in data:
+            data['wind_speed'] = 0
+        if 'wind_direction' not in data:
+            data['wind_direction'] = ''
+        
+        # Check if forecast already exists and update it
+        existing_forecast = HourlyForecast.objects.filter(
+            location=location,
+            period_start=forecast_time_obj
+        ).first()
+        
+        if existing_forecast:
+            serializer = HourlyForecastSerializer(existing_forecast, data=data, partial=True)
+        else:
+            serializer = HourlyForecastSerializer(data=data)
+        
+        if serializer.is_valid():
+            serializer.save(location=location)
+            return Response(serializer.data, status=status.HTTP_200_OK if existing_forecast else status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'])
     def ensure_browser_location(self, request):
@@ -488,7 +543,7 @@ class LocationViewSet(viewsets.ModelViewSet):
                             timestamp = obs_props.get('timestamp')
                             if timestamp:
                                 location.last_observation_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                            
+
                             # Save current conditions including apparent temperature
                             location.save()
             except Exception as e:
@@ -507,8 +562,9 @@ class LocationViewSet(viewsets.ModelViewSet):
             # Parse and save forecast periods
             periods = forecast_data.get('properties', {}).get('periods', [])
 
-            # Clear old forecasts
+            # Clear old forecasts (both daily and hourly, including custom)
             DailyForecast.objects.filter(location=location).delete()
+            HourlyForecast.objects.filter(location=location).delete()  # Clear all hourly including custom
 
             # Helper function to parse wind speed
             def parse_wind_speed(wind_speed_str):
@@ -540,6 +596,7 @@ class LocationViewSet(viewsets.ModelViewSet):
                     short_forecast=period.get('shortForecast', ''),
                     detailed_forecast=period.get('detailedForecast', ''),
                     precipitation_probability=period.get('probabilityOfPrecipitation', {}).get('value'),
+                    nws_data_url=forecast_url,  # Mark as NWS forecast
                 )
 
             # Fetch weather alerts
@@ -1137,7 +1194,7 @@ class DashboardView(TemplateView):
         # Select primary location as first in ordered list
         favorite_location = locations[0] if locations else None
 
-        # Get 3-day forecast grouped by date
+        # Get 3-day forecast grouped by date (NWS forecasts only)
         daily_forecasts = []
         if favorite_location:
             from collections import defaultdict
@@ -1146,6 +1203,7 @@ class DashboardView(TemplateView):
                     location=favorite_location,
                     forecast_date__gte=timezone.now().date(),
                 )
+                .exclude(nws_data_url='')  # Only show NWS forecasts on dashboard
                 .order_by('forecast_date', '-is_daytime')[:6]
             )  # Get up to 6 periods (3 days x 2 periods)
             grouped = defaultdict(lambda: {'date': None, 'day': None, 'night': None})
@@ -1242,12 +1300,12 @@ class LocationListView(ListView):
             if needs_update:
                 fetch_current_conditions(location)
 
-            # Get today's daytime forecast
+            # Get today's daytime forecast (NWS only)
             today_forecast = DailyForecast.objects.filter(
                 location=location,
                 forecast_date=today,
                 is_daytime=True
-            ).first()
+            ).exclude(nws_data_url='').first()  # Only show NWS forecasts on location list
 
             # Get active alerts
             active_alerts = location.alerts.filter(is_active=True)
@@ -1349,6 +1407,7 @@ class LocationDetailView(DetailView):
                             short_forecast=period.get('shortForecast', ''),
                             detailed_forecast=period.get('detailedForecast', ''),
                             precipitation_probability=period.get('probabilityOfPrecipitation', {}).get('value'),
+                            nws_data_url=forecast_url,  # Mark as NWS forecast
                         )
 
                     # Fetch weather alerts
@@ -1413,15 +1472,27 @@ class LocationDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         location = self.object
 
-        # Get all daily forecasts (includes day and night periods)
-        all_forecasts = DailyForecast.objects.filter(
+        # Get all daily forecasts
+        all_daily = DailyForecast.objects.filter(
             location=location
         ).order_by('period_start')
+
+        # Check if we have custom forecasts (those without nws_data_url)
+        custom_daily = all_daily.filter(nws_data_url='')
+        nws_daily = all_daily.exclude(nws_data_url='')
+        
+        # For detail page, prefer custom forecasts if they exist, otherwise show NWS
+        if custom_daily.exists():
+            daily_to_show = custom_daily
+            has_custom_daily = True
+        else:
+            daily_to_show = nws_daily
+            has_custom_daily = False
 
         # Group forecasts by date (day and night together)
         from itertools import groupby
         grouped_forecasts = []
-        for date, periods in groupby(all_forecasts, key=lambda f: f.forecast_date):
+        for date, periods in groupby(daily_to_show, key=lambda f: f.forecast_date):
             periods_list = list(periods)
             day_forecast = next((p for p in periods_list if p.is_daytime), None)
             night_forecast = next((p for p in periods_list if not p.is_daytime), None)
@@ -1431,16 +1502,101 @@ class LocationDetailView(DetailView):
                 'night': night_forecast
             })
 
-        # Get hourly forecasts
-        hourly_forecasts = HourlyForecast.objects.filter(
+        # Get hourly forecasts (include slightly past forecasts to handle timing edge cases)
+        from datetime import timedelta as td
+        cutoff_time = timezone.now() - td(hours=1)  # Include last hour to handle edge cases
+        all_hourly = HourlyForecast.objects.filter(
             location=location,
-            period_start__gte=timezone.now()
-        ).order_by('period_start')[:24]
+            period_start__gte=cutoff_time
+        ).order_by('period_start')
+        
+        # Check if we have custom hourly forecasts
+        custom_hourly = all_hourly.filter(nws_data_url='')[:48]  # Get more to ensure coverage
+        nws_hourly = all_hourly.exclude(nws_data_url='')[:48]
+        
+        # For detail page, prefer custom forecasts if they exist
+        if custom_hourly.exists():
+            hourly_to_show = custom_hourly
+            has_custom_hourly = True
+        else:
+            hourly_to_show = nws_hourly
+            has_custom_hourly = False
+
+        # Serialize hourly forecasts for JavaScript
+        # For editing: merge custom and NWS data - use custom where it exists, NWS for the rest
+        import json
+        from datetime import timedelta
+        
+        # Build dictionaries for faster lookup and track used forecasts
+        custom_list = list(custom_hourly)
+        nws_list = list(nws_hourly)
+        used_custom_indices = set()
+        used_nws_indices = set()
+        
+        # Start from current hour and go forward 24 hours
+        current_time = timezone.now().replace(minute=0, second=0, microsecond=0)
+        merged_hourly = []
+        
+        for i in range(24):
+            hour_time = current_time + timedelta(hours=i)
+            forecast_to_use = None
+            
+            # Try to find the closest custom forecast for this hour (within 60 min, not yet used)
+            best_custom_match = None
+            best_custom_diff = float('inf')
+            best_custom_idx = None
+            
+            for idx, custom_forecast in enumerate(custom_list):
+                if idx in used_custom_indices:
+                    continue
+                time_diff = abs((custom_forecast.period_start - hour_time).total_seconds())
+                if time_diff < 3600 and time_diff < best_custom_diff:  # Within 60 minutes
+                    best_custom_match = custom_forecast
+                    best_custom_diff = time_diff
+                    best_custom_idx = idx
+            
+            if best_custom_match:
+                forecast_to_use = best_custom_match
+                used_custom_indices.add(best_custom_idx)
+            else:
+                # Find closest NWS forecast (within 60 min, not yet used)
+                best_nws_match = None
+                best_nws_diff = float('inf')
+                best_nws_idx = None
+                
+                for idx, nws_forecast in enumerate(nws_list):
+                    if idx in used_nws_indices:
+                        continue
+                    time_diff = abs((nws_forecast.period_start - hour_time).total_seconds())
+                    if time_diff < 3600 and time_diff < best_nws_diff:
+                        best_nws_match = nws_forecast
+                        best_nws_diff = time_diff
+                        best_nws_idx = idx
+                
+                if best_nws_match:
+                    forecast_to_use = best_nws_match
+                    used_nws_indices.add(best_nws_idx)
+            
+            # Add to list if we found something
+            if forecast_to_use:
+                merged_hourly.append(forecast_to_use)
+        
+        hourly_json = json.dumps([{
+            'temperature': h.temperature,
+            'short_forecast': h.short_forecast,
+            'wind_speed': h.wind_speed,
+            'wind_gust': h.wind_gust,
+            'precipitation_probability': h.precipitation_probability,
+            'period_start': h.period_start.isoformat()
+        } for h in merged_hourly])
 
         context.update({
             'page_title': f'{location.name} - Weather Details',
             'daily_forecasts': grouped_forecasts,
-            'hourly_forecasts': hourly_forecasts,
+            'hourly_forecasts': hourly_to_show,
+            'hourly_forecasts_json': hourly_json,
+            'has_custom_daily': has_custom_daily,
+            'has_custom_hourly': has_custom_hourly,
             'active_alerts': location.alerts.filter(is_active=True),
         })
 
@@ -1498,6 +1654,7 @@ def _refresh_forecasts_for_location(location: Location):
                 short_forecast=p.get('shortForecast', ''),
                 detailed_forecast=p.get('detailedForecast', ''),
                 precipitation_probability=p.get('probabilityOfPrecipitation', {}).get('value'),
+                nws_data_url=fcst_url,  # Mark as NWS forecast
             )
         location.last_forecast_update = timezone.now()
         location.save(update_fields=['nws_office','grid_x','grid_y','last_forecast_update'])

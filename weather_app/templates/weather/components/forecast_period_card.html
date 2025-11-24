@@ -9,23 +9,48 @@
             <span class="badge bg-secondary"><i class="fas fa-moon"></i> Night</span>
             {% endif %}
         </div>
-        <i class="fas fa-{{ period.short_forecast|condition_icon }} mb-2" style="font-size: 2rem;"></i>
+        {% with layout=period|needs_chance_layout %}
+            {% if layout == 'mixed' %}
+            <div class="chance-mixed-block mb-2" data-layout="mixed">
+                <i class="fas fa-cloud chance-mixed-main" aria-hidden="true"></i>
+                <span class="chance-mixed-sub" aria-hidden="true">
+                    <i class="fas fa-tint"></i>
+                    <i class="fas fa-snowflake"></i>
+                    <i class="fas fa-tint"></i>
+                </span>
+            </div>
+            {% elif layout == 'storm' %}
+            <div class="chance-mixed-block mb-2" data-layout="storm-chance">
+                <i class="fas fa-cloud chance-mixed-main" aria-hidden="true"></i>
+                <span class="chance-mixed-sub" aria-hidden="true">
+                    <i class="fas fa-bolt"></i>
+                    <i class="fas fa-bolt"></i>
+                </span>
+            </div>
+            {% elif layout == 'snow' %}
+            <div class="chance-mixed-block mb-2" data-layout="snow-chance" data-pop="{{ period.precipitation_probability }}" data-text="{{ period.short_forecast }}">
+                <i class="fas fa-cloud chance-mixed-main" aria-hidden="true"></i>
+                <span class="chance-mixed-sub" aria-hidden="true">
+                    <i class="fas fa-snowflake"></i>
+                    <i class="fas fa-snowflake"></i>
+                </span>
+            </div>
+            {% else %}
+            <i class="fas fa-{{ period|condition_icon:period_type }} mb-2" style="font-size: 2.5rem;" aria-hidden="true" data-layout="else" data-icon="{{ period|condition_icon:period_type }}"></i>
+            {% endif %}
+        {% endwith %}
         <div class="mb-2">
-            <h4 class="mb-0">{{ period.temperature }}°{{ period.temperature_unit }}</h4>
+            <h3 class="mb-1">{{ period.temperature }}°{{ period.temperature_unit }}</h3>
             {% if period|should_show_feels_like %}
-            <small class="d-block" style="opacity: 0.85;"><i class="fas fa-temperature-high"></i> Feels like {{ period.apparent_temperature }}°{{ period.temperature_unit }}</small>
+            <span class="d-block" style="opacity: 0.85; font-size: 1rem;"><i class="fas fa-temperature-high"></i> Feels like {{ period.apparent_temperature }}°{{ period.temperature_unit }}</span>
             {% endif %}
             {% if period.wind_speed %}
-            <small class="d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> {{ period.wind_speed }} mph{% if period.wind_gust %} (gust {{ period.wind_gust }} mph){% endif %}</small>
+            <span class="d-block" style="opacity: 0.85; font-size: 1rem;"><i class="fas fa-wind"></i> {{ period.wind_speed }} mph{% if period.wind_gust %} (gust {{ period.wind_gust }} mph){% endif %}</span>
             {% endif %}
             {% if period.precipitation_probability %}
-            <small class="d-block" style="opacity: 0.85;"><i class="fas fa-cloud-rain"></i> {{ period.precipitation_probability }}% chance</small>
+            <span class="d-block" style="opacity: 0.85; font-size: 1rem;"><i class="fas fa-{{ period|pop_icon }}"></i> {{ period.precipitation_probability|round_pop }}%</span>
             {% endif %}
         </div>
     </div>
-    {% if period.detailed_forecast %}
-    <p class="small mb-0" style="min-height: 3em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ period.detailed_forecast }}</p>
-    {% else %}
-    <p class="small mb-0" style="min-height: 3em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9;">{{ period.short_forecast }}</p>
-    {% endif %}
+    <p class="mb-0" style="min-height: 4.5em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; opacity: 0.9; font-size: 1.05rem;">{{ period.short_forecast }}</p>
 </div>

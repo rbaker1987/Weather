@@ -5,22 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Ralph's Weather{% endblock %}</title>
     {% load static %}
-    
+
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="{% static 'weather/img/logo-favicon.svg' %}">
     <link rel="shortcut icon" href="{% static 'weather/img/logo-favicon.svg' %}">
-    
+
     <!-- Custom CSS -->
     <link rel="stylesheet" type="text/css" href="{% static 'weather/css/style.css' %}">
-    
+
     <!-- CSRF Token -->
     {% csrf_token %}
     <style>
@@ -29,39 +29,39 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s;
         }
-        
+
         .weather-card:hover {
             transform: translateY(-2px);
         }
-        
+
         .alert-severe { border-left: 4px solid #dc3545; }
         .alert-moderate { border-left: 4px solid #fd7e14; }
         .alert-minor { border-left: 4px solid #ffc107; }
-        
+
         .temp-high { color: #dc3545; font-weight: bold; }
         .temp-low { color: #0d6efd; font-weight: bold; }
-        
+
         .navbar-brand {
             font-weight: bold;
             font-size: 1.5rem;
             color: white !important;
         }
-        
+
         .navbar-brand:hover {
             color: #f0f0f0 !important;
         }
-        
+
         .footer {
             background-color: #f8f9fa;
             margin-top: 2rem;
             padding: 2rem 0;
         }
-        
+
         .weather-icon {
             font-size: 2rem;
             margin-right: 0.5rem;
         }
-        
+
         .forecast-day {
             text-align: center;
             padding: 1rem;
@@ -71,7 +71,7 @@
             color: white;
         }
     </style>
-    
+
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -79,11 +79,11 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             {% include 'weather/components/logo.html' %}
-            
+
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            
+
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
@@ -121,7 +121,7 @@
                 </div>
             {% endfor %}
         {% endif %}
-        
+
         {% block content %}{% endblock %}
     </main>
 
@@ -156,19 +156,19 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
+
     <!-- SortableJS for drag and drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    
+
     <!-- Chart.js for charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <!-- Custom Weather JS -->
     <script src="{% static 'weather/js/weather.js' %}"></script>
-    
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>
