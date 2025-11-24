@@ -6,6 +6,7 @@ A Django web application for weather forecasting using the National Weather Serv
 
 - **Web Interface**: Dashboard with browser geolocation and location management
 - **Custom Forecasts**: Edit daily and hourly forecasts with live preview and validation
+- **Animated Radar**: Interactive weather radar maps with play/pause controls and time scrubbing
 - **REST API**: Full CRUD operations for locations and forecasts
 - **Real-time Data**: Current conditions, hourly/daily forecasts, and weather alerts from NWS
 - **Merged Data**: Custom edits prioritized, NWS fills remaining forecast slots automatically
@@ -71,6 +72,7 @@ Install recommended extensions (`.vscode/extensions.json`) for auto-formatting o
 - **Locations**: Add locations by name/zip code, view detailed forecasts
 - **Forecasts**: 7-day forecasts with hourly breakdowns
 - **Custom Forecasts**: Edit daily and hourly forecasts with live preview
+- **Animated Radar**: Interactive weather radar with animation controls (play/pause, time slider)
 - **Alerts**: Active weather alerts for your locations
 - **Timezone Support**: Accurate sunrise/sunset times with proper timezone handling
 
@@ -136,7 +138,7 @@ python manage.py update_forecasts --locations uuid1 uuid2
 
 **Frontend:**
 
-- `templates/weather/components/` - Reusable template fragments
+- `templates/weather/components/` - Reusable template fragments (radar_map.html, forecast cards, etc.)
 - `static/weather/js/weather.js` - Dynamic UI interactions
 - `static/weather/css/style.css` - Temperature-based styling
 
@@ -205,6 +207,16 @@ tests/                       # Unit tests
 
 ## Recent Enhancements
 
+### Animated Radar Maps
+
+- Interactive weather radar using Leaflet.js and NOAA/NWS WMS layers
+- Animation controls: play/pause button and time slider
+- 11 frames covering last 2 hours at 10-minute intervals
+- Reusable `radar_map.html` component with configurable parameters
+- Base map switching: Street view or satellite imagery
+- Base reflectivity data with color-coded legend (NOAA/NWS MRMS)
+- Automatic radar initialization on dashboard and location detail pages
+
 ### Custom Forecast Editing
 
 - Edit daily and hourly forecasts through modal interfaces
@@ -231,9 +243,10 @@ tests/                       # Unit tests
 
 ### Component-Based Templates
 
+- `radar_map.html` - Animated weather radar with Leaflet.js integration
 - `forecast_period_card.html` - Day/night forecast display
 - `section_header.html` - Standardized card headers
-- Eliminated ~200 lines of duplicate markup
+- Eliminated ~300 lines of duplicate markup across templates
 
 ## Contributing
 
