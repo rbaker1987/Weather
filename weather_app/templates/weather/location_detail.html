@@ -747,7 +747,7 @@ function getWeatherIcon(conditions, isDaytime = true, pop = null) {
     const isIce = c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet');
     const isRain = c.includes('rain') || c.includes('shower') || c.includes('drizzle');
     const isMixed = isRain && isSnow;  // Mixed precipitation
-    
+
     // If we have precipitation probability, adjust icon based on it
     if (pop !== null && pop !== undefined) {
         if (pop >= 40) {
@@ -773,7 +773,7 @@ function getWeatherIcon(conditions, isDaytime = true, pop = null) {
             // Fall through to default for other conditions
         }
     }
-    
+
     // Default behavior (no PoP or didn't match PoP conditions)
     if (isStorm) return 'bolt';
     if (isIce) return 'icicles';
@@ -943,13 +943,13 @@ function submitLocationForm() {
 document.addEventListener('DOMContentLoaded', function() {
     const dailyModal = document.getElementById('editDailyForecastModal');
     const hourlyModal = document.getElementById('editHourlyForecastModal');
-    
+
     if (dailyModal) {
         dailyModal.addEventListener('shown.bs.modal', function() {
             generateDailyForecastGrid();
         });
     }
-    
+
     if (hourlyModal) {
         hourlyModal.addEventListener('shown.bs.modal', function() {
             generateHourlyForecastGrid();
@@ -1149,19 +1149,19 @@ function updateHourlyCard(cardId) {
     const popEl = document.getElementById(`${cardId}-pop`);
     const iconEl = document.getElementById(`${cardId}-icon`);
     const cardEl = document.getElementById(`${cardId}-card`);
-    
+
     if (!shortEl || !iconEl || !tempEl) return;
-    
+
     const shortVal = shortEl.value || '';
     const popRaw = popEl ? popEl.value : '';
     const popVal = popRaw === '' ? null : parseInt(popRaw, 10);
     const tempVal = tempEl.value || '';
-    
+
     // Update icon
     const iconName = getWeatherIcon(shortVal, true, popVal);
     iconEl.className = `fas fa-${iconName} mb-2`;
     iconEl.style.fontSize = '1.8rem';
-    
+
     // Update background color based on temperature
     if (tempVal && cardEl) {
         const temp = parseInt(tempVal);
@@ -1180,7 +1180,7 @@ async function generateHourlyForecastGrid() {
     grid.innerHTML = '';
 
     const now = new Date();
-    
+
     // Always fetch from API to ensure we have 24 hours of merged custom+NWS data
     let hourlyData = [];
     try {
@@ -1207,7 +1207,7 @@ async function generateHourlyForecastGrid() {
 
     for (let i = 0; i < 24; i++) {
         const existing = hourlyData[i] || {};
-        
+
         // Use stored period_start if available, otherwise calculate from current time
         let hour;
         let timeStr;
@@ -1219,19 +1219,19 @@ async function generateHourlyForecastGrid() {
             hour.setHours(now.getHours() + i);
             timeStr = hour.toISOString();
         }
-        
+
         const hourStr = hour.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
         const temp = existing.temperature || '';
         const short = existing.short_forecast || '';
         const wind = existing.wind_speed || '';
         const gust = existing.wind_gust || '';
         const pop = existing.precipitation_probability || '';
-        
+
         // Determine background class
         const bgClass = temp ? `temp-bg-${temp}` : 'temp-bg-70';
-        
+
         const cardId = `hourly-${i}`;
-        
+
         const cardHtml = `
             <div class="col-lg-2 col-md-3 col-sm-4 col-6">
                 <div class="card border-0 h-100">
@@ -1283,10 +1283,10 @@ async function generateHourlyForecastGrid() {
                 </div>
             </div>
         `;
-        
+
         grid.insertAdjacentHTML('beforeend', cardHtml);
     }
-    
+
     // Add event listeners
     setTimeout(() => {
         document.querySelectorAll('[data-card]').forEach(input => {
@@ -1295,12 +1295,12 @@ async function generateHourlyForecastGrid() {
                 validateAllHourlyForecasts();
             });
         });
-        
+
         // Update icons for pre-filled forecasts
         for (let i = 0; i < 24; i++) {
             updateHourlyCard(`hourly-${i}`);
         }
-        
+
         validateAllHourlyForecasts();
     }, 100);
 }

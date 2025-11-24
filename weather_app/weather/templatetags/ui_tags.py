@@ -4,7 +4,7 @@ register = template.Library()
 
 
 @register.filter(name="condition_icon")
-def condition_icon(forecast_or_text, period_type='day'):
+def condition_icon(forecast_or_text, period_type="day"):
     """Map a text description to a Font Awesome icon name, adjusted by precipitation probability.
 
     Can accept either a forecast object or text string.
@@ -12,34 +12,36 @@ def condition_icon(forecast_or_text, period_type='day'):
     - High (≥40%): Shows precipitation type (bolt, snowflake, etc.)
     - Medium (20-40%): Shows cloud + precipitation combo
     - Low (<20%): Shows sky condition
-    
+
     Second parameter (period_type) should be 'day' or 'night' to determine icon choice.
     """
     # Check if this is a forecast object with precipitation_probability
-    if hasattr(forecast_or_text, 'short_forecast'):
+    if hasattr(forecast_or_text, "short_forecast"):
         text = forecast_or_text.short_forecast
-        pop = getattr(forecast_or_text, 'precipitation_probability', None)
-        is_daytime = getattr(forecast_or_text, 'is_daytime', True)
+        pop = getattr(forecast_or_text, "precipitation_probability", None)
+        is_daytime = getattr(forecast_or_text, "is_daytime", True)
     else:
         text = forecast_or_text
         pop = None
-        is_daytime = period_type == 'day' if isinstance(period_type, str) else bool(period_type)
+        is_daytime = (
+            period_type == "day" if isinstance(period_type, str) else bool(period_type)
+        )
 
     if not text:
         return "cloud-moon" if not is_daytime else "cloud-sun"
-    
+
     cond = str(text).lower()
     is_storm = any(k in cond for k in ("storm", "thunder", "t-storm"))
     is_snow = any(k in cond for k in ("snow", "flurries", "blizzard"))
     is_ice = any(k in cond for k in ("ice", "icy", "freezing", "sleet"))
     is_rain = any(k in cond for k in ("rain", "shower", "drizzle"))
     is_mixed = is_rain and is_snow  # Mixed precipitation
-    
+
     # If we have precipitation probability, adjust icon based on it
     if pop is not None:
         try:
             pop_val = int(pop)
-            
+
             if pop_val >= 45:
                 # High chance: show precipitation type
                 if is_storm:
@@ -77,7 +79,7 @@ def condition_icon(forecast_or_text, period_type='day'):
                 # Fall through to default for other conditions
         except (TypeError, ValueError):
             pass
-    
+
     # Default behavior (no PoP or couldn't parse it)
     if is_storm:
         return "bolt"
@@ -123,7 +125,9 @@ def should_show_feels_like(forecast_or_temp, apparent_temp=None):
         {% if actual_temp|should_show_feels_like:apparent_temp %}
     """
     # If called with a forecast object
-    if hasattr(forecast_or_temp, 'temperature') and hasattr(forecast_or_temp, 'apparent_temperature'):
+    if hasattr(forecast_or_temp, "temperature") and hasattr(
+        forecast_or_temp, "apparent_temperature"
+    ):
         actual = forecast_or_temp.temperature
         apparent = forecast_or_temp.apparent_temperature
     # If called with separate values
@@ -148,13 +152,14 @@ def should_show_feels_like(forecast_or_temp, apparent_temp=None):
 @register.filter(name="pop_icon")
 def pop_icon(forecast_or_pop, condition_text=None):
     """Return icon for precipitation probability display.
-    
+
     Always returns 'tint' (water droplet) icon for PoP percentage display.
-    
+
     Usage:
         {{ period|pop_icon }}
     """
-    return 'tint'
+    return "tint"
+
 
 @register.filter(name="is_mixed_precip")
 def is_mixed_precip(forecast_or_text):
@@ -164,17 +169,18 @@ def is_mixed_precip(forecast_or_text):
     Can accept either a forecast object or text string.
     Safe for None input.
     """
-    if hasattr(forecast_or_text, 'short_forecast'):
+    if hasattr(forecast_or_text, "short_forecast"):
         text = forecast_or_text.short_forecast
     else:
         text = forecast_or_text
-    
+
     if not text:
         return False
     cond = str(text).lower()
     rain = any(k in cond for k in ("rain", "shower", "drizzle"))
     snow = any(k in cond for k in ("snow", "flurries", "blizzard"))
     return rain and snow
+
 
 @register.filter(name="is_snow_precip")
 def is_snow_precip(forecast_or_text):
@@ -183,11 +189,11 @@ def is_snow_precip(forecast_or_text):
     Can accept either a forecast object or text string.
     Used for chance snow layout (cloud with flakes beneath).
     """
-    if hasattr(forecast_or_text, 'short_forecast'):
+    if hasattr(forecast_or_text, "short_forecast"):
         text = forecast_or_text.short_forecast
     else:
         text = forecast_or_text
-    
+
     if not text:
         return False
     cond = str(text).lower()
@@ -200,7 +206,7 @@ def is_snow_precip(forecast_or_text):
 @register.filter(name="round_pop")
 def round_pop(value):
     """Round precipitation probability to nearest 10%.
-    
+
     Usage:
         {{ period.precipitation_probability|round_pop }}
     """
@@ -216,43 +222,43 @@ def round_pop(value):
 @register.filter(name="needs_chance_layout")
 def needs_chance_layout(forecast_obj):
     """Check if this forecast should use the chance layout (cloud with icons below).
-    
+
     Returns 'mixed' for mixed precip, 'snow' for snow-only 20-49%, or empty string.
     """
-    if not hasattr(forecast_obj, 'short_forecast'):
-        return ''
-    
+    if not hasattr(forecast_obj, "short_forecast"):
+        return ""
+
     text = forecast_obj.short_forecast
-    pop = getattr(forecast_obj, 'precipitation_probability', None)
-    
+    pop = getattr(forecast_obj, "precipitation_probability", None)
+
     if not text:
-        return ''
-    
+        return ""
+
     # Handle None or empty PoP - but still check for mixed
     cond = str(text).lower()
     is_rain = any(k in cond for k in ("rain", "shower", "drizzle"))
     is_snow = any(k in cond for k in ("snow", "flurries", "blizzard"))
     is_storm = any(k in cond for k in ("storm", "thunder", "t-storm"))
-    
+
     # Mixed precipitation - always use mixed layout regardless of PoP
     if is_rain and is_snow:
-        return 'mixed'
-    
+        return "mixed"
+
     # For snow-only or storm, we need a valid PoP
     if pop is None:
-        return ''
-    
+        return ""
+
     try:
         pop_val = int(pop)
     except (TypeError, ValueError):
-        return ''
-    
+        return ""
+
     # Storm with 15-44% PoP (chance)
     if is_storm and pop_val >= 15 and pop_val <= 44:
-        return 'storm'
-    
+        return "storm"
+
     # Snow-only with 15-44% PoP (chance - rounds to 20-40%)
     if is_snow and not is_rain and pop_val >= 15 and pop_val <= 44:
-        return 'snow'
-    
-    return ''
+        return "snow"
+
+    return ""
