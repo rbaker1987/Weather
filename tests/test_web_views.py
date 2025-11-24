@@ -32,6 +32,7 @@ class TestDashboardView:
                 temperature=70 + i,
                 short_forecast="Sunny",
                 wind_speed=5,
+                nws_data_url="https://api.weather.gov/gridpoints/TEST/1,1/forecast",
             )
             DailyForecast.objects.create(
                 location=loc1,
@@ -42,6 +43,7 @@ class TestDashboardView:
                 temperature=60 + i,
                 short_forecast="Clear",
                 wind_speed=3,
+                nws_data_url="https://api.weather.gov/gridpoints/TEST/1,1/forecast",
             )
 
         resp = client.get(reverse('weather:dashboard'))

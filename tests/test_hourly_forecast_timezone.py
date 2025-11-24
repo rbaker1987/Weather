@@ -38,8 +38,8 @@ class DummyResp:
     def raise_for_status(self):
         return None
 
-@patch("weather_app.weather.api.hourly_forecast_api.requests.get")
-@patch("weather_app.weather.api.hourly_forecast_api.TimezoneFinder")
+@patch("weather.api.hourly_forecast_api.requests.get")
+@patch("weather.api.hourly_forecast_api.TimezoneFinder")
 def test_hourly_forecast_includes_timezone(mock_tzfinder, mock_get):
     # Mock timezone finder
     instance = MagicMock()
