@@ -1,0 +1,179 @@
+{# Reusable animated radar map component #}
+{# Required params: map_id, lat, lon, location_name #}
+{# Optional params: height (default: 600px), zoom (default: 8), show_marker (default: true) #}
+
+{% with height=height|default:"600px" zoom=zoom|default:8 show_marker=show_marker|default:True %}
+<div class="card weather-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-radar"></i> Radar for {{ location_name }}
+        </h5>
+        <button onclick="exportSectionAsImage('{{ map_id }}')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+            <i class="fas fa-download"></i>
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div id="{{ map_id }}" style="height: {{ height }}; width: 100%; position: relative;">
+            <div id="{{ map_id }}_controls" style="position: absolute; bottom: 10px; left: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 10px;">
+                <button id="{{ map_id }}_playPause" class="btn btn-sm btn-primary" title="Play/Pause">
+                    <i class="fas fa-play"></i>
+                </button>
+                <input type="range" id="{{ map_id }}_slider" min="0" max="10" value="0" style="width: 200px;">
+                <span id="{{ map_id }}_time" style="font-size: 0.85rem; min-width: 120px;">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const mapId = '{{ map_id }}';
+    const lat = {{ lat }};
+    const lon = {{ lon }};
+    const zoom = {{ zoom }};
+    const showMarker = {{ show_marker|lower }};
+    const locationName = '{{ location_name|escapejs }}';
+
+    // Wait for Leaflet to be available
+    function initRadar() {
+        if (typeof L === 'undefined') {
+            setTimeout(initRadar, 100);
+            return;
+        }
+
+        const map = L.map(mapId).setView([lat, lon], zoom);
+
+        // Base map layers
+        const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        });
+
+        const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri',
+            maxZoom: 19
+        });
+
+        streetMap.addTo(map);
+
+        // Add location marker
+        if (showMarker) {
+            L.marker([lat, lon])
+                .addTo(map)
+                .bindPopup(locationName);
+        }
+
+        // NWS GeoServer base URL
+        const nwsGeoServerUrl = 'https://opengeo.ncep.noaa.gov/geoserver';
+
+        // Radar - Base Reflectivity (CONUS)
+        const radarLayer = L.tileLayer.wms(nwsGeoServerUrl + '/conus/conus_bref_qcd/ows', {
+            layers: 'conus_bref_qcd',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.7,
+            zIndex: 10,
+            attribution: 'NOAA/NWS MRMS'
+        }).addTo(map);
+
+        // Add radar legend
+        const radarLegendUrl = nwsGeoServerUrl + '/conus/conus_bref_qcd/wms?SERVICE=WMS&REQUEST=GetLegendGraphic&FORMAT=image/png&LAYER=conus_bref_qcd';
+        const radarLegend = L.control({position: 'bottomright'});
+        radarLegend.onAdd = function(map) {
+            const div = L.DomUtil.create('div', 'info legend');
+            div.innerHTML = '<div style="background:#fff;padding:8px;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);font-size:12px;max-width:260px">'
+                + '<div style="font-weight:600;margin-bottom:6px">Base Reflectivity (dBZ)</div>'
+                + '<img alt="legend" style="max-width:240px;border:1px solid #ccc;background:#fff" src="' + radarLegendUrl + '" />'
+                + '<div style="margin-top:6px;color:#666">Source: NOAA/NWS MRMS</div>'
+                + '</div>';
+            return div;
+        };
+        radarLegend.addTo(map);
+
+        // Radar animation setup
+        let radarFrames = [];
+        let currentFrame = 0;
+        let isPlaying = false;
+        let animationInterval = null;
+
+        // Generate time frames (last 2 hours, 10-minute intervals)
+        const now = new Date();
+        for (let i = 10; i >= 0; i--) {
+            const frameTime = new Date(now - i * 10 * 60 * 1000);
+            radarFrames.push(frameTime);
+        }
+
+        // Update time display
+        function updateRadarTime(frameIndex) {
+            const timeEl = document.getElementById(mapId + '_time');
+            if (timeEl && radarFrames[frameIndex]) {
+                const time = radarFrames[frameIndex];
+                timeEl.textContent = time.toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: '2-digit', 
+                    hour12: true 
+                });
+            }
+        }
+
+        // Update radar layer with timestamp
+        function updateRadarFrame(frameIndex) {
+            currentFrame = frameIndex;
+            const frameTime = radarFrames[frameIndex];
+            const timestamp = frameTime.toISOString();
+            
+            // Update WMS layer with TIME parameter
+            radarLayer.setParams({
+                time: timestamp
+            });
+            
+            updateRadarTime(frameIndex);
+            document.getElementById(mapId + '_slider').value = frameIndex;
+        }
+
+        // Play/Pause functionality
+        const playPauseBtn = document.getElementById(mapId + '_playPause');
+        playPauseBtn.addEventListener('click', function() {
+            if (isPlaying) {
+                clearInterval(animationInterval);
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+            } else {
+                playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                animationInterval = setInterval(() => {
+                    currentFrame = (currentFrame + 1) % radarFrames.length;
+                    updateRadarFrame(currentFrame);
+                }, 500); // Update every 500ms
+            }
+            isPlaying = !isPlaying;
+        });
+
+        // Slider control
+        document.getElementById(mapId + '_slider').addEventListener('input', function(e) {
+            if (isPlaying) {
+                clearInterval(animationInterval);
+                playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                isPlaying = false;
+            }
+            updateRadarFrame(parseInt(e.target.value));
+        });
+
+        // Initialize with current frame (most recent)
+        updateRadarFrame(radarFrames.length - 1);
+
+        // Base map control
+        const baseMaps = {
+            "Street Map": streetMap,
+            "Satellite": satelliteMap
+        };
+        L.control.layers(baseMaps, null, {position: 'topright'}).addTo(map);
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initRadar);
+    } else {
+        initRadar();
+    }
+})();
+</script>
+{% endwith %}

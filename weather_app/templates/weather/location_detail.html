@@ -545,19 +545,7 @@
 {% if location.latitude and location.longitude %}
 <div class="row mb-4">
     <div class="col-12">
-        <div class="card weather-card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-radar"></i> Weather Radar
-                </h5>
-                <button onclick="exportSectionAsImage('radarMap')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
-                    <i class="fas fa-download"></i>
-                </button>
-            </div>
-            <div class="card-body p-0">
-                <div id="radarMap" style="height: 500px; width: 100%;"></div>
-            </div>
-        </div>
+        {% include 'weather/components/radar_map.html' with map_id='radarMap' lat=location.latitude lon=location.longitude location_name=location.display_name %}
     </div>
 </div>
 {% endif %}
@@ -1622,68 +1610,6 @@ function getCookie(name) {
     }
     return cookieValue;
 }
-
-{% if location.latitude and location.longitude %}
-// Initialize radar map
-document.addEventListener('DOMContentLoaded', function() {
-    const map = L.map('radarMap').setView([{{ location.latitude }}, {{ location.longitude }}], 8);
-
-    // Base map layers
-    const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    });
-
-    const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles © Esri',
-        maxZoom: 19
-    });
-
-    streetMap.addTo(map);
-
-    // Add location marker
-    L.marker([{{ location.latitude }}, {{ location.longitude }}])
-        .addTo(map)
-        .bindPopup('{{ location.display_name }}');
-
-    // Weather overlay layers
-    const weatherLayers = {};
-
-    // NWS GeoServer base URL
-    const nwsGeoServerUrl = 'https://opengeo.ncep.noaa.gov/geoserver';
-
-    // Radar - Base Reflectivity (CONUS)
-    const radarLayer = L.tileLayer.wms(nwsGeoServerUrl + '/conus/conus_bref_qcd/ows', {
-        layers: 'conus_bref_qcd',
-        format: 'image/png',
-        transparent: true,
-        opacity: 0.7,
-        zIndex: 10,
-        attribution: 'NOAA/NWS MRMS'
-    }).addTo(map);
-
-    // Add radar legend
-    const radarLegendUrl = nwsGeoServerUrl + '/conus/conus_bref_qcd/wms?SERVICE=WMS&REQUEST=GetLegendGraphic&FORMAT=image/png&LAYER=conus_bref_qcd';
-    const radarLegend = L.control({position: 'bottomright'});
-    radarLegend.onAdd = function(map) {
-        const div = L.DomUtil.create('div', 'info legend');
-        div.innerHTML = '<div style="background:#fff;padding:8px;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.2);font-size:12px;max-width:260px">'
-            + '<div style="font-weight:600;margin-bottom:6px">Base Reflectivity (dBZ)</div>'
-            + '<img alt="legend" style="max-width:240px;border:1px solid #ccc;background:#fff" src="' + radarLegendUrl + '" />'
-            + '<div style="margin-top:6px;color:#666">Source: NOAA/NWS MRMS</div>'
-            + '</div>';
-        return div;
-    };
-    radarLegend.addTo(map);
-
-    // Base map control
-    const baseMaps = {
-        "Street Map": streetMap,
-        "Satellite": satelliteMap
-    };
-    L.control.layers(baseMaps, null, {position: 'topright'}).addTo(map);
-});
-{% endif %}
 </script>
 
 <!-- Leaflet JS Library -->
