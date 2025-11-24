@@ -5,8 +5,34 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
+    .export-processing {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px 40px;
+        border-radius: 8px;
+        text-align: center;
+    }
     #radarMap {
         z-index: 1;
+    }
+    /* Uniform small hourly forecast icons */
+    /* Unified icon sizing across all forecast displays */
+    .forecast-icon,
+    #hourlyForecastsTable i.hourly-icon {
+        font-size: 1.25rem !important;
+        width: 1.5rem;
+        height: 1.5rem;
+        line-height: 1.5rem;
+        text-align: center;
+        margin-right: 4px;
+        vertical-align: middle;
+        /* inherit the surrounding text color (remove forced blue) */
+        color: inherit;
     }
 </style>
 {% endblock %}
@@ -21,21 +47,18 @@
                 <li class="breadcrumb-item active">{{ location.name }}</li>
             </ol>
         </nav>
-        
+
         <div class="d-flex justify-content-between align-items-start">
             <div>
                 <h1 class="display-5 mb-0">
                     <i class="fas fa-map-marker-alt text-primary"></i> {{ location.display_name }}
-                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editNameModal">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="openEditLocationModal()" title="Edit Location">
                         <i class="fas fa-edit"></i>
                     </button>
                 </h1>
                 <p class="text-muted">Weather details and forecasts</p>
             </div>
             <div class="btn-group">
-                <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#addCustomForecastModal">
-                    <i class="fas fa-plus"></i> Add Custom Forecast
-                </button>
                 <button class="btn btn-outline-primary" onclick="updateForecast('{{ location.id }}')">
                     <i class="fas fa-sync-alt"></i> Update Forecast
                 </button>
@@ -57,13 +80,13 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6>Address & Coordinates</h6>
+                        <h5>Address & Coordinates</h5>
                         {% if location.zip_code %}
-                        <p class="mb-1"><strong>ZIP Code:</strong> {{ location.zip_code }}</p>
+                        <p class="mb-2" style="font-size: 1.1rem;"><strong>ZIP Code:</strong> {{ location.zip_code }}</p>
                         {% endif %}
                         {% if location.latitude and location.longitude %}
-                        <p class="mb-1">
-                            <strong>Coordinates:</strong> 
+                        <p class="mb-2" style="font-size: 1.1rem;">
+                            <strong>Coordinates:</strong>
                             <span class="location-coordinates">
                                 {{ location.latitude|floatformat:4 }}, {{ location.longitude|floatformat:4 }}
                             </span>
@@ -71,15 +94,15 @@
                         {% endif %}
                     </div>
                     <div class="col-md-6">
-                        <h6>Weather Service Info</h6>
+                        <h5>Weather Service Info</h5>
                         {% if location.nws_office %}
-                        <p class="mb-1"><strong>NWS Office:</strong> {{ location.nws_office }}</p>
+                        <p class="mb-2" style="font-size: 1.1rem;"><strong>NWS Office:</strong> {{ location.nws_office }}</p>
                         {% endif %}
                         {% if location.grid_x and location.grid_y %}
-                        <p class="mb-1"><strong>Grid:</strong> {{ location.grid_x }}, {{ location.grid_y }}</p>
+                        <p class="mb-2" style="font-size: 1.1rem;"><strong>Grid:</strong> {{ location.grid_x }}, {{ location.grid_y }}</p>
                         {% endif %}
-                        <p class="mb-1">
-                            <strong>Last Update:</strong> 
+                        <p class="mb-2" style="font-size: 1.1rem;">
+                            <strong>Last Update:</strong>
                             {% if location.last_forecast_update %}
                                 {{ location.last_forecast_update|timesince }} ago
                             {% else %}
@@ -101,18 +124,87 @@
             </div>
             <div class="card-body text-center">
                 {% if location.last_forecast_update %}
-                    <span class="badge bg-success mb-2">
+                    <span class="badge bg-success mb-2" style="font-size: 1.1rem;">
                         <i class="fas fa-check"></i> Active
                     </span>
-                    <p class="small text-muted">
+                    <p class="text-muted" style="font-size: 1rem;">
                         Updated {{ location.last_forecast_update|timesince }} ago
                     </p>
                 {% else %}
-                    <span class="badge bg-warning mb-2">
+                    <span class="badge bg-warning mb-2" style="font-size: 1.1rem;">
                         <i class="fas fa-exclamation-triangle"></i> No Data
                     </span>
-                    <p class="small text-muted">No forecast data available</p>
+                    <p class="text-muted" style="font-size: 1rem;">No forecast data available</p>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Unified Add/Edit Location Modal (reused from location_list) -->
+<div class="modal fade" id="addLocationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addLocationModalTitle">
+                    <i class="fas fa-plus text-primary" id="addLocationIcon"></i> <span id="addLocationTitleText">Add New Location</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% csrf_token %}
+                <form id="addLocationForm">
+                    <div class="mb-3">
+                        <label for="locationInput" class="form-label">Location</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="locationInput"
+                                   placeholder="Enter city, state, or ZIP code" required>
+                            <button class="btn btn-outline-secondary" type="button" id="useMyLocationBtn" onclick="useMyLocation()">
+                                <i class="fas fa-location-arrow"></i> Use My Location
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Examples: "Austin, TX", "78701", "New York, NY"
+                        </div>
+                        <div id="geolocationStatus" class="mt-2"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="displayNameInput" class="form-label">Display Name (optional)</label>
+                        <input type="text" class="form-control" id="displayNameInput" placeholder="e.g., Home, Work, School" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="locationTypeSelect" class="form-label">Location Type</label>
+                        <select class="form-select" id="locationTypeSelect">
+                            <option value="">General</option>
+                            <option value="home">Home</option>
+                            <option value="work">Work</option>
+                            <option value="school">School</option>
+                        </select>
+                        <div class="form-text">Used for ordering and labeling.</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="addLatitude" class="form-label">Latitude</label>
+                            <input type="number" step="0.000001" class="form-control" id="addLatitude" placeholder="Click map or use My Location" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="addLongitude" class="form-label">Longitude</label>
+                            <input type="number" step="0.000001" class="form-control" id="addLongitude" placeholder="Click map or use My Location" readonly>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Click on map to set location</label>
+                        <div id="addLocationMap" style="height: 300px; border-radius: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa;"></div>
+                        <small class="text-muted">Tip: Use the map to fine-tune the point, or click "Use My Location".</small>
+                    </div>
+                    <!-- Removed status toggles to match original Add Location component -->
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="addLocationBtn" class="btn btn-primary" onclick="submitLocationForm()" disabled>
+                    <i class="fas fa-save"></i> <span id="addLocationBtnText">Add Location</span>
+                </button>
             </div>
         </div>
     </div>
@@ -133,14 +225,14 @@
                             <div class="alert mb-2 {% if alert.severity == 'extreme' or alert.severity == 'severe' %}alert-danger{% elif alert.severity == 'moderate' %}alert-warning{% else %}alert-info{% endif %}">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div class="flex-grow-1">
-                                        <div class="mb-1">
-                                            <span class="badge {% if alert.severity == 'extreme' or alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ alert.severity|upper }}</span>
-                                            <strong class="ms-2">{{ alert.event }}</strong>
+                                        <div class="mb-2">
+                                            <span class="badge {% if alert.severity == 'extreme' or alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}" style="font-size: 1rem;">{{ alert.severity|upper }}</span>
+                                            <strong class="ms-2" style="font-size: 1.2rem;">{{ alert.event }}</strong>
                                         </div>
                                         {% if alert.headline %}
-                                        <p class="mb-1">{{ alert.headline }}</p>
+                                        <p class="mb-2" style="font-size: 1.1rem;">{{ alert.headline }}</p>
                                         {% endif %}
-                                        <div class="small text-muted border-top pt-2 mt-2">
+                                        <div class="text-muted border-top pt-2 mt-2" style="font-size: 1rem;">
                                             {% if alert.onset %}<strong>Onset:</strong> <span class="js-localtime" data-dt="{{ alert.onset|date:'c' }}"></span>{% endif %}
                                             {% if alert.expires %} <span class="ms-2"><strong>Expires:</strong> <span class="js-localtime" data-dt="{{ alert.expires|date:'c' }}"></span></span>{% endif %}
                                         </div>
@@ -150,9 +242,9 @@
                             {% endfor %}
                             {% else %}
                             <div class="text-center text-muted py-4">
-                                <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
-                                <h5>No Active Alerts</h5>
-                                <p class="mb-0">This location is clear of weather alerts</p>
+                                <i class="fas fa-check-circle fa-4x mb-3 text-success"></i>
+                                <h4>No Active Alerts</h4>
+                                <p class="mb-0" style="font-size: 1.1rem;">This location is clear of weather alerts</p>
                             </div>
                             {% endif %}
                         </div>
@@ -165,25 +257,30 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card weather-card">
-            <div class="card-header">
-                {% include "weather/components/section_header.html" with icon="thermometer-half" title="Current Conditions" %}
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    {% include "weather/components/section_header.html" with icon="thermometer-half" title="Current Conditions" %}
+                </div>
+                <button onclick="exportSectionAsImage('currentConditionsSection')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                    <i class="fas fa-download"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div class="card-body" id="currentConditionsSection">
                 <div class="card border-0 temp-bg-{{ location.current_temp }}">
                     <div class="card-body p-4">
                         <div class="row align-items-center">
                             <div class="col-md-6">
-                                <h1 class="display-3 mb-2">{{ location.current_temp }}°F</h1>
-                                <h4 class="mb-3">{{ location.current_conditions }}</h4>
+                                <h1 class="display-2 mb-3">{{ location.current_temp }}°F</h1>
+                                <h3 class="mb-4">{{ location.current_conditions }}</h3>
                                 <div class="d-flex flex-wrap gap-3">
                                     {% if location.current_humidity %}
-                                    <div>
+                                    <div style="font-size: 1.15rem;">
                                         <i class="fas fa-tint text-primary"></i>
                                         <strong>Humidity:</strong> {{ location.current_humidity }}%
                                     </div>
                                     {% endif %}
                                     {% if location.current_wind_speed %}
-                                    <div>
+                                    <div style="font-size: 1.15rem;">
                                         <i class="fas fa-wind text-primary"></i>
                                         <strong>Wind:</strong> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}
                                     </div>
@@ -191,12 +288,17 @@
                                 </div>
                             </div>
                             <div class="col-md-6 text-center">
-                                <i class="fas fa-{% if 'storm' in location.current_conditions|lower or 'thunder' in location.current_conditions|lower or 't-storm' in location.current_conditions|lower %}bolt{% elif 'ice' in location.current_conditions|lower or 'icy' in location.current_conditions|lower or 'freezing' in location.current_conditions|lower or 'sleet' in location.current_conditions|lower %}icicles{% elif 'snow' in location.current_conditions|lower or 'flurries' in location.current_conditions|lower or 'blizzard' in location.current_conditions|lower %}snowflake{% elif 'fog' in location.current_conditions|lower or 'mist' in location.current_conditions|lower or 'haze' in location.current_conditions|lower %}smog{% elif 'rain' in location.current_conditions|lower or 'shower' in location.current_conditions|lower or 'drizzle' in location.current_conditions|lower %}cloud-rain{% elif 'wind' in location.current_conditions|lower and 'cloudy' not in location.current_conditions|lower %}wind{% elif 'partly' in location.current_conditions|lower %}cloud-sun{% elif 'sunny' in location.current_conditions|lower or 'clear' in location.current_conditions|lower or 'fair' in location.current_conditions|lower %}sun{% elif 'cloud' in location.current_conditions|lower or 'overcast' in location.current_conditions|lower %}cloud{% else %}cloud-sun{% endif %}" style="font-size: 8rem; opacity: 0.3;"></i>
+                                <!-- Placeholder icon; will be replaced after sunrise/sunset fetched -->
+                                <i id="currentConditionsIcon" data-condition="{{ location.current_conditions|escapejs }}" class="fas fa-cloud-sun" style="font-size: 10rem; opacity: 0.3;"></i>
+                                <div class="mt-4">
+                                    <span class="badge bg-dark me-2" style="font-size: 1.05rem;"><i class="fas fa-sun"></i> Sunrise: <span id="sunriseDisplay">--:--</span></span>
+                                    <span class="badge bg-dark" style="font-size: 1.05rem;"><i class="fas fa-moon"></i> Sunset: <span id="sunsetDisplay">--:--</span></span>
+                                </div>
                             </div>
                         </div>
                     </div>
                     {% if location.last_observation_time %}
-                    <div class="card-footer small text-muted">
+                    <div class="card-footer text-muted" style="font-size: 1rem;">
                         <i class="fas fa-clock"></i> Observed <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
                     </div>
                     {% endif %}
@@ -212,8 +314,18 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card weather-card">
-            <div class="card-header">
-                {% include "weather/components/section_header.html" with icon="clock" title="Next 24 Hours" %}
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    {% include "weather/components/section_header.html" with icon="clock" title="Next 24 Hours" %}
+                </div>
+                <div class="btn-group">
+                    <button onclick="editHourlyForecasts()" class="btn btn-sm text-white" title="Edit Hourly Forecasts" style="background: transparent; border: none;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="exportSectionAsImage('next24HoursBody')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
             </div>
             <div class="card-body" id="next24HoursBody">
                 <div class="text-center py-4">
@@ -227,16 +339,33 @@
     </div>
 </div>
 
-        
+
 <!-- Daily Forecasts -->
 {% if daily_forecasts %}
 <div class="row mb-4">
     <div class="col-12">
         <div class="card weather-card">
-            <div class="card-header">
-                {% include "weather/components/section_header.html" with icon="calendar-alt" title="7-Day Forecast" %}
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-alt text-primary"></i>
+                        {% if has_custom_daily %}
+                        Ralph's Weather Daily for {{ location.display_name }}
+                        {% else %}
+                        NWS Daily for {{ location.display_name }}
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="btn-group">
+                    <button onclick="editDailyForecasts()" class="btn btn-sm text-white" title="Edit Daily Forecasts" style="background: transparent; border: none;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="exportForecastAsImage()" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
             </div>
-            <div class="card-body">
+            <div class="card-body" id="forecastExportSection">
                 <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
                     {% for day_group in daily_forecasts %}
                     <div class="col">
@@ -248,7 +377,7 @@
                                 {% if day_group.day %}
                                 {% include "weather/components/forecast_period_card.html" with period=day_group.day period_type="day" %}
                                 {% endif %}
-                                
+
                                 {% if day_group.night %}
                                 {% include "weather/components/forecast_period_card.html" with period=day_group.night period_type="night" %}
                                 {% endif %}
@@ -268,12 +397,29 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card weather-card">
-            <div class="card-header">
-                {% include "weather/components/section_header.html" with icon="clock" title="24-Hour Forecast" %}
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">
+                        <i class="fas fa-clock text-primary"></i>
+                        {% if has_custom_hourly %}
+                        Ralph's Weather Hourly for {{ location.display_name }}
+                        {% else %}
+                        NWS Hourly for {{ location.display_name }}
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="btn-group">
+                    <button onclick="editHourlyForecasts()" class="btn btn-sm text-white" title="Edit Hourly Forecasts" style="background: transparent; border: none;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="exportSectionAsImage('hourlyForecastTable')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
             </div>
-            <div class="card-body">
+            <div class="card-body" id="hourlyForecastTable">
                 <div class="table-responsive">
-                    <table class="table table-sm table-hover">
+                    <table class="table table-hover" style="font-size: 1.1rem;">
                         <thead>
                             <tr>
                                 <th>Time</th>
@@ -324,9 +470,9 @@
     <div class="col-12">
         <div class="card weather-card">
             <div class="card-body text-center py-5">
-                <i class="fas fa-cloud-meatball fa-4x text-muted mb-3"></i>
-                <h4 class="text-muted">No Forecast Data Available</h4>
-                <p class="text-muted mb-4">Click "Update Forecast" to fetch the latest weather data for this location.</p>
+                <i class="fas fa-cloud-meatball fa-5x text-muted mb-4"></i>
+                <h3 class="text-muted">No Forecast Data Available</h3>
+                <p class="text-muted mb-4" style="font-size: 1.15rem;">Click "Update Forecast" to fetch the latest weather data for this location.</p>
                 <button class="btn btn-primary btn-lg" onclick="updateForecast('{{ location.id }}')">
                     <i class="fas fa-sync-alt"></i> Update Forecast
                 </button>
@@ -342,77 +488,52 @@
     </div>
 </div>
 
-<!-- Edit Name Modal -->
-<div class="modal fade" id="editNameModal" tabindex="-1" aria-labelledby="editNameModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editNameModalLabel">Edit Location Name</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="editNameForm">
-                    <div class="mb-3">
-                        <label for="customName" class="form-label">Location Name</label>
-                        <input type="text" class="form-control" id="customName" name="custom_name" 
-                               value="{{ location.custom_name|default:location.name }}" 
-                               placeholder="Enter location name (e.g., 'Home', 'Office', '75771')">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveCustomName()">Save</button>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Edit Name Modal -->
-<div class="modal fade" id="editNameModal" tabindex="-1" aria-labelledby="editNameModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editNameModalLabel">Edit Location Name</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="editNameForm">
-                    <div class="mb-3">
-                        <label for="customName" class="form-label">Custom Name</label>
-                        <input type="text" class="form-control" id="customName" 
-                               value="{{ location.custom_name|default:location.name }}" 
-                               placeholder="Enter custom name (e.g., 'Home', 'Office')">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveCustomName()">Save</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Add Custom Forecast Modal -->
-<div class="modal fade" id="addCustomForecastModal" tabindex="-1" aria-labelledby="addCustomForecastModalLabel" aria-hidden="true">
+<!-- Edit Daily Forecasts Modal -->
+<div class="modal fade" id="editDailyForecastModal" tabindex="-1" aria-labelledby="editDailyForecastModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="addCustomForecastModalLabel">Add Custom Forecast - 7 Days</h5>
+                <h5 class="modal-title" id="editDailyForecastModalLabel">Edit Daily Forecast - 8 Days</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="customForecastForm">
+                <form id="dailyForecastForm">
                     <!-- Forecast Cards Grid -->
-                    <div class="row g-3" id="customForecastsGrid">
+                    <div class="row g-3" id="dailyForecastsGrid">
                         <!-- Day cards will be generated dynamically -->
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" onclick="saveAllCustomForecasts()">
+                <button type="button" id="saveDailyForecastBtn" class="btn btn-success" onclick="saveAllDailyForecasts()" disabled>
+                    <i class="fas fa-save"></i> Save All Forecasts
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Hourly Forecasts Modal -->
+<div class="modal fade" id="editHourlyForecastModal" tabindex="-1" aria-labelledby="editHourlyForecastModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editHourlyForecastModalLabel">Edit Hourly Forecast - 24 Hours</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="hourlyForecastForm">
+                    <!-- Hourly Cards Grid -->
+                    <div class="row g-3" id="hourlyForecastsGrid">
+                        <!-- Hour cards will be generated dynamically -->
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="saveHourlyForecastBtn" class="btn btn-success" onclick="saveAllHourlyForecasts()" disabled>
                     <i class="fas fa-save"></i> Save All Forecasts
                 </button>
             </div>
@@ -425,10 +546,13 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card weather-card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="fas fa-radar"></i> Weather Radar
                 </h5>
+                <button onclick="exportSectionAsImage('radarMap')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                    <i class="fas fa-download"></i>
+                </button>
             </div>
             <div class="card-body p-0">
                 <div id="radarMap" style="height: 500px; width: 100%;"></div>
@@ -459,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function () {
             hour: 'numeric', minute: '2-digit'
         });
     });
-    
+
     // Load next 24 hours forecast
     loadNext24Hours();
 });
@@ -471,13 +595,13 @@ async function loadNext24Hours() {
         console.warn('next24HoursBody element not found');
         return;
     }
-    
+
     next24Body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading hourly forecast...</p></div>';
-    
+
     try {
         const lat = {{ location.latitude }};
         const lon = {{ location.longitude }};
-        
+
         // Use apiRequest if available, otherwise fetch
         let resp;
         if (window.apiRequest) {
@@ -488,21 +612,94 @@ async function loadNext24Hours() {
             });
             resp = await response.json();
         }
-        
+
+        // Store per-date sunrise/sunset map
+        if (resp && resp.sun_events) {
+            window.locationSunEvents = resp.sun_events;
+            // Use today's date for display if available
+            const todayKey = new Date().toISOString().split('T')[0];
+            const todayEvents = window.locationSunEvents[todayKey];
+            if (resp && resp.timezone) {
+                window.locationTimezone = resp.timezone;
+            }
+            if (todayEvents) {
+                const sunriseEl = document.getElementById('sunriseDisplay');
+                const sunsetEl = document.getElementById('sunsetDisplay');
+                let sr = new Date(todayEvents.sunrise);
+                let ss = new Date(todayEvents.sunset);
+                // Frontend safety: if inverted (sr > ss) swap
+                if (sr > ss) {
+                    console.warn('Sun event inversion detected on frontend; swapping sunrise/sunset for display', {sr, ss});
+                    const tmp = sr; sr = ss; ss = tmp;
+                }
+                const fmtOptions = {hour:'numeric', minute:'2-digit'};
+                if (window.locationTimezone) {
+                    fmtOptions.timeZone = window.locationTimezone;
+                }
+                if (sunriseEl) sunriseEl.textContent = sr.toLocaleTimeString([], fmtOptions);
+                if (sunsetEl) sunsetEl.textContent = ss.toLocaleTimeString([], fmtOptions);
+            }
+            // Debug logging of all sun events
+            try {
+                Object.entries(window.locationSunEvents || {}).forEach(([d, ev]) => {
+                    const srDbg = new Date(ev.sunrise);
+                    const ssDbg = new Date(ev.sunset);
+                    if (srDbg > ssDbg) {
+                        console.warn('Inverted sun events detected', d, srDbg.toISOString(), ssDbg.toISOString());
+                    } else {
+                        console.log('Sun events', d, 'sunrise', srDbg.toISOString(), 'sunset', ssDbg.toISOString());
+                    }
+                });
+            } catch(e) { console.debug('Sun events debug logging failed', e); }
+            updateCurrentConditionsIcon();
+        }
+
         if (resp && resp.hours && resp.hours.length > 0) {
             let html = '<div class="row g-2">';
             resp.hours.forEach(hour => {
                 const tempClass = `temp-bg-${hour.temp}`;
+                const startDate = hour.start ? new Date(hour.start) : null;
+                let isDay = true;
+                if (startDate && window.locationSunEvents) {
+                    const key = startDate.toISOString().split('T')[0];
+                    const ev = window.locationSunEvents[key];
+                    if (ev) {
+                        const sr = new Date(ev.sunrise);
+                        const ss = new Date(ev.sunset);
+                        isDay = startDate >= sr && startDate < ss;
+                    }
+                }
+                const iconName = getWeatherIcon(hour.condition || '', isDay, hour.pop);
+                const popIcon = getPrecipIcon(hour.pop, hour.condition, isDay);
+                const condLower = (hour.condition || '').toLowerCase();
+                const isMixed = (condLower.includes('rain') || condLower.includes('shower') || condLower.includes('drizzle')) && (condLower.includes('snow') || condLower.includes('flurries') || condLower.includes('blizzard'));
+                const isSnowOnly = !isMixed && (condLower.includes('snow') || condLower.includes('flurries') || condLower.includes('blizzard')) && !(condLower.includes('rain') || condLower.includes('shower') || condLower.includes('drizzle'));
+                const isStormOnly = (condLower.includes('storm') || condLower.includes('thunder') || condLower.includes('t-storm'));
+                const isChanceSnow = isSnowOnly && (hour.pop !== null && hour.pop !== undefined) && hour.pop >= 15 && hour.pop <= 44;
+                const isChanceStorm = isStormOnly && (hour.pop !== null && hour.pop !== undefined) && hour.pop >= 15 && hour.pop <= 44;
+                // Choose a single consistent icon for display; fallback for chance/mixed
+                let displayIconName;
+                if (isMixed) {
+                    displayIconName = 'cloud-rain';
+                } else if (isChanceStorm) {
+                    displayIconName = 'bolt';
+                } else if (isChanceSnow) {
+                    displayIconName = 'snowflake';
+                } else {
+                    displayIconName = iconName || 'cloud';
+                }
                 html += `
                     <div class="col-6 col-md-4 col-lg-3 col-xl-2">
                         <div class="card h-100 border-0">
-                            <div class="card-body p-2 text-center ${tempClass}">
-                                <div class="fw-bold mb-1">${hour.time}</div>
-                                <i class="fas fa-${hour.icon} mb-2" style="font-size: 1.5rem;"></i>
-                                <div class="h5 mb-1">${hour.temp}&deg;F</div>
-                                <small class="d-block mb-1" style="opacity: 0.9;">${hour.condition}</small>
-                                ${hour.wind ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
-                                ${hour.pop !== null && hour.pop !== undefined ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-cloud-rain"></i> ${hour.pop}%</small>` : ''}
+                            <div class="card-body p-2 text-center ${tempClass} d-flex flex-column justify-content-between">
+                                <div>
+                                    <div class="fw-bold mb-1">${hour.time}</div>
+                                    <i class=\"fas fa-${displayIconName} mb-2 forecast-icon\"></i>
+                                    <div class="h5 mb-1">${hour.temp}&deg;F</div>
+                                    ${hour.wind ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
+                                    ${hour.pop !== null && hour.pop !== undefined ? `<small class="d-block mb-2" style="opacity: 0.85;"><i class="fas fa-${popIcon}"></i> ${roundPop(hour.pop)}%</small>` : ''}
+                                </div>
+                                <p class="mb-0 mt-2" style="opacity: 0.9; font-size: 0.95rem;">${hour.condition}</p>
                             </div>
                         </div>
                     </div>
@@ -524,15 +721,15 @@ const nwsForecasts = [
     {% for day_group in daily_forecasts %}
     {
         date: '{{ day_group.date|date:"Y-m-d" }}',
-        day: {% if day_group.day %}{ 
-            temperature: {{ day_group.day.temperature }}, 
+        day: {% if day_group.day %}{
+            temperature: {{ day_group.day.temperature }},
             short_forecast: '{{ day_group.day.short_forecast|escapejs }}',
             wind_speed: {{ day_group.day.wind_speed|default:'null' }},
             wind_gust: {{ day_group.day.wind_gust|default:'null' }},
             precipitation_probability: {{ day_group.day.precipitation_probability|default:'null' }}
         }{% else %}null{% endif %},
-        night: {% if day_group.night %}{ 
-            temperature: {{ day_group.night.temperature }}, 
+        night: {% if day_group.night %}{
+            temperature: {{ day_group.night.temperature }},
             short_forecast: '{{ day_group.night.short_forecast|escapejs }}',
             wind_speed: {{ day_group.night.wind_speed|default:'null' }},
             wind_gust: {{ day_group.night.wind_gust|default:'null' }},
@@ -542,47 +739,270 @@ const nwsForecasts = [
     {% endfor %}
 ];
 
-// Initialize 7-day custom forecast grid
-document.addEventListener('DOMContentLoaded', function() {
-    const modal = document.getElementById('addCustomForecastModal');
-    
-    modal.addEventListener('shown.bs.modal', function() {
-        generateCustomForecastGrid();
+// Generic weather icon chooser (mirrors backend logic)
+function getWeatherIcon(conditions, isDaytime = true, pop = null) {
+    const c = (conditions || '').toLowerCase();
+    const isStorm = c.includes('storm') || c.includes('thunder') || c.includes('t-storm');
+    const isSnow = c.includes('snow') || c.includes('flurries') || c.includes('blizzard');
+    const isIce = c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet');
+    const isRain = c.includes('rain') || c.includes('shower') || c.includes('drizzle');
+    const isMixed = isRain && isSnow;  // Mixed precipitation
+
+    // If we have precipitation probability, adjust icon based on it
+    if (pop !== null && pop !== undefined) {
+        if (pop >= 40) {
+            // High chance: show precipitation type
+            if (isStorm) return 'bolt';
+            if (isSnow) return 'snowflake';
+            if (isIce) return 'icicles';
+            if (isRain) return 'cloud-rain';
+            // Fall through to default for non-precipitation conditions
+        } else if (pop >= 20) {
+            // Medium chance: show cloud + precipitation
+            if (isStorm) return 'cloud-bolt';
+            if (isMixed) return 'cloud-meatball';  // Wintry mix for mixed precip
+            if (isSnow) return 'cloud-snow';
+            if (isIce) return 'cloud-meatball';
+            if (isRain) return 'cloud-rain';
+            // Fall through to default for non-precipitation conditions
+        } else {
+            // Low chance: show just sky type
+            if (c.includes('sunny') || c.includes('clear')) return isDaytime ? 'sun' : 'moon';
+            if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
+            if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
+            // Fall through to default for other conditions
+        }
+    }
+
+    // Default behavior (no PoP or didn't match PoP conditions)
+    if (isStorm) return 'bolt';
+    if (isIce) return 'icicles';
+    if (isSnow) return 'snowflake';
+    if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
+    if (c.includes('rain') || c.includes('shower') || c.includes('drizzle')) return 'cloud-rain';
+    if (c.includes('wind') && !c.includes('cloudy')) return 'wind';
+    if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
+    if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return isDaytime ? 'sun' : 'moon';
+    if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
+    return isDaytime ? 'cloud-sun' : 'cloud-moon';
+}
+
+// Precipitation icon based on probability and condition (mirrors backend logic)
+function getPrecipIcon(pop, condition, isDaytime = true) {
+    // Always return water droplet for PoP display
+    return 'tint';
+}
+
+// Round PoP to nearest 10%
+function roundPop(pop) {
+    if (pop === null || pop === undefined) return pop;
+    return Math.round(pop / 10) * 10;
+}
+
+function updateCurrentConditionsIcon() {
+    const iconEl = document.getElementById('currentConditionsIcon');
+    if (!iconEl) return;
+    const cond = iconEl.getAttribute('data-condition') || '';
+    let isDay = true;
+    const now = new Date();
+    if (window.locationSunrise && window.locationSunset) {
+        isDay = now >= window.locationSunrise && now < window.locationSunset;
+    }
+    const iconName = getWeatherIcon(cond, isDay);
+    iconEl.className = `fas fa-${iconName}`;
+}
+
+// Summarize text using API
+async function summarizeText(text, maxLength = 120) {
+    if (!text || text.length <= maxLength) return text;
+
+    try {
+        const response = await fetch('/api/summarize_forecast/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ text: text, max_length: maxLength })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            return data.summary || text;
+        }
+    } catch (err) {
+        console.error('Summarization failed:', err);
+    }
+    return text;
+}
+
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+}
+
+// Open unified edit modal populated with current location data
+function openEditLocationModal() {
+    const modalEl = document.getElementById('addLocationModal');
+    if (!modalEl) return;
+    // Switch titles/icons
+    document.getElementById('addLocationTitleText').textContent = 'Edit Location';
+    const icon = document.getElementById('addLocationIcon');
+    if (icon) { icon.className = 'fas fa-edit text-warning'; }
+    document.getElementById('addLocationBtnText').textContent = 'Save Changes';
+
+    // Enable button immediately (we already have data)
+    const addBtn = document.getElementById('addLocationBtn');
+    if (addBtn) addBtn.disabled = false;
+
+    // Populate fields
+    const locNameInput = document.getElementById('locationInput');
+    if (locNameInput) {
+        locNameInput.value = '{{ location.name|escapejs }}';
+        // store existing coordinates as dataset (used by submit logic)
+        {% if location.latitude and location.longitude %}
+        locNameInput.dataset.latitude = '{{ location.latitude }}';
+        locNameInput.dataset.longitude = '{{ location.longitude }}';
+        {% endif %}
+    }
+    const displayNameInput = document.getElementById('displayNameInput');
+    if (displayNameInput) displayNameInput.value = '{{ location.custom_name|escapejs }}';
+    const typeSelect = document.getElementById('locationTypeSelect');
+    if (typeSelect) typeSelect.value = '{{ location.location_type }}';
+    const latEl = document.getElementById('addLatitude');
+    const lonEl = document.getElementById('addLongitude');
+    {% if location.latitude and location.longitude %}
+    if (latEl) latEl.value = '{{ location.latitude }}';
+    if (lonEl) lonEl.value = '{{ location.longitude }}';
+    {% endif %}
+    // Status switches removed; existing flags remain unchanged on save if not sent.
+
+    // Show modal
+    const bsModal = new bootstrap.Modal(modalEl);
+    bsModal.show();
+}
+
+// Submit add/edit form (POST for new, PATCH for existing)
+function submitLocationForm() {
+    const locNameInput = document.getElementById('locationInput');
+    const displayNameInput = document.getElementById('displayNameInput');
+    const typeSelect = document.getElementById('locationTypeSelect');
+    const latEl = document.getElementById('addLatitude');
+    const lonEl = document.getElementById('addLongitude');
+
+    if (!locNameInput.value.trim()) {
+        alert('Location name is required');
+        return;
+    }
+
+    const data = {
+        name: locNameInput.value.trim(),
+        ...(displayNameInput.value.trim() ? { custom_name: displayNameInput.value.trim() } : {}),
+        ...(typeSelect.value ? { location_type: typeSelect.value } : {})
+        // Status flags intentionally omitted to preserve existing values
+    };
+
+    // Include coordinates if present (either from dataset or inputs)
+    const latVal = latEl && latEl.value ? latEl.value : (locNameInput.dataset.latitude || null);
+    const lonVal = lonEl && lonEl.value ? lonEl.value : (locNameInput.dataset.longitude || null);
+    if (latVal && lonVal) {
+        data.latitude = Number(parseFloat(latVal).toFixed(6));
+        data.longitude = Number(parseFloat(lonVal).toFixed(6));
+    }
+
+    // Determine if editing existing (always editing on detail page)
+    const method = 'PATCH';
+    const url = '/api/locations/{{ location.id }}/';
+
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify(data)
+    })
+    .then(r => {
+        if (!r.ok) {
+            return r.json().then(err => { throw new Error(JSON.stringify(err)); });
+        }
+        return r.json();
+    })
+    .then(resp => {
+        // Close modal and reload to reflect changes
+        const modal = bootstrap.Modal.getInstance(document.getElementById('addLocationModal'));
+        if (modal) modal.hide();
+        window.location.reload();
+    })
+    .catch(err => {
+        console.error('Failed to save location:', err);
+        alert('Error saving location: ' + err.message);
     });
+}
+
+// Initialize modals
+document.addEventListener('DOMContentLoaded', function() {
+    const dailyModal = document.getElementById('editDailyForecastModal');
+    const hourlyModal = document.getElementById('editHourlyForecastModal');
+
+    if (dailyModal) {
+        dailyModal.addEventListener('shown.bs.modal', function() {
+            generateDailyForecastGrid();
+        });
+    }
+
+    if (hourlyModal) {
+        hourlyModal.addEventListener('shown.bs.modal', function() {
+            generateHourlyForecastGrid();
+        });
+    }
 });
 
-function generateCustomForecastGrid() {
-    const grid = document.getElementById('customForecastsGrid');
+// Open daily forecast editor
+function editDailyForecasts() {
+    const modal = new bootstrap.Modal(document.getElementById('editDailyForecastModal'));
+    modal.show();
+}
+
+// Open hourly forecast editor
+function editHourlyForecasts() {
+    const modal = new bootstrap.Modal(document.getElementById('editHourlyForecastModal'));
+    modal.show();
+}
+
+async function generateDailyForecastGrid() {
+    const grid = document.getElementById('dailyForecastsGrid');
     grid.innerHTML = '';
-    
+
     const today = new Date();
-    
-    for (let i = 0; i < 7; i++) {
+
+    for (let i = 0; i < 8; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() + i);
         const dateStr = date.toISOString().split('T')[0];
         const displayDate = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        
+
         const dayCardId = `forecast-${i}-day`;
         const nightCardId = `forecast-${i}-night`;
-        
+
         // Get NWS forecast data for this day
         const nwsForecast = nwsForecasts[i] || {};
         const dayTemp = nwsForecast.day?.temperature || '';
-        const dayForecast = nwsForecast.day?.short_forecast || '';
+        const dayForecastRaw = nwsForecast.day?.short_forecast || '';
+        const dayForecast = await summarizeText(dayForecastRaw, 120);
         const dayWind = nwsForecast.day?.wind_speed || '';
         const dayGust = nwsForecast.day?.wind_gust || '';
         const dayPop = nwsForecast.day?.precipitation_probability || '';
         const nightTemp = nwsForecast.night?.temperature || '';
-        const nightForecast = nwsForecast.night?.short_forecast || '';
+        const nightForecastRaw = nwsForecast.night?.short_forecast || '';
+        const nightForecast = await summarizeText(nightForecastRaw, 120);
         const nightWind = nwsForecast.night?.wind_speed || '';
         const nightGust = nwsForecast.night?.wind_gust || '';
         const nightPop = nwsForecast.night?.precipitation_probability || '';
-        
+
         // Determine background classes
         const dayBgClass = dayTemp ? `temp-bg-${dayTemp}` : 'temp-bg-70';
         const nightBgClass = nightTemp ? `night-temp-bg-${nightTemp}` : 'night-temp-bg-50';
-        
+
         const cardHtml = `
             <div class="col-lg-3 col-md-4 col-sm-6">
                 <div class="card border-0 h-100">
@@ -600,49 +1020,48 @@ function generateCustomForecastGrid() {
                                 </div>
                                 <i class="fas fa-cloud mb-2" id="${dayCardId}-icon" style="font-size: 2rem;"></i>
                                 <div class="mb-2">
-                                    <input type="number" class="form-control form-control-sm text-center mx-auto" 
-                                           id="${dayCardId}-temp" 
+                                    <input type="number" class="form-control form-control-sm text-center mx-auto"
+                                           id="${dayCardId}-temp"
                                            data-card="${dayCardId}"
-                                           placeholder="°F" 
+                                           placeholder="°F"
                                            value="${dayTemp}"
                                            style="width: 70px; font-size: 1.1rem;">
                                 </div>
                             </div>
-                            <input type="text" class="form-control form-control-sm text-center mb-2" 
-                                   id="${dayCardId}-short" 
+                            <textarea class="form-control form-control-sm text-center mb-2"
+                                   id="${dayCardId}-short"
                                    data-card="${dayCardId}"
-                                   placeholder="Forecast" 
-                                   value="${dayForecast}"
-                                   maxlength="70"
-                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.85rem;">
+                                   placeholder="Forecast"
+                                   rows="3"
+                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.95rem; resize: none;">${dayForecast}</textarea>
                             <div class="row g-1 mb-2">
                                 <div class="col-6">
-                                    <input type="number" class="form-control form-control-sm text-center" 
-                                           id="${dayCardId}-wind" 
-                                           placeholder="Wind (mph)" 
+                                    <input type="number" class="form-control form-control-sm text-center"
+                                           id="${dayCardId}-wind"
+                                           placeholder="Wind (mph)"
                                            value="${dayWind}"
                                            min="0" max="200"
                                            style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
                                 </div>
                                 <div class="col-6">
-                                    <input type="number" class="form-control form-control-sm text-center" 
-                                           id="${dayCardId}-gust" 
-                                           placeholder="Gust (mph)" 
+                                    <input type="number" class="form-control form-control-sm text-center"
+                                           id="${dayCardId}-gust"
+                                           placeholder="Gust (mph)"
                                            value="${dayGust}"
                                            min="0" max="200"
                                            style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
                                 </div>
                             </div>
-                            <input type="number" class="form-control form-control-sm text-center" 
-                                   id="${dayCardId}-pop" 
-                                   placeholder="PoP (%)" 
+                            <input type="number" class="form-control form-control-sm text-center"
+                                   id="${dayCardId}-pop"
+                                   placeholder="PoP (%)"
                                    value="${dayPop}"
                                    min="0" max="100"
                                    style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
                             <input type="hidden" id="${dayCardId}-date" value="${dateStr}">
                             <input type="hidden" id="${dayCardId}-period" value="day">
                         </div>
-                        
+
                         <!-- Night Period -->
                         <div class="p-3 text-center flex-fill ${nightBgClass}" id="${nightCardId}-card" style="min-height: 180px;">
                             <div>
@@ -653,42 +1072,41 @@ function generateCustomForecastGrid() {
                                 </div>
                                 <i class="fas fa-cloud mb-2" id="${nightCardId}-icon" style="font-size: 2rem;"></i>
                                 <div class="mb-2">
-                                    <input type="number" class="form-control form-control-sm text-center mx-auto" 
-                                           id="${nightCardId}-temp" 
+                                    <input type="number" class="form-control form-control-sm text-center mx-auto"
+                                           id="${nightCardId}-temp"
                                            data-card="${nightCardId}"
-                                           placeholder="°F" 
+                                           placeholder="°F"
                                            value="${nightTemp}"
                                            style="width: 70px; font-size: 1.1rem;">
                                 </div>
                             </div>
-                            <input type="text" class="form-control form-control-sm text-center mb-2" 
-                                   id="${nightCardId}-short" 
+                            <textarea class="form-control form-control-sm text-center mb-2"
+                                   id="${nightCardId}-short"
                                    data-card="${nightCardId}"
-                                   placeholder="Forecast" 
-                                   value="${nightForecast}"
-                                   maxlength="70"
-                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.85rem;">
+                                   placeholder="Forecast"
+                                   rows="3"
+                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.95rem; resize: none;">${nightForecast}</textarea>
                             <div class="row g-1 mb-2">
                                 <div class="col-6">
-                                    <input type="number" class="form-control form-control-sm text-center" 
-                                           id="${nightCardId}-wind" 
-                                           placeholder="Wind (mph)" 
+                                    <input type="number" class="form-control form-control-sm text-center"
+                                           id="${nightCardId}-wind"
+                                           placeholder="Wind (mph)"
                                            value="${nightWind}"
                                            min="0" max="200"
                                            style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
                                 </div>
                                 <div class="col-6">
-                                    <input type="number" class="form-control form-control-sm text-center" 
-                                           id="${nightCardId}-gust" 
-                                           placeholder="Gust (mph)" 
+                                    <input type="number" class="form-control form-control-sm text-center"
+                                           id="${nightCardId}-gust"
+                                           placeholder="Gust (mph)"
                                            value="${nightGust}"
                                            min="0" max="200"
                                            style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
                                 </div>
                             </div>
-                            <input type="number" class="form-control form-control-sm text-center" 
-                                   id="${nightCardId}-pop" 
-                                   placeholder="PoP (%)" 
+                            <input type="number" class="form-control form-control-sm text-center"
+                                   id="${nightCardId}-pop"
+                                   placeholder="PoP (%)"
                                    value="${nightPop}"
                                    min="0" max="100"
                                    style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
@@ -699,24 +1117,335 @@ function generateCustomForecastGrid() {
                 </div>
             </div>
         `;
-        
+
         grid.insertAdjacentHTML('beforeend', cardHtml);
     }
-    
+
     // Add event listeners for live preview and update initial icons
     setTimeout(() => {
         document.querySelectorAll('[data-card]').forEach(input => {
             input.addEventListener('input', function() {
                 updateForecastCard(this.dataset.card);
+                validateAllForecasts();
             });
         });
-        
+
         // Update icons for pre-filled forecasts
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 8; i++) {
             updateForecastCard(`forecast-${i}-day`);
             updateForecastCard(`forecast-${i}-night`);
         }
+
+        // Auto-fill any missing fields from previous day
+        autoFillMissingForecasts();
+        validateAllDailyForecasts();
     }, 100);
+}
+
+// Dynamically update hourly card icon and background based on conditions/PoP
+function updateHourlyCard(cardId) {
+    const tempEl = document.getElementById(`${cardId}-temp`);
+    const shortEl = document.getElementById(`${cardId}-short`);
+    const popEl = document.getElementById(`${cardId}-pop`);
+    const iconEl = document.getElementById(`${cardId}-icon`);
+    const cardEl = document.getElementById(`${cardId}-card`);
+
+    if (!shortEl || !iconEl || !tempEl) return;
+
+    const shortVal = shortEl.value || '';
+    const popRaw = popEl ? popEl.value : '';
+    const popVal = popRaw === '' ? null : parseInt(popRaw, 10);
+    const tempVal = tempEl.value || '';
+
+    // Update icon
+    const iconName = getWeatherIcon(shortVal, true, popVal);
+    iconEl.className = `fas fa-${iconName} mb-2`;
+    iconEl.style.fontSize = '1.8rem';
+
+    // Update background color based on temperature
+    if (tempVal && cardEl) {
+        const temp = parseInt(tempVal);
+        // Remove existing temp-bg classes
+        cardEl.className = cardEl.className.replace(/temp-bg-\d+/g, '').trim();
+        // Re-add base classes and new temp class
+        if (!cardEl.classList.contains('card-body')) {
+            cardEl.classList.add('card-body', 'p-2', 'text-center');
+        }
+        cardEl.classList.add(`temp-bg-${temp}`);
+    }
+}
+
+async function generateHourlyForecastGrid() {
+    const grid = document.getElementById('hourlyForecastsGrid');
+    grid.innerHTML = '';
+
+    const now = new Date();
+
+    // Always fetch from API to ensure we have 24 hours of merged custom+NWS data
+    let hourlyData = [];
+    try {
+        const response = await fetch(`/api/hourly_forecast/?lat={{ location.latitude }}&lon={{ location.longitude }}&hours=24`);
+        if (response.ok) {
+            const apiData = await response.json();
+            // Extract hours array and map to expected format
+            if (apiData.hours && Array.isArray(apiData.hours)) {
+                hourlyData = apiData.hours.map(h => ({
+                    temperature: h.temp,
+                    short_forecast: h.condition,
+                    wind_speed: h.wind ? parseInt(h.wind) : null,
+                    wind_gust: h.windGust,
+                    precipitation_probability: h.pop,
+                    period_start: h.start  // Use API's start time
+                }));
+            }
+        }
+    } catch (err) {
+        console.error('Failed to fetch hourly data:', err);
+        // Fallback to template data if API fails
+        hourlyData = {{ hourly_forecasts_json|safe|default:"[]" }};
+    }
+
+    for (let i = 0; i < 24; i++) {
+        const existing = hourlyData[i] || {};
+
+        // Use stored period_start if available, otherwise calculate from current time
+        let hour;
+        let timeStr;
+        if (existing.period_start) {
+            hour = new Date(existing.period_start);
+            timeStr = existing.period_start;
+        } else {
+            hour = new Date(now);
+            hour.setHours(now.getHours() + i);
+            timeStr = hour.toISOString();
+        }
+
+        const hourStr = hour.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+        const temp = existing.temperature || '';
+        const short = existing.short_forecast || '';
+        const wind = existing.wind_speed || '';
+        const gust = existing.wind_gust || '';
+        const pop = existing.precipitation_probability || '';
+
+        // Determine background class
+        const bgClass = temp ? `temp-bg-${temp}` : 'temp-bg-70';
+
+        const cardId = `hourly-${i}`;
+
+        const cardHtml = `
+            <div class="col-lg-2 col-md-3 col-sm-4 col-6">
+                <div class="card border-0 h-100">
+                    <div class="card-body p-2 text-center ${bgClass}" id="${cardId}-card" style="min-height: 200px;">
+                        <div>
+                            <div class="fw-bold mb-2" style="font-size: 0.9rem;">${hourStr}</div>
+                            <i class="fas fa-cloud mb-2" id="${cardId}-icon" style="font-size: 1.8rem;"></i>
+                            <div class="mb-2">
+                                <input type="number" class="form-control form-control-sm text-center mx-auto"
+                                       id="${cardId}-temp"
+                                       data-card="${cardId}"
+                                       placeholder="°F"
+                                       value="${temp}"
+                                       style="width: 60px; font-size: 1rem;">
+                            </div>
+                        </div>
+                        <textarea class="form-control form-control-sm text-center mb-2"
+                               id="${cardId}-short"
+                               data-card="${cardId}"
+                               placeholder="Conditions"
+                               rows="2"
+                               style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem; resize: none;">${short}</textarea>
+                        <div class="row g-1 mb-1">
+                            <div class="col-6">
+                                <input type="number" class="form-control form-control-sm text-center"
+                                       id="${cardId}-wind"
+                                       placeholder="Wind"
+                                       value="${wind}"
+                                       min="0" max="200"
+                                       style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.65rem;">
+                            </div>
+                            <div class="col-6">
+                                <input type="number" class="form-control form-control-sm text-center"
+                                       id="${cardId}-gust"
+                                       placeholder="Gust"
+                                       value="${gust}"
+                                       min="0" max="200"
+                                       style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.65rem;">
+                            </div>
+                        </div>
+                        <input type="number" class="form-control form-control-sm text-center"
+                               id="${cardId}-pop"
+                               placeholder="PoP %"
+                               value="${pop}"
+                               min="0" max="100"
+                               style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.65rem;">
+                        <input type="hidden" id="${cardId}-time" value="${timeStr}">
+                    </div>
+                </div>
+            </div>
+        `;
+
+        grid.insertAdjacentHTML('beforeend', cardHtml);
+    }
+
+    // Add event listeners
+    setTimeout(() => {
+        document.querySelectorAll('[data-card]').forEach(input => {
+            input.addEventListener('input', function() {
+                updateHourlyCard(this.dataset.card);
+                validateAllHourlyForecasts();
+            });
+        });
+
+        // Update icons for pre-filled forecasts
+        for (let i = 0; i < 24; i++) {
+            updateHourlyCard(`hourly-${i}`);
+        }
+
+        validateAllHourlyForecasts();
+    }, 100);
+}
+
+function saveAllHourlyForecasts() {
+    const locationId = '{{ location.id }}';
+    const forecasts = [];
+    const missingFields = [];
+
+    // Collect all hourly forecast data - save ALL hours to create complete custom forecast set
+    for (let i = 0; i < 24; i++) {
+        const temp = document.getElementById(`hourly-${i}-temp`).value;
+        const shortForecast = document.getElementById(`hourly-${i}-short`).value.trim();
+        const time = document.getElementById(`hourly-${i}-time`).value;
+        const wind = document.getElementById(`hourly-${i}-wind`).value;
+        const gust = document.getElementById(`hourly-${i}-gust`).value;
+        const pop = document.getElementById(`hourly-${i}-pop`).value;
+
+        // Check if required fields are present
+        if (!temp || !shortForecast) {
+            missingFields.push({ hour: i, missing: !temp ? 'temperature' : 'conditions' });
+            const tempEl = document.getElementById(`hourly-${i}-temp`);
+            const shortEl = document.getElementById(`hourly-${i}-short`);
+            if (!temp && tempEl) tempEl.classList.add('is-invalid');
+            if (!shortForecast && shortEl) shortEl.classList.add('is-invalid');
+        } else {
+            // Save ALL hours with data to create complete custom forecast set
+            const forecastData = {
+                location: locationId,
+                forecast_time: time,
+                temperature: parseInt(temp),
+                temperature_unit: 'F',
+                short_forecast: shortForecast
+            };
+
+            if (wind) forecastData.wind_speed = parseInt(wind);
+            if (gust) forecastData.wind_gust = parseInt(gust);
+            if (pop) forecastData.precipitation_probability = parseInt(pop);
+
+            forecasts.push(forecastData);
+        }
+    }
+
+    // Enforce completion: all 24 hours must be valid
+    if (missingFields.length > 0) {
+        alert('Please fill temperature and conditions for all hours before saving.');
+        return;
+    }
+
+    // Save all hourly forecasts - mark first one to clear existing forecasts
+    const savePromises = forecasts.map((forecastData, index) => {
+        // Mark first forecast to trigger database clear
+        if (index === 0) {
+            forecastData._batch_start = true;
+        }
+        return fetch(`/api/locations/${locationId}/hourly-forecasts/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(forecastData)
+        })
+    });
+
+    Promise.all(savePromises).then(() => {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editHourlyForecastModal'));
+        modal.hide();
+        window.location.reload();
+    }).catch(error => {
+        console.error('Failed to save hourly forecasts:', error);
+        alert('Failed to save some hourly forecasts. Please try again.');
+    });
+}
+
+// Copy previous day's same period values forward if empty
+function autoFillMissingForecasts() {
+    for (let i = 1; i < 8; i++) { // start at second day
+        ['day','night'].forEach(period => {
+            const prevId = `forecast-${i-1}-${period}`;
+            const currId = `forecast-${i}-${period}`;
+            const prevTempEl = document.getElementById(`${prevId}-temp`);
+            const prevShortEl = document.getElementById(`${prevId}-short`);
+            const currTempEl = document.getElementById(`${currId}-temp`);
+            const currShortEl = document.getElementById(`${currId}-short`);
+            if (prevTempEl && currTempEl && !currTempEl.value) {
+                currTempEl.value = prevTempEl.value;
+            }
+            if (prevShortEl && currShortEl && !currShortEl.value) {
+                currShortEl.value = prevShortEl.value;
+            }
+            // Wind / Gust / PoP
+            ['wind','gust','pop'].forEach(field => {
+                const prevFieldEl = document.getElementById(`${prevId}-${field}`);
+                const currFieldEl = document.getElementById(`${currId}-${field}`);
+                if (prevFieldEl && currFieldEl && !currFieldEl.value && prevFieldEl.value) {
+                    currFieldEl.value = prevFieldEl.value;
+                }
+            });
+            updateForecastCard(currId);
+        });
+    }
+}
+
+// Validate all daily periods; enable save button only if complete
+function validateAllDailyForecasts() {
+    let allValid = true;
+    for (let i = 0; i < 8; i++) {
+        ['day','night'].forEach(period => {
+            const base = `forecast-${i}-${period}`;
+            const tempEl = document.getElementById(`${base}-temp`);
+            const shortEl = document.getElementById(`${base}-short`);
+            if (!tempEl || !shortEl) return; // skip if missing
+            const tempValid = tempEl.value !== '';
+            const shortValid = shortEl.value.trim() !== '';
+            if (!tempValid) tempEl.classList.add('is-invalid'); else tempEl.classList.remove('is-invalid');
+            if (!shortValid) shortEl.classList.add('is-invalid'); else shortEl.classList.remove('is-invalid');
+            if (!tempValid || !shortValid) allValid = false;
+        });
+    }
+    const saveBtn = document.getElementById('saveDailyForecastBtn');
+    if (saveBtn) {
+        saveBtn.disabled = !allValid;
+    }
+    return allValid;
+}
+
+// Validate all hourly periods; enable save button only if complete
+function validateAllHourlyForecasts() {
+    let allValid = true;
+    for (let i = 0; i < 24; i++) {
+        const tempEl = document.getElementById(`hourly-${i}-temp`);
+        const shortEl = document.getElementById(`hourly-${i}-short`);
+        if (!tempEl || !shortEl) continue;
+        const tempValid = tempEl.value !== '';
+        const shortValid = shortEl.value.trim() !== '';
+        if (!tempValid) tempEl.classList.add('is-invalid'); else tempEl.classList.remove('is-invalid');
+        if (!shortValid) shortEl.classList.add('is-invalid'); else shortEl.classList.remove('is-invalid');
+        if (!tempValid || !shortValid) allValid = false;
+    }
+    const saveBtn = document.getElementById('saveHourlyForecastBtn');
+    if (saveBtn) {
+        saveBtn.disabled = !allValid;
+    }
+    return allValid;
 }
 
 function updateForecastCard(cardId) {
@@ -726,7 +1455,7 @@ function updateForecastCard(cardId) {
     const icon = document.getElementById(`${cardId}-icon`);
     const period = document.getElementById(`${cardId}-period`).value;
     const isDaytime = period === 'day';
-    
+
     // Update background based on temperature
     let bgClass = '';
     if (temp >= 110) bgClass = 'temp-bg-110';
@@ -742,12 +1471,12 @@ function updateForecastCard(cardId) {
     else if (temp >= 10) bgClass = 'temp-bg-10';
     else if (temp >= 0) bgClass = 'temp-bg-0';
     else bgClass = 'temp-bg--10';
-    
+
     card.className = `p-3 text-center ${bgClass}`;
     card.style.minHeight = '200px';
-    
+
     // Update icon
-    let iconClass = 'fas fa-cloud';
+    let iconClass = isDaytime ? 'fas fa-cloud-sun' : 'fas fa-cloud-moon';
     if (shortForecast.includes('storm') || shortForecast.includes('thunder')) iconClass = 'fas fa-bolt';
     else if (shortForecast.includes('ice') || shortForecast.includes('freezing') || shortForecast.includes('sleet')) iconClass = 'fas fa-icicles';
     else if (shortForecast.includes('snow') || shortForecast.includes('flurries') || shortForecast.includes('blizzard')) iconClass = 'fas fa-snowflake';
@@ -757,17 +1486,18 @@ function updateForecastCard(cardId) {
     else if (shortForecast.includes('partly')) iconClass = isDaytime ? 'fas fa-cloud-sun' : 'fas fa-cloud-moon';
     else if (shortForecast.includes('sunny') || shortForecast.includes('clear')) iconClass = isDaytime ? 'fas fa-sun' : 'fas fa-moon';
     else if (shortForecast.includes('cloud')) iconClass = 'fas fa-cloud';
-    
+
     icon.className = `${iconClass} mb-2`;
     icon.style.fontSize = '2rem';
 }
 
-function saveAllCustomForecasts() {
+function saveAllDailyForecasts() {
     const locationId = '{{ location.id }}';
     const forecasts = [];
-    
-    // Collect all forecast data
-    for (let i = 0; i < 7; i++) {
+    const missingFields = [];
+
+    // Collect all forecast data - save ALL periods to replace NWS forecasts completely
+    for (let i = 0; i < 8; i++) {
         ['day', 'night'].forEach(period => {
             const cardId = `forecast-${i}-${period}`;
             const temp = document.getElementById(`${cardId}-temp`).value;
@@ -777,11 +1507,20 @@ function saveAllCustomForecasts() {
             const wind = document.getElementById(`${cardId}-wind`).value;
             const gust = document.getElementById(`${cardId}-gust`).value;
             const pop = document.getElementById(`${cardId}-pop`).value;
-            
+
             console.log(`${cardId}: temp=${temp}, shortForecast="${shortForecast}"`);
-            
-            // Only save if temperature and forecast are provided
-            if (temp && shortForecast) {
+
+            // Check if required fields are present
+            if (!temp || !shortForecast) {
+                console.warn(`Missing data for ${cardId} - ${!temp ? 'temperature' : 'forecast text'}`);
+                missingFields.push({ cardId, missing: !temp ? 'temperature' : 'forecast text' });
+                // Add visual invalid state
+                const tempEl = document.getElementById(`${cardId}-temp`);
+                const shortEl = document.getElementById(`${cardId}-short`);
+                if (!temp && tempEl) tempEl.classList.add('is-invalid');
+                if (!shortForecast && shortEl) shortEl.classList.add('is-invalid');
+            } else {
+                // Save ALL periods with data to create complete custom forecast set
                 const forecastData = {
                     location: locationId,
                     date: date,
@@ -789,10 +1528,9 @@ function saveAllCustomForecasts() {
                     temperature: parseInt(temp),
                     temperature_unit: 'F',
                     short_forecast: shortForecast,
-                    detailed_forecast: shortForecast,
                     name: period === 'day' ? 'Custom Day' : 'Custom Night'
                 };
-                
+
                 // Add wind data if provided
                 if (wind) {
                     forecastData.wind_speed = parseInt(wind);
@@ -803,23 +1541,29 @@ function saveAllCustomForecasts() {
                 if (pop) {
                     forecastData.precipitation_probability = parseInt(pop);
                 }
-                
+
+                console.log('Queueing forecast for save:', forecastData);
                 forecasts.push(forecastData);
             }
         });
     }
-    
-    if (forecasts.length === 0) {
-        alert('Please enter at least one forecast with temperature and description.');
+
+    // Enforce completion: all 16 periods must be valid
+    if (missingFields.length > 0) {
+        alert('Please fill temperature and forecast text for all day and night periods before saving.');
         return;
     }
-    
-    // Save all forecasts
+
+    // Save all forecasts - mark first one to clear existing forecasts
     let savedCount = 0;
     let errors = [];
-    
-    const savePromises = forecasts.map(forecastData => 
-        fetch(`/api/locations/${locationId}/forecasts/`, {
+
+    const savePromises = forecasts.map((forecastData, index) => {
+        // Mark first forecast to trigger database clear
+        if (index === 0) {
+            forecastData._batch_start = true;
+        }
+        return fetch(`/api/locations/${locationId}/forecasts/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -838,51 +1582,24 @@ function saveAllCustomForecasts() {
         })
         .catch(error => {
             errors.push(error.message);
-        })
-    );
-    
+        });
+    });
+
     Promise.all(savePromises).then(() => {
-        const modal = bootstrap.Modal.getInstance(document.getElementById('addCustomForecastModal'));
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editDailyForecastModal'));
         modal.hide();
-        
+
         if (errors.length > 0) {
             console.error('Some forecasts failed to save:', errors);
         }
-        
+
         // Reload page to show new forecasts
         window.location.reload();
     });
 }
 
 // Save custom name
-function saveCustomName() {
-    const customName = document.getElementById('customName').value;
-    const locationId = '{{ location.id }}';
-    
-    fetch(`/api/locations/${locationId}/`, {
-        method: 'PATCH',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify({
-            custom_name: customName
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Close modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('editNameModal'));
-        modal.hide();
-        
-        // Reload page to show updated name
-        window.location.reload();
-    })
-    .catch(error => {
-        console.error('Error updating location name:', error);
-        alert('Failed to update location name. Please try again.');
-    });
-}
+// Deprecated: saveCustomName removed; unified submitLocationForm handles updates.
 
 // Save custom forecast
 function saveCustomForecast() {
@@ -910,31 +1627,31 @@ function getCookie(name) {
 // Initialize radar map
 document.addEventListener('DOMContentLoaded', function() {
     const map = L.map('radarMap').setView([{{ location.latitude }}, {{ location.longitude }}], 8);
-    
+
     // Base map layers
     const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
     });
-    
+
     const satelliteMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles © Esri',
         maxZoom: 19
     });
-    
+
     streetMap.addTo(map);
-    
+
     // Add location marker
     L.marker([{{ location.latitude }}, {{ location.longitude }}])
         .addTo(map)
         .bindPopup('{{ location.display_name }}');
-    
+
     // Weather overlay layers
     const weatherLayers = {};
 
     // NWS GeoServer base URL
     const nwsGeoServerUrl = 'https://opengeo.ncep.noaa.gov/geoserver';
-    
+
     // Radar - Base Reflectivity (CONUS)
     const radarLayer = L.tileLayer.wms(nwsGeoServerUrl + '/conus/conus_bref_qcd/ows', {
         layers: 'conus_bref_qcd',
@@ -944,7 +1661,7 @@ document.addEventListener('DOMContentLoaded', function() {
         zIndex: 10,
         attribution: 'NOAA/NWS MRMS'
     }).addTo(map);
-    
+
     // Add radar legend
     const radarLegendUrl = nwsGeoServerUrl + '/conus/conus_bref_qcd/wms?SERVICE=WMS&REQUEST=GetLegendGraphic&FORMAT=image/png&LAYER=conus_bref_qcd';
     const radarLegend = L.control({position: 'bottomright'});
@@ -958,7 +1675,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return div;
     };
     radarLegend.addTo(map);
-    
+
     // Base map control
     const baseMaps = {
         "Street Map": streetMap,
@@ -971,4 +1688,115 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Leaflet JS Library -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- HTML2Canvas for image export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+// Generic export function for any section
+function exportSectionAsImage(sectionId) {
+    const exportSection = document.getElementById(sectionId);
+    if (!exportSection) {
+        alert('Section not found');
+        return;
+    }
+
+    // Show processing indicator
+    const processingDiv = document.createElement('div');
+    processingDiv.className = 'export-processing';
+    processingDiv.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Generating image...';
+    document.body.appendChild(processingDiv);
+
+    // Capture the section
+    html2canvas(exportSection, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true
+    }).then(canvas => {
+        canvas.toBlob(function(blob) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const locationName = '{{ location.display_name|escapejs }}';
+            const today = new Date();
+            const dateStr = today.toISOString().split('T')[0];
+            link.download = `${locationName.replace(/[^a-z0-9]/gi, '_')}_${sectionId}_${dateStr}.jpg`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+            document.body.removeChild(processingDiv);
+        }, 'image/jpeg', 0.95);
+    }).catch(error => {
+        console.error('Export failed:', error);
+        document.body.removeChild(processingDiv);
+        alert('Failed to export image. Please try again.');
+    });
+}
+
+// Backward compatibility - alias for forecast section
+function exportForecastAsImage() {
+    exportSectionAsImage('forecastExportSection');
+}
+
+// AI Summarization for forecast text exceeding character limit
+async function summarizeText(text, maxLength) {
+    if (text.length <= maxLength) {
+        return text;
+    }
+
+    try {
+        const response = await fetch('/api/summarize_forecast/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                text: text,
+                max_length: maxLength
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            return data.summary;
+        } else {
+            console.warn('Summarization failed, truncating text');
+            return text.substring(0, maxLength - 3) + '...';
+        }
+    } catch (error) {
+        console.error('Summarization error:', error);
+        return text.substring(0, maxLength - 3) + '...';
+    }
+}
+
+async function summarizeIfNeeded(textarea, maxLength) {
+    const text = textarea.value.trim();
+    if (text.length <= maxLength) {
+        return; // No need to summarize
+    }
+
+    // Show loading indicator
+    const originalValue = textarea.value;
+    textarea.style.opacity = '0.5';
+    textarea.disabled = true;
+
+    try {
+        const summary = await summarizeText(text, maxLength);
+        textarea.value = summary;
+        // Update the card preview
+        if (textarea.dataset.card) {
+            updateForecastCard(textarea.dataset.card);
+        }
+    } finally {
+        textarea.style.opacity = '1';
+        textarea.disabled = false;
+    }
+}
+
+// Helper to get CSRF token
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+           document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+}
+</script>
 {% endblock %}

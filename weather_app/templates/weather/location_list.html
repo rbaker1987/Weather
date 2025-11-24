@@ -61,13 +61,13 @@
                             </li>
                             <li>
                                 <a class="dropdown-item" href="#" onclick="event.preventDefault(); setCurrentLocation('{{ location.id }}');">
-                                    <i class="fas fa-home text-info"></i> 
+                                    <i class="fas fa-home text-info"></i>
                                     {% if location.is_current_location %}Current Location{% else %}Set as Current{% endif %}
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="#" 
-                                   data-bs-toggle="modal" 
+                                <a class="dropdown-item" href="#"
+                                   data-bs-toggle="modal"
                                    data-bs-target="#editNameModal{{ location.id }}"
                                    onclick="event.preventDefault();">
                                     <i class="fas fa-edit"></i> Edit
@@ -75,7 +75,7 @@
                             </li>
                             <li>
                                 <a class="dropdown-item" href="#" onclick="event.preventDefault(); toggleLocationEnabled('{{ location.id }}', {{ location.is_enabled|lower }});">
-                                    <i class="fas fa-{% if location.is_enabled %}eye-slash{% else %}eye{% endif %}"></i> 
+                                    <i class="fas fa-{% if location.is_enabled %}eye-slash{% else %}eye{% endif %}"></i>
                                     {% if location.is_enabled %}Disable{% else %}Enable{% endif %}
                                 </a>
                             </li>
@@ -88,7 +88,7 @@
                         </ul>
                     </div>
                 </div>
-            
+
             <!-- Active Alerts -->
             {% if alert_count > 0 %}
             <a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none">
@@ -106,7 +106,7 @@
                 </div>
             </a>
             {% endif %}
-            
+
             <a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none">
             <!-- Current Conditions -->
             {% if location.current_temp %}
@@ -118,7 +118,7 @@
                     <small><i class="fas fa-info-circle"></i> Click "Update Forecast" to get current conditions</small>
                 </div>
             {% endif %}
-                
+
                 <!-- Location Info -->
                 <div class="mb-3">
                     {% if location.zip_code %}
@@ -137,9 +137,9 @@
                         </p>
                     {% endif %}
                 </div>
-                
-                
-                
+
+
+
             </div>
         </div>
         </a>
@@ -173,8 +173,8 @@
                 <form id="editNameForm{{ location.id }}">
                     <div class="mb-3">
                         <label for="customName{{ location.id }}" class="form-label">Location Name</label>
-                        <input type="text" class="form-control" id="customName{{ location.id }}" name="custom_name" 
-                               value="{{ location.custom_name|default:location.name }}" 
+                        <input type="text" class="form-control" id="customName{{ location.id }}" name="custom_name"
+                               value="{{ location.custom_name|default:location.name }}"
                                placeholder="Enter location name (e.g., 'Home', 'Office', '75771')">
                     </div>
                     <div class="mb-3">
@@ -189,12 +189,12 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="latitude{{ location.id }}" class="form-label">Latitude</label>
-                            <input type="number" step="0.000001" class="form-control" id="latitude{{ location.id }}" 
+                            <input type="number" step="0.000001" class="form-control" id="latitude{{ location.id }}"
                                    value="{{ location.latitude }}" readonly>
                         </div>
                         <div class="col-md-6">
                             <label for="longitude{{ location.id }}" class="form-label">Longitude</label>
-                            <input type="number" step="0.000001" class="form-control" id="longitude{{ location.id }}" 
+                            <input type="number" step="0.000001" class="form-control" id="longitude{{ location.id }}"
                                    value="{{ location.longitude }}" readonly>
                         </div>
                     </div>
@@ -227,13 +227,13 @@
                 <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
             </li>
         {% endif %}
-        
+
         <li class="page-item active">
             <span class="page-link">
                 Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
             </span>
         </li>
-        
+
         {% if page_obj.has_next %}
             <li class="page-item">
                 <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
@@ -262,7 +262,7 @@
                     <div class="mb-3">
                         <label for="locationInput" class="form-label">Location</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" id="locationInput" 
+                            <input type="text" class="form-control" id="locationInput"
                                    placeholder="Enter city, state, or ZIP code" required>
                             <button class="btn btn-outline-secondary" type="button" id="useMyLocationBtn" onclick="useMyLocation()">
                                 <i class="fas fa-location-arrow"></i> Use My Location
@@ -343,12 +343,12 @@ function addLocation() {
     const addLatEl = document.getElementById('addLatitude');
     const addLonEl = document.getElementById('addLongitude');
     const addBtn = document.getElementById('addLocationBtn');
-    
+
     if (!locationValue.trim()) {
         alert('Please enter a location');
         return;
     }
-    
+
     // Ensure geocoded coordinates or a map-click are present (dataset set)
     if (!locationInput.dataset.latitude || !locationInput.dataset.longitude) {
         alert('Please wait for the map to locate your place or click on the map to choose a point.');
@@ -362,10 +362,10 @@ function addLocation() {
     // Prefer explicit map values if present
     const mapLat = addLatEl && addLatEl.value ? addLatEl.value : null;
     const mapLon = addLonEl && addLonEl.value ? addLonEl.value : null;
-    
+
     // Check if it's a ZIP code (5 digits)
     const isZipCode = /^\d{5}$/.test(locationValue.trim());
-    
+
     // Prepare payload; round coordinates to 6 decimal places (model constraint)
     const data = {
         name: locationValue,
@@ -380,9 +380,9 @@ function addLocation() {
         } : {})),
         ...(typeSelect && typeSelect.value ? { location_type: typeSelect.value } : {})
     };
-    
+
     console.log('Sending location data:', data);
-    
+
     fetch('/api/locations/', {
         method: 'POST',
         headers: {
@@ -488,7 +488,7 @@ function saveCustomName(locationId) {
     const longitude = parseFloat(document.getElementById(`longitude${locationId}`).value);
     const locationTypeEl = document.getElementById(`locationType${locationId}`);
     const locationType = locationTypeEl ? locationTypeEl.value : '';
-    
+
     fetch(`/api/locations/${locationId}/`, {
         method: 'PATCH',
         headers: {
@@ -507,7 +507,7 @@ function saveCustomName(locationId) {
         // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById(`editNameModal${locationId}`));
         modal.hide();
-        
+
         // Reload page to show updated location
         window.location.reload();
     })
@@ -522,7 +522,7 @@ function saveLocationData(locationId) {
 }
 
 function getCsrfToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
            document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
 }
 
@@ -604,24 +604,24 @@ function useMyLocation() {
     const addLatEl = document.getElementById('addLatitude');
     const addLonEl = document.getElementById('addLongitude');
     const addBtn = document.getElementById('addLocationBtn');
-    
+
     if (!navigator.geolocation) {
         statusDiv.innerHTML = '<div class="alert alert-warning">Geolocation is not supported by your browser</div>';
         return;
     }
-    
+
     // Show loading state
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting location...';
     statusDiv.innerHTML = '<div class="alert alert-info">Requesting your location...</div>';
-    
+
     navigator.geolocation.getCurrentPosition(
         async function(position) {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
-            
+
             statusDiv.innerHTML = '<div class="alert alert-info">Found coordinates, getting address...</div>';
-            
+
             try {
                 // Use Nominatim reverse geocoding
                 const response = await fetch(
@@ -632,14 +632,14 @@ function useMyLocation() {
                         }
                     }
                 );
-                
+
                 if (!response.ok) {
                     throw new Error('Geocoding failed');
                 }
-                
+
                 const data = await response.json();
                 const address = data.address;
-                
+
                 // Build location string
                 let locationStr = '';
                 if (address.city) {
@@ -651,15 +651,15 @@ function useMyLocation() {
                 } else if (address.county) {
                     locationStr = address.county;
                 }
-                
+
                 if (address.state) {
                     locationStr += locationStr ? ', ' + address.state : address.state;
                 }
-                
+
                 if (!locationStr && address.postcode) {
                     locationStr = address.postcode;
                 }
-                
+
                 if (locationStr) {
                     input.value = locationStr;
                     statusDiv.innerHTML = `<div class="alert alert-success">Location found: ${locationStr}</div>`;
@@ -668,7 +668,7 @@ function useMyLocation() {
                     input.value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
                     statusDiv.innerHTML = `<div class="alert alert-success">Using coordinates: ${lat.toFixed(4)}, ${lon.toFixed(4)}</div>`;
                 }
-                
+
                 // Store rounded to 6 decimals, update map inputs
                 input.dataset.latitude = Number(lat).toFixed(6);
                 input.dataset.longitude = Number(lon).toFixed(6);
@@ -678,7 +678,7 @@ function useMyLocation() {
                     initAddLocationMap(Number(lat), Number(lon));
                 }
                 updateAddButtonState();
-                
+
             } catch (error) {
                 console.error('Geocoding error:', error);
                 // Use coordinates as fallback
@@ -761,43 +761,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initLocationMap(locationId, lat, lon) {
     const mapId = `map${locationId}`;
-    
+
     // If map already exists, remove it
     if (locationMaps[locationId]) {
         locationMaps[locationId].remove();
         delete locationMaps[locationId];
     }
-    
+
     // Create new map centered on current coordinates
     const map = L.map(mapId).setView([lat, lon], 13);
-    
+
     // Add OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
     }).addTo(map);
-    
+
     // Add marker at current location
     let marker = L.marker([lat, lon], {
         draggable: false
     }).addTo(map);
-    
+
     // Handle map clicks to update location
     map.on('click', function(e) {
         const newLat = e.latlng.lat;
         const newLon = e.latlng.lng;
-        
+
         // Update marker position
         marker.setLatLng([newLat, newLon]);
-        
+
         // Update input fields
         document.getElementById(`latitude${locationId}`).value = newLat.toFixed(6);
         document.getElementById(`longitude${locationId}`).value = newLon.toFixed(6);
     });
-    
+
     // Store map instance
     locationMaps[locationId] = map;
-    
+
     // Force map to resize properly
     setTimeout(function() {
         map.invalidateSize();
@@ -869,19 +869,19 @@ function toggleReorderMode() {
     const btn = document.getElementById('reorderBtn');
     const dragHandles = document.querySelectorAll('.drag-handle');
     const locationCards = document.getElementById('locationCards');
-    
+
     if (reorderMode) {
         // Enable reorder mode
         btn.innerHTML = '<i class="fas fa-save"></i> Save Order';
         btn.classList.remove('btn-secondary');
         btn.classList.add('btn-primary');
-        
+
         // Show drag handles only for General (draggable) cards
         dragHandles.forEach(handle => {
             const card = handle.closest('[data-location-id]');
             handle.style.display = card && card.dataset.draggable === 'true' ? 'block' : 'none';
         });
-        
+
         // Initialize Sortable
         sortable = Sortable.create(locationCards, {
             animation: 150,
@@ -898,7 +898,7 @@ function toggleReorderMode() {
         cards.forEach(card => {
             locationOrder.push(card.getAttribute('data-location-id'));
         });
-        
+
         // Save order to backend
         fetch('/api/locations/reorder/', {
             method: 'POST',
@@ -916,12 +916,12 @@ function toggleReorderMode() {
                 btn.innerHTML = '<i class="fas fa-arrows-alt"></i> Reorder';
                 btn.classList.remove('btn-primary');
                 btn.classList.add('btn-secondary');
-                
+
                 // Hide drag handles
                 dragHandles.forEach(handle => {
                     handle.style.display = 'none';
                 });
-                
+
                 // Destroy Sortable
                 if (sortable) {
                     sortable.destroy();
@@ -1000,6 +1000,17 @@ function loadBrowserLocation() {
             const conditions = props.textDescription || 'Unknown';
             document.getElementById('browserConditions').textContent = conditions;
 
+            // Fetch per-date sunrise/sunset events (single hour call returns mapping)
+            try {
+                const ssResp = await fetch(`/api/hourly_forecast/?lat=${lat}&lon=${lon}&hours=1`);
+                const ssData = await ssResp.json();
+                if (ssData.sun_events) {
+                    window.browserSunEvents = ssData.sun_events;
+                }
+            } catch(e) {
+                console.warn('Sun events fetch failed', e);
+            }
+
             if (props.relativeHumidity && props.relativeHumidity.value !== null) {
                 const h = Math.round(props.relativeHumidity.value);
                 const el = document.getElementById('browserHumidity');
@@ -1014,7 +1025,21 @@ function loadBrowserLocation() {
                 el.querySelector('span').textContent = `${mph} mph ${dir}`;
             }
 
-            const icon = getWeatherIcon(conditions);
+            let iconIsDay = true;
+            if (window.browserSunEvents) {
+                const now = new Date();
+                const key = now.toISOString().split('T')[0];
+                const ev = window.browserSunEvents[key];
+                if (ev) {
+                    const sr = new Date(ev.sunrise);
+                    const ss = new Date(ev.sunset);
+                    iconIsDay = now >= sr && now < ss;
+                }
+            } else {
+                const hour = new Date().getHours();
+                iconIsDay = hour >= 6 && hour < 18;
+            }
+            const icon = getWeatherIcon(conditions, iconIsDay);
             document.getElementById('browserWeatherIcon').className = `fas fa-${icon} fa-2x`;
 
             loading.style.display = 'none';
@@ -1059,7 +1084,7 @@ function getWindDirection(degrees) {
     return dirs[idx];
 }
 
-function getWeatherIcon(conditions) {
+function getWeatherIcon(conditions, isDaytime = true) {
     const c = (conditions || '').toLowerCase();
     if (c.includes('storm') || c.includes('thunder') || c.includes('t-storm')) return 'bolt';
     if (c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet')) return 'icicles';
@@ -1067,10 +1092,10 @@ function getWeatherIcon(conditions) {
     if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
     if (c.includes('rain') || c.includes('shower') || c.includes('drizzle')) return 'cloud-rain';
     if (c.includes('wind') && !c.includes('cloudy')) return 'wind';
-    if (c.includes('partly')) return 'cloud-sun';
-    if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return 'sun';
+    if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
+    if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return isDaytime ? 'sun' : 'moon';
     if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
-    return 'cloud-sun';
+    return isDaytime ? 'cloud-sun' : 'cloud-moon';
 }
 
 // No cross-page navigation needed; use header links

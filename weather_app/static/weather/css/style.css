@@ -19,6 +19,14 @@ body {
     color: #333;
 }
 
+.card-body {
+    font-size: 1.1rem;
+}
+
+.card-header {
+    font-size: 1.15rem;
+}
+
 /* Header and navigation */
 .navbar-brand {
     font-weight: bold;
@@ -47,13 +55,13 @@ body {
 
 /* Temperature display */
 .temperature {
-    font-size: 2.5rem;
+    font-size: 3.5rem;
     font-weight: bold;
     color: var(--weather-primary);
 }
 
 .temperature-small {
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     font-weight: 600;
 }
 
@@ -61,6 +69,36 @@ body {
 .weather-icon {
     font-size: 3rem;
     margin-bottom: 1rem;
+}
+
+/* Chance mixed precipitation layout */
+.chance-mixed-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+}
+.chance-mixed-main {
+    font-size: 2.5rem;
+    margin-bottom: 0.15rem;
+}
+.chance-mixed-sub {
+    display: inline-flex;
+    gap: 6px;
+    font-size: 1.35rem;
+}
+.chance-mixed-sub i {
+    line-height: 1;
+}
+
+/* Multiple droplet variant */
+.rain-drops {
+    display: inline-flex;
+    gap: 4px;
+}
+.rain-drops i {
+    font-size: 1.2rem;
+    line-height: 1;
 }
 
 .weather-status {
@@ -194,11 +232,11 @@ body {
     .temperature {
         font-size: 2rem;
     }
-    
+
     .stat-number {
         font-size: 2rem;
     }
-    
+
     .weather-icon {
         font-size: 2rem;
     }

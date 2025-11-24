@@ -19,10 +19,15 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card weather-card">
-            <div class="card-header">
-                {% include "weather/components/section_header.html" with icon="thermometer-half" title="Current Conditions" %}
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    {% include "weather/components/section_header.html" with icon="thermometer-half" title="Current Conditions" %}
+                </div>
+                <button onclick="exportSectionAsImage('forecastListCurrentConditions')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                    <i class="fas fa-download"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div class="card-body" id="forecastListCurrentConditions">
                 <div class="row">
                     <!-- Browser Location Card (Always First) -->
                     <div class="col-xl-3 col-lg-4 col-md-6 mb-3">
@@ -65,7 +70,7 @@
                                 {% if location_forecast.day %}
                                 {% include "weather/components/forecast_period_card.html" with period=location_forecast.day period_type="day" %}
                                 {% endif %}
-                                
+
                                 {% if location_forecast.night %}
                                 {% include "weather/components/forecast_period_card.html" with period=location_forecast.night period_type="night" %}
                                 {% endif %}
@@ -171,6 +176,17 @@ function loadBrowserLocation() {
             const conditions = props.textDescription || 'Unknown';
             document.getElementById('browserConditions').textContent = conditions;
 
+            // Fetch per-date sunrise/sunset (single hour call still returns mapping)
+            try {
+                const ssResp = await fetch(`/api/hourly_forecast/?lat=${lat}&lon=${lon}&hours=1`);
+                const ssData = await ssResp.json();
+                if (ssData.sun_events) {
+                    window.browserSunEvents = ssData.sun_events;
+                }
+            } catch(e) {
+                console.warn('Sun events fetch failed', e);
+            }
+
             if (props.relativeHumidity && props.relativeHumidity.value !== null) {
                 const h = Math.round(props.relativeHumidity.value);
                 const el = document.getElementById('browserHumidity');
@@ -185,8 +201,25 @@ function loadBrowserLocation() {
                 el.querySelector('span').textContent = `${mph} mph ${dir}`;
             }
 
-            const icon = getWeatherIcon(conditions);
+            // Prefer sunrise/sunset from hourly forecast; fallback to hour range
+            let iconIsDay = true;
+            if (window.browserSunEvents) {
+                const now = new Date();
+                const key = now.toISOString().split('T')[0];
+                const ev = window.browserSunEvents[key];
+                if (ev) {
+                    const sr = new Date(ev.sunrise);
+                    const ss = new Date(ev.sunset);
+                    iconIsDay = now >= sr && now < ss;
+                }
+            } else {
+                const hour = new Date().getHours();
+                iconIsDay = hour >= 6 && hour < 18;
+            }
+            const icon = getWeatherIcon(conditions, iconIsDay);
             document.getElementById('browserWeatherIcon').className = `fas fa-${icon} fa-2x`;
+
+            // Optionally display timezone-specific sunrise/sunset if container present (future enhancement placeholder)
 
             loading.style.display = 'none';
             content.style.display = 'block';
@@ -230,7 +263,7 @@ function getWindDirection(degrees) {
     return dirs[idx];
 }
 
-function getWeatherIcon(conditions) {
+function getWeatherIcon(conditions, isDaytime = true) {
     const c = (conditions || '').toLowerCase();
     if (c.includes('storm') || c.includes('thunder') || c.includes('t-storm')) return 'bolt';
     if (c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet')) return 'icicles';
@@ -238,10 +271,54 @@ function getWeatherIcon(conditions) {
     if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
     if (c.includes('rain') || c.includes('shower') || c.includes('drizzle')) return 'cloud-rain';
     if (c.includes('wind') && !c.includes('cloudy')) return 'wind';
-    if (c.includes('partly')) return 'cloud-sun';
-    if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return 'sun';
+    if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
+    if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return isDaytime ? 'sun' : 'moon';
     if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
-    return 'cloud-sun';
+    return isDaytime ? 'cloud-sun' : 'cloud-moon';
+}
+</script>
+
+<!-- HTML2Canvas for image export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+// Generic export function for any section
+function exportSectionAsImage(sectionId) {
+    const exportSection = document.getElementById(sectionId);
+    if (!exportSection) {
+        alert('Section not found');
+        return;
+    }
+
+    // Show processing indicator
+    const processingDiv = document.createElement('div');
+    processingDiv.className = 'export-processing';
+    processingDiv.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Generating image...';
+    document.body.appendChild(processingDiv);
+
+    // Capture the section
+    html2canvas(exportSection, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true
+    }).then(canvas => {
+        canvas.toBlob(function(blob) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const today = new Date();
+            const dateStr = today.toISOString().split('T')[0];
+            link.download = `weather_forecast_${sectionId}_${dateStr}.jpg`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+            document.body.removeChild(processingDiv);
+        }, 'image/jpeg', 0.95);
+    }).catch(error => {
+        console.error('Export failed:', error);
+        document.body.removeChild(processingDiv);
+        alert('Failed to export image. Please try again.');
+    });
 }
 </script>
 {% endblock %}
