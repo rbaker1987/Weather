@@ -1,16 +1,13 @@
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from django.test import Client
 
 # Coordinates for a location expected to resolve to America/Chicago
 LAT = 32.5107
 LON = -95.4094
 
-MOCK_GRID_JSON = {
-    "properties": {
-        "forecastHourly": "https://example.com/hourly"
-    }
-}
+MOCK_GRID_JSON = {"properties": {"forecastHourly": "https://example.com/hourly"}}
 
 MOCK_HOURLY_JSON = {
     "properties": {
@@ -22,21 +19,25 @@ MOCK_HOURLY_JSON = {
                 "shortForecast": "Mostly Cloudy",
                 "windSpeed": "5 mph",
                 "windDirection": "E",
-                "probabilityOfPrecipitation": {"value": 10}
+                "probabilityOfPrecipitation": {"value": 10},
             }
         ]
     }
 }
+
 
 class DummyResp:
     def __init__(self, json_data):
         self._json = json_data
         self.status_code = 200
         self.ok = True
+
     def json(self):
         return self._json
+
     def raise_for_status(self):
         return None
+
 
 @patch("weather.api.hourly_forecast_api.requests.get")
 @patch("weather.api.hourly_forecast_api.TimezoneFinder")
