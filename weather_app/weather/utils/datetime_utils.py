@@ -153,12 +153,10 @@ def ensure_utc_datetime(dt: Union[datetime, str]) -> datetime:
 
     if not is_dst_aware_datetime(dt):
         # Assume local time if naive
-        dt = dt.replace(tzinfo=timezone.utc)
-            dt = dt.replace(tzinfo=dt_timezone.utc)
+        dt = dt.replace(tzinfo=dt_timezone.utc)
     else:
         # Convert to UTC
-        dt = dt.astimezone(timezone.utc)
-            dt = dt.astimezone(dt_timezone.utc)
+        dt = dt.astimezone(dt_timezone.utc)
 
     return dt
 
