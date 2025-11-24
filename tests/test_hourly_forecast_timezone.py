@@ -1,6 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
 from django.test import Client
 
 # Coordinates for a location expected to resolve to America/Chicago
@@ -39,6 +40,7 @@ class DummyResp:
         return None
 
 
+@pytest.mark.django_db
 @patch("weather.api.hourly_forecast_api.requests.get")
 @patch("weather.api.hourly_forecast_api.TimezoneFinder")
 def test_hourly_forecast_includes_timezone(mock_tzfinder, mock_get):
