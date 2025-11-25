@@ -41,6 +41,7 @@ function getModelDomRefs(modelName) {
     .model-card:hover {
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         transform: translateY(-2px);
+        border-color: #FFD700;
     }
     .model-card.active { border-color: #0d6efd; background: #f8f9ff; }
     .model-card.disabled { opacity: 0.55; filter: grayscale(20%); }
@@ -220,6 +221,10 @@ async function loadModelData() {
     const lat = selectedOption.dataset.lat;
     const lon = selectedOption.dataset.lon;
     
+    // Get all available models from the model cards
+    const modelCards = document.querySelectorAll('.model-card[data-model]');
+    const models = Array.from(modelCards).map(card => card.dataset.model).join(',');
+    
     // Show loading indicator
     document.getElementById('loadingIndicator').style.display = 'block';
     document.getElementById('modelResults').style.display = 'none';
@@ -227,7 +232,7 @@ async function loadModelData() {
     
     try {
         // Fetch all model data from our API endpoint
-        const apiUrl = `/api/model-comparison/?latitude=${lat}&longitude=${lon}&forecast_days=${forecastDays}`;
+        const apiUrl = `/api/model-comparison/?latitude=${lat}&longitude=${lon}&forecast_days=${forecastDays}&models=${models}`;
         const response = await fetch(apiUrl);
         
         if (!response.ok) {
