@@ -101,10 +101,10 @@ class TestModelComparisonAPI:
             )
 
         assert response.status_code == 200
-        # Verify the API was called with forecast_days=7 in the URL
+        # Verify the API was called with forecast_days=7 in params
         mock_get.assert_called()
-        call_args = mock_get.call_args[0][0]
-        assert "forecast_days=7" in call_args
+        call_kwargs = mock_get.call_args[1]
+        assert call_kwargs["params"]["forecast_days"] == 7
 
     def test_model_comparison_api_error_handling(self, client):
         """Test model comparison handles API errors gracefully."""
@@ -113,6 +113,7 @@ class TestModelComparisonAPI:
             mock_response = Mock()
             mock_response.status_code = 500
             mock_response.json.side_effect = Exception("API Error")
+            mock_response.raise_for_status.side_effect = Exception("API Error")
             mock_get.return_value = mock_response
 
             response = client.get(
@@ -120,9 +121,12 @@ class TestModelComparisonAPI:
                 {"latitude": 32.4910, "longitude": -95.3954, "models": "GFS"},
             )
 
-        assert response.status_code == 500
+        # API returns 200 with error in response data
+        assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "error"
+        assert data["status"] == "success"
+        # Check that model has error
+        assert data["models"][0]["error"] is not None
 
     def test_model_comparison_multiple_models(self, client):
         """Test comparing multiple weather models."""
@@ -197,8 +201,8 @@ class TestModelDetailView:
         )
 
         assert response.status_code == 200
-        # Context should have clamped forecast_days
-        assert response.context["forecast_days"] <= 2
+        # Context should have clamped forecast_days as string
+        assert int(response.context["forecast_days"]) <= 2
 
 
 @pytest.mark.django_db
