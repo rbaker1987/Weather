@@ -1,19 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Weather Favicon">
   <defs>
     <style>
-      .fav-bg { fill: #4169E1; }
-      .cold-front-curve { fill: none; stroke: #ffffff; stroke-width: 4; stroke-linecap: round; }
-      .logo-text { font-family: 'Arial', sans-serif; fill: #ffffff; font-size: 11px; font-weight: bold; }
+      .lightning { fill: #FFD700; stroke: #FFA500; stroke-width: 1.5; stroke-linejoin: miter; }
     </style>
-    <path id="textCurveFav" d="M 12,39 Q 32,49 52,39"/>
   </defs>
-  <rect class="fav-bg" width="64" height="64" rx="8"/>
-  <!-- Downward curve -->
-  <path class="cold-front-curve" d="M 12,22 Q 32,34 52,22"/>
-  <!-- RW text following curve -->
-  <text class="logo-text">
-    <textPath href="#textCurveFav" startOffset="50%" text-anchor="middle">
-      RW
-    </textPath>
-  </text>
+  
+  <!-- Second lightning bolt as shadow accent -->
+  <path d="M 37,16 L 27,36 L 37,36 L 27,56 Z" fill="#FFD700" opacity="0.4" stroke="#FFA500" stroke-width="1"/>
+  
+  <!-- Main lightning bolt -->
+  <path class="lightning" d="M 32,14 L 22,34 L 32,34 L 22,54 Z"/>
 </svg>
