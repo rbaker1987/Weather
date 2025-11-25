@@ -1427,7 +1427,7 @@ class TempLocationView(TemplateView):
         context = super().get_context_data(**kwargs)
         lat = self.request.GET.get("latitude")
         lon = self.request.GET.get("longitude")
-        
+
         if not lat or not lon:
             context["error"] = "Latitude and longitude are required"
             context["page_title"] = "Temporary Location"
@@ -1442,16 +1442,16 @@ class TempLocationView(TemplateView):
             return context
 
         # Create a pseudo-location object for template compatibility
-        from types import SimpleNamespace
         from datetime import datetime
-        import requests
-        import json
         from itertools import groupby
-        
+        from types import SimpleNamespace
+
+        import requests
+
         location = SimpleNamespace(
             id=None,
             name=f"Map Location ({lat}, {lon})",
-            display_name=f"📍 Map Location",
+            display_name="📍 Map Location",
             latitude=latitude,
             longitude=longitude,
             zip_code=None,
@@ -1475,21 +1475,21 @@ class TempLocationView(TemplateView):
         daily_forecasts = []
         hourly_forecasts = []
         active_alerts = []
-        
+
         try:
             headers = {"User-Agent": "(Weather App, contact@example.com)"}
-            
+
             # Get grid point data
             grid_url = f"https://api.weather.gov/points/{latitude},{longitude}"
             grid_response = requests.get(grid_url, headers=headers, timeout=10)
             grid_response.raise_for_status()
             grid_data = grid_response.json()
-            
+
             properties = grid_data.get("properties", {})
             location.nws_office = properties.get("gridId", "")
             location.grid_x = properties.get("gridX")
             location.grid_y = properties.get("gridY")
-            
+
             # Fetch current conditions
             try:
                 observation_stations_url = properties.get("observationStations")
@@ -1497,7 +1497,7 @@ class TempLocationView(TemplateView):
                     stations_response = requests.get(observation_stations_url, headers=headers, timeout=10)
                     stations_response.raise_for_status()
                     stations_data = stations_response.json()
-                    
+
                     stations = stations_data.get("features", [])
                     if stations:
                         station_id = stations[0].get("properties", {}).get("stationIdentifier")
@@ -1506,47 +1506,47 @@ class TempLocationView(TemplateView):
                             obs_response = requests.get(obs_url, headers=headers, timeout=10)
                             obs_response.raise_for_status()
                             obs_data = obs_response.json()
-                            
+
                             obs_props = obs_data.get("properties", {})
                             temp_c = obs_props.get("temperature", {}).get("value")
                             if temp_c:
                                 location.current_temp = int(temp_c * 9 / 5 + 32)
-                            
+
                             location.current_conditions = obs_props.get("textDescription", "")
-                            
+
                             humidity = obs_props.get("relativeHumidity", {}).get("value")
                             if humidity:
                                 location.current_humidity = int(humidity)
-                            
+
                             wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
                             if wind_speed_kmh is not None:
                                 location.current_wind_speed = int(wind_speed_kmh * 0.621371)
-                            
+
                             wind_gust_kmh = obs_props.get("windGust", {}).get("value")
                             if wind_gust_kmh is not None:
                                 location.current_wind_gust = int(wind_gust_kmh * 0.621371)
-                            
+
                             wind_dir_deg = obs_props.get("windDirection", {}).get("value")
                             if wind_dir_deg is not None:
                                 deg = float(wind_dir_deg)
                                 directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
                                 location.current_wind_direction = directions[int((deg + 22.5) / 45) % 8]
-                            
+
                             timestamp = obs_props.get("timestamp")
                             if timestamp:
                                 location.last_observation_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             except Exception as e:
                 print(f"Warning: Could not fetch current conditions: {str(e)}")
-            
+
             # Get forecast URL
             forecast_url = properties.get("forecast")
             if forecast_url:
                 forecast_response = requests.get(forecast_url, headers=headers, timeout=10)
                 forecast_response.raise_for_status()
                 forecast_data = forecast_response.json()
-                
+
                 periods = forecast_data.get("properties", {}).get("periods", [])
-                
+
                 # Parse periods into daily forecast objects
                 for period in periods[:14]:
                     daily_forecasts.append(SimpleNamespace(
@@ -1562,25 +1562,25 @@ class TempLocationView(TemplateView):
                         detailed_forecast=period.get("detailedForecast", ""),
                         precipitation_probability=period.get("probabilityOfPrecipitation", {}).get("value"),
                     ))
-            
+
             # Fetch alerts
             try:
                 alerts_url = f"https://api.weather.gov/alerts/active?point={latitude},{longitude}"
                 alerts_response = requests.get(alerts_url, headers=headers, timeout=10)
                 alerts_response.raise_for_status()
                 alerts_data = alerts_response.json()
-                
+
                 features = alerts_data.get("features", [])
                 for feature in features:
                     props = feature.get("properties", {})
                     onset = props.get("onset")
                     expires = props.get("expires")
-                    
+
                     if onset:
                         onset = datetime.fromisoformat(onset.replace("Z", "+00:00"))
                     if expires:
                         expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
-                    
+
                     active_alerts.append(SimpleNamespace(
                         event=props.get("event", "Unknown"),
                         headline=props.get("headline", ""),
@@ -1592,12 +1592,12 @@ class TempLocationView(TemplateView):
                     ))
             except Exception as e:
                 print(f"Warning: Failed to fetch alerts: {str(e)}")
-            
+
             location.last_forecast_update = timezone.now()
-            
+
         except Exception as e:
             print(f"Warning: Failed to fetch forecast data: {str(e)}")
-        
+
         # Group daily forecasts by date
         grouped_forecasts = []
         if daily_forecasts:
@@ -1628,9 +1628,9 @@ class TempLocationView(TemplateView):
             context["locations"] = locations_qs.order_by("-is_current_location", "display_order", "name")
         except Exception:
             context["locations"] = Location.objects.none()
-        
+
         return context
-    
+
     @staticmethod
     def _parse_wind_speed(wind_speed_str):
         """Extract numeric wind speed from string like '10 to 15 mph' or '10 mph'."""
@@ -1733,13 +1733,13 @@ class ModelDetailView(TemplateView):
             }
             if config["models"]:
                 params["models"] = config["models"]
-            
+
             # Add cache-busting headers to ensure latest data
             headers = {
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
             }
-            
+
             try:
                 resp = requests.get(config["url"], params=params, headers=headers, timeout=30)
                 resp.raise_for_status()
