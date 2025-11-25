@@ -26,17 +26,17 @@ def setup_logging(
         retention: Log file retention setting (e.g., "30 days", "1 week")
     """
     config = get_config().logging
-    
+
     # Use provided values or fall back to configuration
     level = log_level or config.level
     file_path = log_file or config.file
     format_str = log_format or config.format
     rotation_setting = rotation or config.rotation
     retention_setting = retention or config.retention
-    
+
     # Remove default handler
     logger.remove()
-    
+
     # Add console handler
     logger.add(
         sys.stdout,
@@ -46,12 +46,12 @@ def setup_logging(
         backtrace=True,
         diagnose=True
     )
-    
+
     # Add file handler if specified
     if file_path:
         log_path = Path(file_path)
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         logger.add(
             log_path,
             level=level,
@@ -62,7 +62,7 @@ def setup_logging(
             diagnose=True,
             enqueue=True  # Thread-safe logging
         )
-    
+
     logger.info("Logging initialized", level=level, file=file_path)
 
 
