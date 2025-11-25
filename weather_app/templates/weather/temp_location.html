@@ -1,0 +1,218 @@
+{% extends "weather/base.html" %}
+{% load ui_tags %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    .location-info-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    .temp-badge {
+        background: rgba(255,255,255,0.2);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        display: inline-block;
+        margin: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'weather:dashboard' %}">Home</a></li>
+                <li class="breadcrumb-item active">Temporary Location</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">
+    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+</div>
+{% else %}
+
+<!-- Location Header -->
+<div class="location-info-card shadow-lg">
+    <h2 class="mb-3">
+        <i class="fas fa-map-pin"></i> Temporary Location Forecast
+    </h2>
+    <div class="d-flex flex-wrap gap-2">
+        <div class="temp-badge">
+            <i class="fas fa-compass"></i> <strong>Latitude:</strong> {{ latitude }}
+        </div>
+        <div class="temp-badge">
+            <i class="fas fa-compass"></i> <strong>Longitude:</strong> {{ longitude }}
+        </div>
+    </div>
+    <p class="mt-3 mb-0 small">
+        <i class="fas fa-info-circle"></i> This is a temporary location and will not be saved to your locations list.
+    </p>
+</div>
+
+<!-- Quick Links -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-chart-line"></i> Available Models for this Location
+                </h5>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'weather:model-detail' model_name='GFS' %}?latitude={{ latitude }}&longitude={{ longitude }}&forecast_days=7" class="btn btn-outline-primary">
+                        GFS Model
+                    </a>
+                    <a href="{% url 'weather:model-detail' model_name='ICON' %}?latitude={{ latitude }}&longitude={{ longitude }}&forecast_days=7" class="btn btn-outline-primary">
+                        ICON Model
+                    </a>
+                    <a href="{% url 'weather:model-detail' model_name='ECMWF' %}?latitude={{ latitude }}&longitude={{ longitude }}&forecast_days=7" class="btn btn-outline-primary">
+                        ECMWF Model
+                    </a>
+                    <a href="{% url 'weather:model-detail' model_name='GEM' %}?latitude={{ latitude }}&longitude={{ longitude }}&forecast_days=7" class="btn btn-outline-primary">
+                        GEM Model
+                    </a>
+                    <a href="{% url 'weather:model-detail' model_name='HRRR' %}?latitude={{ latitude }}&longitude={{ longitude }}&forecast_days=3" class="btn btn-outline-primary">
+                        HRRR Model
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NWS Forecast Data -->
+<div id="nwsForecastContainer" class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-cloud-sun"></i> National Weather Service Forecast
+                </h5>
+            </div>
+            <div class="card-body" id="nwsForecastContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Loading NWS forecast data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Location Map -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-map"></i> Location Map
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="locationMap" style="height: 400px; border-radius: 8px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if not error %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const lat = parseFloat('{{ latitude }}');
+    const lon = parseFloat('{{ longitude }}');
+    
+    // Initialize map
+    const map = L.map('locationMap').setView([lat, lon], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18
+    }).addTo(map);
+    
+    // Add marker for the location
+    const marker = L.marker([lat, lon]).addTo(map);
+    marker.bindPopup(`<b>Selected Location</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}`).openPopup();
+    
+    // Fetch NWS data
+    fetchNWSForecast(lat, lon);
+});
+
+async function fetchNWSForecast(lat, lon) {
+    const container = document.getElementById('nwsForecastContent');
+    
+    try {
+        // First get grid point info
+        const gridResponse = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
+        
+        if (!gridResponse.ok) {
+            throw new Error('Location may be outside NWS coverage area');
+        }
+        
+        const gridData = await gridResponse.json();
+        const forecastUrl = gridData.properties.forecast;
+        
+        // Get forecast data
+        const forecastResponse = await fetch(forecastUrl);
+        const forecastData = await forecastResponse.json();
+        const periods = forecastData.properties.periods;
+        
+        // Display forecast periods
+        let html = '<div class="row">';
+        periods.slice(0, 6).forEach((period, index) => {
+            html += `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h6 class="card-title">${period.name}</h6>
+                            <div class="d-flex align-items-center mb-2">
+                                <img src="${period.icon}" alt="${period.shortForecast}" style="width: 48px; height: 48px; margin-right: 10px;">
+                                <div>
+                                    <div class="fs-4 fw-bold">${period.temperature}°${period.temperatureUnit}</div>
+                                    <div class="small text-muted">${period.shortForecast}</div>
+                                </div>
+                            </div>
+                            <p class="small mb-1"><i class="fas fa-wind"></i> ${period.windSpeed} ${period.windDirection}</p>
+                            ${period.probabilityOfPrecipitation?.value ? 
+                                `<p class="small mb-0"><i class="fas fa-tint"></i> Precip: ${period.probabilityOfPrecipitation.value}%</p>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i> 
+                <strong>Unable to load NWS forecast</strong><br>
+                ${error.message}<br>
+                <small class="text-muted">This location may be outside the National Weather Service coverage area (US only). Try using the model forecasts above.</small>
+            </div>
+        `;
+    }
+}
+</script>
+
+<!-- Include location picker map component -->
+{% include "weather/components/location_picker_map.html" %}
+{% endif %}
+{% endblock %}

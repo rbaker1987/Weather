@@ -269,7 +269,8 @@ function getWeatherIcon(conditions, isDaytime = true) {
     if (c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet')) return 'icicles';
     if (c.includes('snow') || c.includes('flurries') || c.includes('blizzard')) return 'snowflake';
     if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
-    if (c.includes('rain') || c.includes('shower') || c.includes('drizzle')) return 'cloud-rain';
+    // Showers without snow/ice = rain showers
+    if ((c.includes('rain') || c.includes('shower') || c.includes('drizzle')) && !c.includes('snow') && !c.includes('ice') && !c.includes('freezing')) return 'cloud-rain';
     if (c.includes('wind') && !c.includes('cloudy')) return 'wind';
     if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
     if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return isDaytime ? 'sun' : 'moon';

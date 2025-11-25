@@ -1,0 +1,217 @@
+<!-- Location Picker Map Modal -->
+<div class="modal fade" id="locationPickerModal" tabindex="-1" aria-labelledby="locationPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="locationPickerModalLabel">
+                    <i class="fas fa-map-marker-alt text-primary"></i> Select Location
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Click anywhere on the map to select a temporary location</label>
+                    <div id="locationPickerMap" style="height: 500px; border-radius: 8px; border: 1px solid #dee2e6;"></div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="fas fa-info-circle"></i> The marker shows your selected location. This is temporary and won't be saved.
+                    </small>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Latitude</label>
+                        <input type="text" class="form-control" id="pickerLatitude" readonly>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Longitude</label>
+                        <input type="text" class="form-control" id="pickerLongitude" readonly>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Elevation</label>
+                        <input type="text" class="form-control" id="pickerElevation" readonly placeholder="Loading...">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="applyLocationBtn" onclick="applySelectedLocation()">
+                    <i class="fas fa-check"></i> Apply Location
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<script>
+let locationPickerMapInstance = null;
+let locationPickerMarker = null;
+let selectedTempLat = null;
+let selectedTempLon = null;
+
+function openLocationPicker() {
+    const modal = new bootstrap.Modal(document.getElementById('locationPickerModal'));
+    modal.show();
+    
+    // Initialize map after modal is shown
+    setTimeout(() => {
+        if (!locationPickerMapInstance) {
+            initLocationPickerMap();
+        } else {
+            locationPickerMapInstance.invalidateSize();
+        }
+    }, 200);
+}
+
+function initLocationPickerMap() {
+    // Default to center of US
+    let defaultLat = 39.8283;
+    let defaultLon = -98.5795;
+    let defaultZoom = 4;
+
+    const urlParams = new URLSearchParams(window.location.search);
+
+    // Prefer current location option from dropdown
+    const locSelect = document.getElementById('detailLocationSelect');
+    if (locSelect) {
+        // Find option marked as current
+        const currentOpt = Array.from(locSelect.options).find(o => o.dataset.current === '1');
+        if (currentOpt && currentOpt.dataset.lat && currentOpt.dataset.lon) {
+            defaultLat = parseFloat(currentOpt.dataset.lat);
+            defaultLon = parseFloat(currentOpt.dataset.lon);
+            defaultZoom = 8;
+        } else if (locSelect.selectedOptions.length && locSelect.selectedOptions[0].dataset.lat) {
+            // Fallback to selected option if no explicit current
+            const sel = locSelect.selectedOptions[0];
+            defaultLat = parseFloat(sel.dataset.lat);
+            defaultLon = parseFloat(sel.dataset.lon);
+            defaultZoom = 8;
+        }
+    }
+
+    // Override with explicit query params if provided
+    if (urlParams.has('latitude') && urlParams.has('longitude')) {
+        defaultLat = parseFloat(urlParams.get('latitude'));
+        defaultLon = parseFloat(urlParams.get('longitude'));
+        defaultZoom = 8;
+    }
+    
+    locationPickerMapInstance = L.map('locationPickerMap').setView([defaultLat, defaultLon], defaultZoom);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18
+    }).addTo(locationPickerMapInstance);
+    
+    // Add initial marker if we have coordinates
+    if (urlParams.has('latitude') && urlParams.has('longitude')) {
+        const lat = parseFloat(defaultLat.toFixed(4));
+        const lon = parseFloat(defaultLon.toFixed(4));
+        locationPickerMarker = L.marker([lat, lon]).addTo(locationPickerMapInstance);
+        selectedTempLat = lat;
+        selectedTempLon = lon;
+        document.getElementById('pickerLatitude').value = lat.toFixed(4);
+        document.getElementById('pickerLongitude').value = lon.toFixed(4);
+        
+        // Fetch initial elevation
+        fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.elevation && data.elevation.length > 0) {
+                    const elevMeters = Math.round(data.elevation[0]);
+                    const elevFeet = Math.round(elevMeters * 3.28084);
+                    document.getElementById('pickerElevation').value = `${elevMeters}m (${elevFeet}ft)`;
+                }
+            })
+            .catch(() => document.getElementById('pickerElevation').value = 'N/A');
+    }
+    
+    // Click handler to place/move marker
+    locationPickerMapInstance.on('click', async function(e) {
+        const lat = parseFloat(e.latlng.lat.toFixed(4));
+        const lon = parseFloat(e.latlng.lng.toFixed(4));
+        
+        if (locationPickerMarker) {
+            locationPickerMarker.setLatLng([lat, lon]);
+        } else {
+            locationPickerMarker = L.marker([lat, lon]).addTo(locationPickerMapInstance);
+        }
+        
+        selectedTempLat = lat;
+        selectedTempLon = lon;
+        
+        document.getElementById('pickerLatitude').value = lat.toFixed(4);
+        document.getElementById('pickerLongitude').value = lon.toFixed(4);
+        document.getElementById('pickerElevation').value = 'Loading...';
+        
+        // Fetch elevation from Open-Meteo API
+        try {
+            const elevResponse = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
+            const elevData = await elevResponse.json();
+            if (elevData.elevation && elevData.elevation.length > 0) {
+                const elevMeters = Math.round(elevData.elevation[0]);
+                const elevFeet = Math.round(elevMeters * 3.28084);
+                document.getElementById('pickerElevation').value = `${elevMeters}m (${elevFeet}ft)`;
+            } else {
+                document.getElementById('pickerElevation').value = 'N/A';
+            }
+        } catch (error) {
+            console.error('Failed to fetch elevation:', error);
+            document.getElementById('pickerElevation').value = 'N/A';
+        }
+    });
+}
+
+function applySelectedLocation() {
+    if (selectedTempLat !== null && selectedTempLon !== null) {
+        // Check if we're on model detail page or forecast detail page
+        const currentPath = window.location.pathname;
+        
+        if (currentPath.includes('/models/')) {
+            // Model detail page - reload with new coordinates
+            const modelMatch = currentPath.match(/\/models\/([^/]+)/);
+            if (modelMatch) {
+                const modelName = modelMatch[1];
+                const forecastDays = new URLSearchParams(window.location.search).get('forecast_days') || '5';
+                window.location.href = `/models/${modelName}/?latitude=${selectedTempLat}&longitude=${selectedTempLon}&forecast_days=${forecastDays}`;
+            }
+        } else if (currentPath.includes('/locations/') || currentPath.includes('/temp-location/')) {
+            // Location detail or temp location page - reload with temp coordinates
+            window.location.href = `/temp-location/?latitude=${selectedTempLat}&longitude=${selectedTempLon}`;
+        } else {
+            // Default - go to temp location detail view
+            window.location.href = `/temp-location/?latitude=${selectedTempLat}&longitude=${selectedTempLon}`;
+        }
+        
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('locationPickerModal')).hide();
+    } else {
+        alert('Please select a location on the map first.');
+    }
+}
+
+// Helper to add custom location to dropdowns after map selection
+function addCustomLocationToDropdowns(lat, lon) {
+    const selectors = ['locationSelect', 'detailLocationSelect'];
+    selectors.forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        
+        // Remove any existing custom option
+        const existingCustom = select.querySelector('option[value="custom"]');
+        if (existingCustom) existingCustom.remove();
+        
+        // Add new custom option
+        const option = document.createElement('option');
+        option.value = 'custom';
+        option.dataset.lat = lat;
+        option.dataset.lon = lon;
+        option.textContent = `📍 Map Location (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        option.selected = true;
+        select.appendChild(option);
+        
+        // Trigger change event to reload data if applicable
+        select.dispatchEvent(new Event('change'));
+    });
+}
+</script>

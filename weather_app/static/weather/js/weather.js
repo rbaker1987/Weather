@@ -271,14 +271,14 @@ async function addLocation(formData) {
 
 async function updateForecast(locationId) {
     try {
-        showLoading('Updating forecast...');
+        showLoading('Updating data...');
 
         const data = await apiRequest(`/api/locations/${locationId}/update_forecast/`, {
             method: 'POST'
         });
 
         hideLoading();
-        showNotification('Forecast update triggered successfully!', 'success');
+        showNotification('Data update triggered successfully!', 'success');
 
         // Refresh forecast data
         setTimeout(() => {
