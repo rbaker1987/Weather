@@ -1719,7 +1719,7 @@ class ModelDetailView(TemplateView):
         error = None
         run_time = None
         if lat and lon:
-            import httpx
+            import requests
 
             params = {
                 "latitude": lat,
@@ -1741,7 +1741,7 @@ class ModelDetailView(TemplateView):
             }
             
             try:
-                resp = httpx.get(config["url"], params=params, headers=headers, timeout=30)
+                resp = requests.get(config["url"], params=params, headers=headers, timeout=30)
                 resp.raise_for_status()
                 data = resp.json()
                 # Determine run time from first hourly time

@@ -1,9 +1,8 @@
 """API endpoint for fetching weather model comparison data."""
 
-import asyncio
 import logging
 
-import httpx
+import requests
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -55,15 +54,14 @@ class ModelComparisonAPIView(APIView):
         },
     }
 
-    async def fetch_model_data(
+    def fetch_model_data(
         self,
-        client: httpx.AsyncClient,
         model_name: str,
         lat: float,
         lon: float,
         forecast_days: int,
     ) -> dict:
-        """Fetch data for a single model asynchronously."""
+        """Fetch data for a single model."""
         config = self.MODEL_CONFIGS.get(model_name)
         if not config:
             return {"name": model_name, "data": None, "error": "Unknown model"}
@@ -103,7 +101,7 @@ class ModelComparisonAPIView(APIView):
         }
 
         try:
-            response = await client.get(config["url"], params=params, headers=headers, timeout=10.0)
+            response = requests.get(config["url"], params=params, headers=headers, timeout=10.0)
             response.raise_for_status()
             data = response.json()
 
@@ -114,10 +112,10 @@ class ModelComparisonAPIView(APIView):
 
             return {"name": model_name, "data": data, "error": None, "skipped": None}
 
-        except httpx.TimeoutException:
+        except requests.Timeout:
             logger.error(f"Timeout fetching {model_name} data")
             return {"name": model_name, "data": None, "error": "Timeout", "skipped": None}
-        except httpx.HTTPStatusError as e:
+        except requests.HTTPError as e:
             logger.error(f"HTTP error fetching {model_name}: {e}")
             return {
                 "name": model_name,
@@ -129,53 +127,56 @@ class ModelComparisonAPIView(APIView):
             logger.error(f"Error fetching {model_name} data: {e}")
             return {"name": model_name, "data": None, "error": str(e), "skipped": None}
 
-    async def fetch_all_models(
-        self, lat: float, lon: float, forecast_days: int
-    ) -> dict[str, dict]:
-        """Fetch data for all models concurrently."""
-        async with httpx.AsyncClient() as client:
-            tasks = [
-                self.fetch_model_data(client, model_name, lat, lon, forecast_days)
-                for model_name in self.MODEL_CONFIGS
-            ]
-            results = await asyncio.gather(*tasks)
-
-        # Convert list of results to dictionary keyed by model name
-        return {result["name"]: result for result in results}
+    def fetch_all_models(
+        self, models: list[str], lat: float, lon: float, forecast_days: int
+    ) -> list[dict]:
+        """Fetch data for specified models."""
+        results = []
+        for model_name in models:
+            result = self.fetch_model_data(model_name, lat, lon, forecast_days)
+            results.append(result)
+        return results
 
     def get(self, request):
         """Handle GET request for model comparison data."""
         # Get query parameters
         lat = request.query_params.get("latitude")
         lon = request.query_params.get("longitude")
+        models_param = request.query_params.get("models", "")
         forecast_days = request.query_params.get("forecast_days", "7")
 
         # Validate parameters
         if not lat or not lon:
             return Response(
-                {"error": "latitude and longitude parameters are required"}, status=400
+                {"status": "error", "error": "latitude and longitude parameters are required"}, status=400
+            )
+
+        if not models_param:
+            return Response(
+                {"status": "error", "error": "models parameter is required"}, status=400
             )
 
         try:
             lat = float(lat)
             lon = float(lon)
             forecast_days = int(forecast_days)
+            models = [m.strip().upper() for m in models_param.split(",") if m.strip()]
         except (ValueError, TypeError):
             return Response(
-                {"error": "Invalid latitude, longitude, or forecast_days"}, status=400
+                {"status": "error", "error": "Invalid latitude, longitude, or forecast_days"}, status=400
             )
 
         # Validate ranges
         if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-            return Response({"error": "Invalid latitude or longitude range"}, status=400)
+            return Response({"status": "error", "error": "Invalid latitude or longitude range"}, status=400)
 
         if not (1 <= forecast_days <= 16):
-            return Response({"error": "forecast_days must be between 1 and 16"}, status=400)
+            return Response({"status": "error", "error": "forecast_days must be between 1 and 16"}, status=400)
 
-        # Fetch all model data concurrently
+        # Fetch all model data
         try:
-            results = asyncio.run(self.fetch_all_models(lat, lon, forecast_days))
-            return Response(results)
+            results = self.fetch_all_models(models, lat, lon, forecast_days)
+            return Response({"status": "success", "models": results})
         except Exception as e:
             logger.error(f"Error fetching model data: {e}")
-            return Response({"error": "Failed to fetch model data"}, status=500)
+            return Response({"status": "error", "error": "Failed to fetch model data"}, status=500)
