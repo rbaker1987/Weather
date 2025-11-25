@@ -42,9 +42,13 @@
     <div class="col-12">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'weather:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'weather:dashboard' %}">Home</a></li>
+                {% if not is_temp_location %}
                 <li class="breadcrumb-item"><a href="{% url 'weather:location-list' %}">Locations</a></li>
                 <li class="breadcrumb-item active">{{ location.name }}</li>
+                {% else %}
+                <li class="breadcrumb-item active">Temporary Location</li>
+                {% endif %}
             </ol>
         </nav>
 
@@ -52,21 +56,34 @@
             <div>
                 <h1 class="display-5 mb-0">
                     <i class="fas fa-map-marker-alt text-primary"></i> {{ location.display_name }}
+                    {% if not is_temp_location %}
                     <button class="btn btn-sm btn-outline-secondary" onclick="openEditLocationModal()" title="Edit Location">
                         <i class="fas fa-edit"></i>
                     </button>
+                    {% endif %}
                 </h1>
-                <p class="text-muted">Weather details and forecasts</p>
+                <p class="text-muted">{% if is_temp_location %}Temporary location - not saved{% else %}Weather details and forecasts{% endif %}</p>
             </div>
-            <div class="btn-group">
-                <button class="btn btn-outline-primary" onclick="updateForecast('{{ location.id }}')">
-                    <i class="fas fa-sync-alt"></i> Update Forecast
-                </button>
-                <a href="{% url 'weather:location-list' %}" class="btn btn-secondary">
-                    <i class="fas fa-arrow-left"></i> Back to Locations
-                </a>
+            <div>
+              <div class="row g-2 align-items-end">
+                {% include "weather/components/location_selector.html" with locations=locations current_location_id=location.id latitude=location.latitude longitude=location.longitude location_col_class='col-auto' map_btn_col_class='col-auto' %}
+                {% if not is_temp_location %}
+                <div class="col-auto">
+                  <button class="btn btn-outline-primary" onclick="updateForecast('{{ location.id }}')">
+                      <i class="fas fa-sync-alt"></i> Update Data
+                  </button>
+                </div>
+                {% endif %}
+                <div class="col-auto">
+                  <a href="{% if is_temp_location %}{% url 'weather:dashboard' %}{% else %}{% url 'weather:location-list' %}{% endif %}" class="btn btn-secondary">
+                      <i class="fas fa-arrow-left"></i> {% if is_temp_location %}Back to Home{% else %}Back to Locations{% endif %}
+                  </a>
+                </div>
+              </div>
             </div>
         </div>
+
+        
     </div>
 </div>
 
@@ -140,7 +157,7 @@
         </div>
     </div>
 </div>
-
+{% if not is_temp_location %}
 <!-- Unified Add/Edit Location Modal (reused from location_list) -->
 <div class="modal fade" id="addLocationModal" tabindex="-1">
     <div class="modal-dialog">
@@ -209,6 +226,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
             {% comment %} Active Alerts moved above Current Conditions {% endcomment %}
             <div class="row mb-4">
@@ -464,6 +482,34 @@
 </div>
 {% endif %}
 
+<!-- Weather Model Comparison -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card weather-card">
+            <div class="card-header">
+                {% include "weather/components/section_header.html" with icon="cloud-sun" title="Weather Model Comparison" %}
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    <i class="fas fa-info-circle"></i> Compare predictions from multiple weather models for this location.
+                    <a href="{% url 'weather:models' %}" class="btn btn-sm btn-outline-primary float-end">
+                        <i class="fas fa-expand"></i> View Full Comparison
+                    </a>
+                </p>
+                
+                <div id="modelComparisonContainer">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading model comparison...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- No Data Message -->
 {% if not daily_forecasts and not hourly_forecasts %}
 <div class="row">
@@ -472,10 +518,14 @@
             <div class="card-body text-center py-5">
                 <i class="fas fa-cloud-meatball fa-5x text-muted mb-4"></i>
                 <h3 class="text-muted">No Forecast Data Available</h3>
-                <p class="text-muted mb-4" style="font-size: 1.15rem;">Click "Update Forecast" to fetch the latest weather data for this location.</p>
+                {% if is_temp_location %}
+                <p class="text-muted mb-4" style="font-size: 1.15rem;">This is a temporary location. View the model comparison section below for forecast data, or save this as a permanent location to fetch NWS forecasts.</p>
+                {% else %}
+                <p class="text-muted mb-4" style="font-size: 1.15rem;">Click "Update Data" to fetch the latest weather data for this location.</p>
                 <button class="btn btn-primary btn-lg" onclick="updateForecast('{{ location.id }}')">
-                    <i class="fas fa-sync-alt"></i> Update Forecast
+                    <i class="fas fa-sync-alt"></i> Update Data
                 </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -555,6 +605,10 @@
 <script>
 // Update forecast functionality specific to detail page
 function updateForecast(locationId) {
+    if (!locationId || locationId === 'None' || locationId === 'null') {
+        alert('Cannot update forecast for temporary locations.');
+        return;
+    }
     weatherApp.updateForecast(locationId);
 }
 
@@ -733,7 +787,8 @@ function getWeatherIcon(conditions, isDaytime = true, pop = null) {
     const isStorm = c.includes('storm') || c.includes('thunder') || c.includes('t-storm');
     const isSnow = c.includes('snow') || c.includes('flurries') || c.includes('blizzard');
     const isIce = c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet');
-    const isRain = c.includes('rain') || c.includes('shower') || c.includes('drizzle');
+    // Showers without snow/ice = rain showers; snow showers = snow
+    const isRain = (c.includes('rain') || c.includes('shower') || c.includes('drizzle')) && !isSnow && !isIce;
     const isMixed = isRain && isSnow;  // Mixed precipitation
 
     // If we have precipitation probability, adjust icon based on it
@@ -830,6 +885,10 @@ function getCsrfToken() {
 
 // Open unified edit modal populated with current location data
 function openEditLocationModal() {
+    {% if is_temp_location %}
+    alert('Temporary locations cannot be edited. Please save as a permanent location first.');
+    return;
+    {% endif %}
     const modalEl = document.getElementById('addLocationModal');
     if (!modalEl) return;
     // Switch titles/icons
@@ -871,6 +930,10 @@ function openEditLocationModal() {
 
 // Submit add/edit form (POST for new, PATCH for existing)
 function submitLocationForm() {
+    {% if is_temp_location %}
+    alert('Cannot save temporary location from this view.');
+    return;
+    {% endif %}
     const locNameInput = document.getElementById('locationInput');
     const displayNameInput = document.getElementById('displayNameInput');
     const typeSelect = document.getElementById('locationTypeSelect');
@@ -1724,5 +1787,183 @@ function getCsrfToken() {
     return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
            document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
 }
+
+// Load weather model comparison data
+async function loadLocationModelData() {
+    const lat = {{ location.latitude }};
+    const lon = {{ location.longitude }};
+    const container = document.getElementById('modelComparisonContainer');
+    
+    // Show loading state
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">Loading model data...</p>
+        </div>
+    `;
+    
+    try {
+        // Fetch 3-day forecast from GFS, ICON, ECMWF, and Canadian GEM
+        const modelConfigs = [
+            { name: 'GFS', url: `https://api.open-meteo.com/v1/gfs?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
+            { name: 'ICON', url: `https://api.open-meteo.com/v1/dwd-icon?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
+            { name: 'ECMWF', url: `https://api.open-meteo.com/v1/ecmwf?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
+            { name: 'GEM', url: `https://api.open-meteo.com/v1/gem?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` }
+        ];
+        const modelData = {};
+        
+        for (const config of modelConfigs) {
+            try {
+                const response = await fetch(config.url);
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error(`Error from ${config.name}:`, data.reason);
+                    modelData[config.name] = null;
+                } else {
+                    modelData[config.name] = data;
+                }
+            } catch (error) {
+                console.error(`Error fetching ${config.name} data:`, error);
+                modelData[config.name] = null;
+            }
+        }
+        
+        // Display the comparison
+        displayModelComparison(modelData, container);
+        
+    } catch (error) {
+        console.error('Error loading model data:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> Error loading model data. Please try again.
+            </div>
+        `;
+    }
+}
+
+function displayModelComparison(modelData, container) {
+    const gfsData = modelData.GFS;
+    const iconData = modelData.ICON;
+    const ecmwfData = modelData.ECMWF;
+    const gemData = modelData.GEM;
+    
+    if (!gfsData || !gfsData.daily) {
+        container.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-circle"></i> No model data available for this location.
+            </div>
+        `;
+        return;
+    }
+    
+    const dates = gfsData.daily.time;
+    const gfsMaxTemp = gfsData.daily.temperature_2m_max;
+    const gfsMinTemp = gfsData.daily.temperature_2m_min;
+    const gfsPrecip = gfsData.daily.precipitation_sum;
+    
+    const iconMaxTemp = iconData?.daily?.temperature_2m_max || [];
+    const iconMinTemp = iconData?.daily?.temperature_2m_min || [];
+    const iconPrecip = iconData?.daily?.precipitation_sum || [];
+    
+    const ecmwfMaxTemp = ecmwfData?.daily?.temperature_2m_max || [];
+    const ecmwfMinTemp = ecmwfData?.daily?.temperature_2m_min || [];
+    const ecmwfPrecip = ecmwfData?.daily?.precipitation_sum || [];
+    
+    const gemMaxTemp = gemData?.daily?.temperature_2m_max || [];
+    const gemMinTemp = gemData?.daily?.temperature_2m_min || [];
+    const gemPrecip = gemData?.daily?.precipitation_sum || [];
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th rowspan="2">Date</th>
+                        <th colspan="2" class="text-center bg-primary text-white">GFS</th>
+                        <th colspan="2" class="text-center bg-warning">ICON</th>
+                        <th colspan="2" class="text-center bg-success text-white">ECMWF</th>
+                        <th colspan="2" class="text-center bg-danger text-white">GEM</th>
+                    </tr>
+                    <tr>
+                        <th class="text-center">High/Low</th>
+                        <th class="text-center">Precip</th>
+                        <th class="text-center">High/Low</th>
+                        <th class="text-center">Precip</th>
+                        <th class="text-center">High/Low</th>
+                        <th class="text-center">Precip</th>
+                        <th class="text-center">High/Low</th>
+                        <th class="text-center">Precip</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    for (let i = 0; i < Math.min(3, dates.length); i++) {
+        // Parse date as local time to avoid timezone issues
+        const [year, month, day] = dates[i].split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        
+        html += `
+            <tr>
+                <td><strong>${dateStr}</strong></td>
+                <td class="text-center">
+                    <span class="text-danger fw-bold">${gfsMaxTemp[i]?.toFixed(0)}°</span> / 
+                    <span class="text-primary fw-bold">${gfsMinTemp[i]?.toFixed(0)}°</span>
+                </td>
+                <td class="text-center">${gfsPrecip[i]?.toFixed(2) || '0.00'}"</td>
+                <td class="text-center">
+                    ${iconMaxTemp[i] ? `<span class="text-danger fw-bold">${iconMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${iconMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
+                </td>
+                <td class="text-center">${iconPrecip[i]?.toFixed(2) || 'N/A'}</td>
+                <td class="text-center">
+                    ${ecmwfMaxTemp[i] ? `<span class="text-danger fw-bold">${ecmwfMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${ecmwfMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
+                </td>
+                <td class="text-center">${ecmwfPrecip[i]?.toFixed(2) || 'N/A'}</td>
+                <td class="text-center">
+                    ${gemMaxTemp[i] ? `<span class="text-danger fw-bold">${gemMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${gemMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
+                </td>
+                <td class="text-center">${gemPrecip[i]?.toFixed(2) || 'N/A'}</td>
+            </tr>
+        `;
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        <p class="text-muted small mb-0">
+            <i class="fas fa-info-circle"></i> 
+            Data from Open-Meteo API. GFS (NOAA), ICON (German DWD), ECMWF (European Centre), GEM (Canadian).
+        </p>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Auto-load model comparison on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadLocationModelData();
+    const locSel = document.getElementById('detailLocationSelect');
+    if(locSel){
+        locSel.addEventListener('change', function(){
+            const opt = locSel.options[locSel.selectedIndex];
+            if(!opt) return;
+            if(opt.value === 'custom' && opt.dataset.lat){
+                window.location.href = `/temp-location/?latitude=${opt.dataset.lat}&longitude=${opt.dataset.lon}`;
+            } else {
+                window.location.href = `/locations/${opt.value}/`;
+            }
+        });
+    }
+});
 </script>
+
+<!-- Include location picker map component -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% include "weather/components/location_picker_map.html" %}
+
 {% endblock %}

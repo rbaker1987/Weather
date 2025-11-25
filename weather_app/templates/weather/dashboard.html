@@ -1,6 +1,6 @@
 {% extends "weather/base.html" %}
 {% load ui_tags %}
-{% block title %}Weather Dashboard{% endblock %}
+{% block title %}Weather Home{% endblock %}
 {% block extra_css %}
 {% if favorite_location and favorite_location.latitude and favorite_location.longitude %}
 <link
@@ -754,7 +754,8 @@
       return "snowflake";
     if (c.includes("fog") || c.includes("mist") || c.includes("haze"))
       return "smog";
-    if (c.includes("rain") || c.includes("shower") || c.includes("drizzle"))
+    // Showers without snow/ice = rain showers
+    if ((c.includes("rain") || c.includes("shower") || c.includes("drizzle")) && !c.includes("snow") && !c.includes("ice") && !c.includes("freezing"))
       return "cloud-rain";
     if (c.includes("wind") && !c.includes("cloudy")) return "wind";
     if (c.includes("partly")) return isDaytime ? "cloud-sun" : "cloud-moon";
@@ -999,4 +1000,9 @@ function exportSectionAsImage(sectionId) {
     });
 }
 </script>
+
+<!-- Include location picker map component -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% include "weather/components/location_picker_map.html" %}
+
 {% endblock %}

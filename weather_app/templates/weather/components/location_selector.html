@@ -1,0 +1,26 @@
+{# Shared location selector with map picker button #}
+<div class="{{ location_col_class|default:'col-md-6' }}">
+  <label for="detailLocationSelect" class="form-label">Location</label>
+  <select id="detailLocationSelect" class="form-select">
+    {% for loc in locations %}
+      <option value="{{ loc.id }}" data-lat="{{ loc.latitude }}" data-lon="{{ loc.longitude }}" {% if loc.is_current_location %}data-current="1"{% endif %} {% if current_location_id and loc.id == current_location_id %}selected{% endif %}>{{ loc.display_name }}</option>
+    {% endfor %}
+    {% if latitude and longitude %}
+      {% with has_match=False %}
+        {% for loc in locations %}
+          {% if latitude == loc.latitude|stringformat:'s' and longitude == loc.longitude|stringformat:'s' %}
+            {% with has_match=True %}{% endwith %}
+          {% endif %}
+        {% endfor %}
+        {% if not has_match %}
+          <option value="custom" data-lat="{{ latitude }}" data-lon="{{ longitude }}" selected>📍 Map Location ({{ latitude|floatformat:4 }}, {{ longitude|floatformat:4 }})</option>
+        {% endif %}
+      {% endwith %}
+    {% endif %}
+  </select>
+</div>
+<div class="{{ map_btn_col_class|default:'col-md-2' }}">
+  <button class="btn btn-outline-primary w-100" onclick="openLocationPicker()" title="Pick location on map">
+    <i class="fas fa-map-marked-alt"></i>
+  </button>
+</div>

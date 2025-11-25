@@ -1402,6 +1402,382 @@ class DashboardView(TemplateView):
         return context
 
 
+class ModelsView(TemplateView):
+    """View for comparing weather models."""
+
+    template_name = "weather/models.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Get all active locations for the selector
+        location_ids = self.request.session.get("location_ids", [])
+        context["locations"] = Location.objects.filter(
+            is_active=True, id__in=location_ids
+        ).order_by("-is_current_location", "display_order", "name")
+        context["page_title"] = "Weather Models"
+        return context
+
+
+class TempLocationView(TemplateView):
+    """View for temporary location forecast (map-selected coordinates)."""
+
+    template_name = "weather/location_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        lat = self.request.GET.get("latitude")
+        lon = self.request.GET.get("longitude")
+        
+        if not lat or not lon:
+            context["error"] = "Latitude and longitude are required"
+            context["page_title"] = "Temporary Location"
+            return context
+
+        try:
+            latitude = float(lat)
+            longitude = float(lon)
+        except (ValueError, TypeError):
+            context["error"] = "Invalid coordinates"
+            context["page_title"] = "Temporary Location"
+            return context
+
+        # Create a pseudo-location object for template compatibility
+        from types import SimpleNamespace
+        from datetime import datetime
+        import requests
+        import json
+        from itertools import groupby
+        
+        location = SimpleNamespace(
+            id=None,
+            name=f"Map Location ({lat}, {lon})",
+            display_name=f"📍 Map Location",
+            latitude=latitude,
+            longitude=longitude,
+            zip_code=None,
+            nws_office="",
+            grid_x=None,
+            grid_y=None,
+            last_forecast_update=None,
+            last_observation_time=None,
+            current_temp=None,
+            current_conditions="",
+            current_humidity=None,
+            current_wind_speed=None,
+            current_wind_gust=None,
+            current_wind_direction="",
+            current_apparent_temp=None,
+            is_current_location=False,
+        )
+        location.alerts = SimpleNamespace(filter=lambda **k: [])
+
+        # Fetch forecast data from NWS
+        daily_forecasts = []
+        hourly_forecasts = []
+        active_alerts = []
+        
+        try:
+            headers = {"User-Agent": "(Weather App, contact@example.com)"}
+            
+            # Get grid point data
+            grid_url = f"https://api.weather.gov/points/{latitude},{longitude}"
+            grid_response = requests.get(grid_url, headers=headers, timeout=10)
+            grid_response.raise_for_status()
+            grid_data = grid_response.json()
+            
+            properties = grid_data.get("properties", {})
+            location.nws_office = properties.get("gridId", "")
+            location.grid_x = properties.get("gridX")
+            location.grid_y = properties.get("gridY")
+            
+            # Fetch current conditions
+            try:
+                observation_stations_url = properties.get("observationStations")
+                if observation_stations_url:
+                    stations_response = requests.get(observation_stations_url, headers=headers, timeout=10)
+                    stations_response.raise_for_status()
+                    stations_data = stations_response.json()
+                    
+                    stations = stations_data.get("features", [])
+                    if stations:
+                        station_id = stations[0].get("properties", {}).get("stationIdentifier")
+                        if station_id:
+                            obs_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
+                            obs_response = requests.get(obs_url, headers=headers, timeout=10)
+                            obs_response.raise_for_status()
+                            obs_data = obs_response.json()
+                            
+                            obs_props = obs_data.get("properties", {})
+                            temp_c = obs_props.get("temperature", {}).get("value")
+                            if temp_c:
+                                location.current_temp = int(temp_c * 9 / 5 + 32)
+                            
+                            location.current_conditions = obs_props.get("textDescription", "")
+                            
+                            humidity = obs_props.get("relativeHumidity", {}).get("value")
+                            if humidity:
+                                location.current_humidity = int(humidity)
+                            
+                            wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
+                            if wind_speed_kmh is not None:
+                                location.current_wind_speed = int(wind_speed_kmh * 0.621371)
+                            
+                            wind_gust_kmh = obs_props.get("windGust", {}).get("value")
+                            if wind_gust_kmh is not None:
+                                location.current_wind_gust = int(wind_gust_kmh * 0.621371)
+                            
+                            wind_dir_deg = obs_props.get("windDirection", {}).get("value")
+                            if wind_dir_deg is not None:
+                                deg = float(wind_dir_deg)
+                                directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+                                location.current_wind_direction = directions[int((deg + 22.5) / 45) % 8]
+                            
+                            timestamp = obs_props.get("timestamp")
+                            if timestamp:
+                                location.last_observation_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            except Exception as e:
+                print(f"Warning: Could not fetch current conditions: {str(e)}")
+            
+            # Get forecast URL
+            forecast_url = properties.get("forecast")
+            if forecast_url:
+                forecast_response = requests.get(forecast_url, headers=headers, timeout=10)
+                forecast_response.raise_for_status()
+                forecast_data = forecast_response.json()
+                
+                periods = forecast_data.get("properties", {}).get("periods", [])
+                
+                # Parse periods into daily forecast objects
+                for period in periods[:14]:
+                    daily_forecasts.append(SimpleNamespace(
+                        forecast_date=datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).date(),
+                        period_start=datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")),
+                        period_end=datetime.fromisoformat(period["endTime"].replace("Z", "+00:00")),
+                        is_daytime=period.get("isDaytime", True),
+                        temperature=period.get("temperature"),
+                        temperature_unit=period.get("temperatureUnit", "F"),
+                        wind_speed=self._parse_wind_speed(period.get("windSpeed", "")),
+                        wind_direction=period.get("windDirection", ""),
+                        short_forecast=period.get("shortForecast", ""),
+                        detailed_forecast=period.get("detailedForecast", ""),
+                        precipitation_probability=period.get("probabilityOfPrecipitation", {}).get("value"),
+                    ))
+            
+            # Fetch alerts
+            try:
+                alerts_url = f"https://api.weather.gov/alerts/active?point={latitude},{longitude}"
+                alerts_response = requests.get(alerts_url, headers=headers, timeout=10)
+                alerts_response.raise_for_status()
+                alerts_data = alerts_response.json()
+                
+                features = alerts_data.get("features", [])
+                for feature in features:
+                    props = feature.get("properties", {})
+                    onset = props.get("onset")
+                    expires = props.get("expires")
+                    
+                    if onset:
+                        onset = datetime.fromisoformat(onset.replace("Z", "+00:00"))
+                    if expires:
+                        expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+                    
+                    active_alerts.append(SimpleNamespace(
+                        event=props.get("event", "Unknown"),
+                        headline=props.get("headline", ""),
+                        description=props.get("description", ""),
+                        severity=props.get("severity", "unknown").lower(),
+                        urgency=props.get("urgency", "unknown").lower(),
+                        onset=onset,
+                        expires=expires,
+                    ))
+            except Exception as e:
+                print(f"Warning: Failed to fetch alerts: {str(e)}")
+            
+            location.last_forecast_update = timezone.now()
+            
+        except Exception as e:
+            print(f"Warning: Failed to fetch forecast data: {str(e)}")
+        
+        # Group daily forecasts by date
+        grouped_forecasts = []
+        if daily_forecasts:
+            for date, periods in groupby(daily_forecasts, key=lambda f: f.forecast_date):
+                periods_list = list(periods)
+                day_forecast = next((p for p in periods_list if p.is_daytime), None)
+                night_forecast = next((p for p in periods_list if not p.is_daytime), None)
+                grouped_forecasts.append({"date": date, "day": day_forecast, "night": night_forecast})
+
+        context["location"] = location
+        context["latitude"] = lat
+        context["longitude"] = lon
+        context["page_title"] = f"Temporary Location - {lat}, {lon}"
+        context["daily_forecasts"] = grouped_forecasts
+        context["hourly_forecasts"] = hourly_forecasts
+        context["hourly_forecasts_json"] = "[]"
+        context["has_custom_daily"] = False
+        context["has_custom_hourly"] = False
+        context["active_alerts"] = active_alerts
+        context["is_temp_location"] = True
+
+        # Add locations list for selector
+        try:
+            location_ids = self.request.session.get("location_ids", [])
+            locations_qs = Location.objects.filter(is_active=True)
+            if location_ids:
+                locations_qs = locations_qs.filter(id__in=location_ids)
+            context["locations"] = locations_qs.order_by("-is_current_location", "display_order", "name")
+        except Exception:
+            context["locations"] = Location.objects.none()
+        
+        return context
+    
+    @staticmethod
+    def _parse_wind_speed(wind_speed_str):
+        """Extract numeric wind speed from string like '10 to 15 mph' or '10 mph'."""
+        if not wind_speed_str:
+            return 0
+        import re
+        numbers = re.findall(r"\d+", str(wind_speed_str))
+        if numbers:
+            if len(numbers) > 1:
+                return int((int(numbers[0]) + int(numbers[1])) / 2)
+            return int(numbers[0])
+        return 0
+
+
+class ModelDetailView(TemplateView):
+    """Detailed view for a single weather model with extended variables."""
+
+    template_name = "weather/model_detail.html"
+
+    # Supported model configurations (subset, HRDPS removed)
+    MODEL_CONFIGS = {
+        # max_days chosen to reflect typical availability from Open-Meteo for each model
+        "GFS": {"url": "https://api.open-meteo.com/v1/gfs", "models": None, "max_days": 16},
+        "ICON": {"url": "https://api.open-meteo.com/v1/dwd-icon", "models": None, "max_days": 7},
+        "ECMWF": {"url": "https://api.open-meteo.com/v1/ecmwf", "models": None, "max_days": 10},
+        "AIFS": {"url": "https://api.open-meteo.com/v1/ecmwf", "models": "ecmwf_aifs025", "max_days": 10},
+        "GEM": {"url": "https://api.open-meteo.com/v1/gem", "models": None, "max_days": 10},
+        "HRRR": {"url": "https://api.open-meteo.com/v1/forecast", "models": "ncep_hrrr_conus", "max_days": 2},
+        "NAM": {"url": "https://api.open-meteo.com/v1/forecast", "models": "ncep_nam_conus", "max_days": 3},
+        "RGEM": {"url": "https://api.open-meteo.com/v1/gem", "models": "cmc_gem_rdps", "max_days": 2},
+    }
+
+    EXTENDED_HOURLY = (
+        # Temperatures (include higher pressure levels; interpolate pseudo 650/550/450 later)
+        "temperature_2m,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,apparent_temperature,"\
+        # Humidity
+        "relativehumidity_2m,relativehumidity_925hPa,relativehumidity_850hPa,relativehumidity_700hPa,relativehumidity_500hPa,"\
+        # Other surface / diagnostic fields
+        "dewpoint_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"\
+        # Precipitation & cloud
+        "precipitation,snowfall,cloudcover,pressure_msl"
+    )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        request = self.request
+        model_name = kwargs.get("model_name", "").upper()
+        config = self.MODEL_CONFIGS.get(model_name)
+        if not config:
+            from django.http import Http404
+
+            raise Http404("Unknown model")
+
+        # Acquire lat/lon parameters; fallback to first active location if missing
+        lat = request.GET.get("latitude")
+        lon = request.GET.get("longitude")
+        # Determine requested forecast_days; default to model's max_days if not provided
+        config_max_days = config.get("max_days", 5)
+        forecast_days_param = request.GET.get("forecast_days")
+        if forecast_days_param is None:
+            forecast_days = str(config_max_days)
+        else:
+            # Clamp to model maximum
+            try:
+                req_days_int = int(forecast_days_param)
+                if req_days_int < 1:
+                    req_days_int = 1
+                if req_days_int > config_max_days:
+                    req_days_int = config_max_days
+                forecast_days = str(req_days_int)
+            except ValueError:
+                forecast_days = str(config_max_days)
+        location_obj = None
+        if not (lat and lon):
+            location_ids = request.session.get("location_ids", [])
+            location_obj = (
+                Location.objects.filter(is_active=True, id__in=location_ids)
+                .order_by("-is_current_location", "display_order", "name")
+                .first()
+            )
+            if location_obj:
+                lat = location_obj.latitude
+                lon = location_obj.longitude
+
+        data = None
+        error = None
+        run_time = None
+        if lat and lon:
+            import requests
+
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "hourly": self.EXTENDED_HOURLY,
+                "temperature_unit": "fahrenheit",
+                "precipitation_unit": "inch",
+                "windspeed_unit": "mph",
+                "timezone": "auto",
+                "forecast_days": forecast_days,
+            }
+            if config["models"]:
+                params["models"] = config["models"]
+            
+            # Add cache-busting headers to ensure latest data
+            headers = {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+            }
+            
+            try:
+                resp = requests.get(config["url"], params=params, headers=headers, timeout=30)
+                resp.raise_for_status()
+                data = resp.json()
+                # Determine run time from first hourly time
+                if data.get("hourly", {}).get("time"):
+                    from datetime import datetime
+
+                    first_time = data["hourly"]["time"][0]
+                    run_time = datetime.fromisoformat(first_time.replace("Z", "+00:00"))
+            except Exception as exc:  # noqa: BLE001
+                error = str(exc)
+        else:
+            error = "Latitude/longitude not provided and no fallback location available"
+
+        import json
+        context.update(
+            {
+                "model_name": model_name,
+                "model_config": config,
+                "data": data,  # original Python object (for server-side uses if any)
+                "data_json": json.dumps(data) if data is not None else "null",
+                "error": error,
+                "run_time": run_time,
+                "latitude": lat,
+                "longitude": lon,
+                "forecast_days": forecast_days,
+                "locations": Location.objects.filter(
+                    is_active=True,
+                    id__in=request.session.get("location_ids", []),
+                ).order_by("-is_current_location", "display_order", "name"),
+                "available_models": list(self.MODEL_CONFIGS.keys()),
+                "page_title": f"{model_name} Model Details",
+            }
+        )
+        return context
+
+
 class LocationListView(ListView):
     """List view for weather locations."""
 
@@ -1800,6 +2176,17 @@ class LocationDetailView(DetailView):
                 "active_alerts": location.alerts.filter(is_active=True),
             }
         )
+
+        # Add active locations list for location toggle dropdown (similar to model detail page)
+        try:
+            location_ids = self.request.session.get("location_ids", [])
+            locations_qs = Location.objects.filter(is_active=True)
+            if location_ids:
+                locations_qs = locations_qs.filter(id__in=location_ids)
+            context["locations"] = locations_qs.order_by("-is_current_location", "display_order", "name")
+        except Exception:
+            # Fallback: empty list if any error occurs
+            context["locations"] = Location.objects.none()
 
         return context
 
