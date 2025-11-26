@@ -1,4 +1,5 @@
 {% extends "weather/base.html" %}
+{% load ui_tags %}
 
 {% block title %}{{ location.name }} - Weather Details{% endblock %}
 
@@ -118,14 +119,7 @@
                         {% if location.grid_x and location.grid_y %}
                         <p class="mb-2" style="font-size: 1.1rem;"><strong>Grid:</strong> {{ location.grid_x }}, {{ location.grid_y }}</p>
                         {% endif %}
-                        <p class="mb-2" style="font-size: 1.1rem;">
-                            <strong>Last Update:</strong>
-                            {% if location.last_forecast_update %}
-                                {{ location.last_forecast_update|timesince }} ago
-                            {% else %}
-                                Never
-                            {% endif %}
-                        </p>
+                        {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-muted' show_label=True %}
                     </div>
                 </div>
             </div>
@@ -144,9 +138,7 @@
                     <span class="badge bg-success mb-2" style="font-size: 1.1rem;">
                         <i class="fas fa-check"></i> Active
                     </span>
-                    <p class="text-muted" style="font-size: 1rem;">
-                        Updated {{ location.last_forecast_update|timesince }} ago
-                    </p>
+                    {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-muted' show_label=True %}
                 {% else %}
                     <span class="badge bg-warning mb-2" style="font-size: 1.1rem;">
                         <i class="fas fa-exclamation-triangle"></i> No Data
@@ -289,6 +281,9 @@
                         <div class="row align-items-center">
                             <div class="col-md-6">
                                 <h1 class="display-2 mb-3">{{ location.current_temp }}°F</h1>
+                                {% if location.current_temp|should_show_feels_like:location.current_apparent_temp %}
+                                <h5 class="mb-3" style="opacity: 0.9;"><i class="fas fa-temperature-high"></i> Feels like {{ location.current_apparent_temp }}°F</h5>
+                                {% endif %}
                                 <h3 class="mb-4">{{ location.current_conditions }}</h3>
                                 <div class="d-flex flex-wrap gap-3">
                                     {% if location.current_humidity %}
@@ -335,6 +330,7 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
                     {% include "weather/components/section_header.html" with icon="clock" title="Next 24 Hours" %}
+                    {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
                 </div>
                 <div class="btn-group">
                     <button onclick="editHourlyForecasts()" class="btn btn-sm text-white" title="Edit Hourly Forecasts" style="background: transparent; border: none;">
@@ -366,13 +362,14 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
                     <h5 class="mb-0">
-                        <i class="fas fa-calendar-alt text-primary"></i>
+                        <i class="fas fa-calendar-alt text-white"></i>
                         {% if has_custom_daily %}
-                        Ralph's Weather Daily for {{ location.display_name }}
+                        Ralph's Weather Daily
                         {% else %}
-                        NWS Daily for {{ location.display_name }}
+                        NWS Daily
                         {% endif %}
                     </h5>
+                    {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
                 </div>
                 <div class="btn-group">
                     <button onclick="editDailyForecasts()" class="btn btn-sm text-white" title="Edit Daily Forecasts" style="background: transparent; border: none;">
@@ -425,6 +422,7 @@
                         NWS Hourly for {{ location.display_name }}
                         {% endif %}
                     </h5>
+                    {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
                 </div>
                 <div class="btn-group">
                     <button onclick="editHourlyForecasts()" class="btn btn-sm text-white" title="Edit Hourly Forecasts" style="background: transparent; border: none;">
@@ -448,6 +446,7 @@
                             </tr>
                         </thead>
                         <tbody>
+                                
                             {% for forecast in hourly_forecasts|slice:":12" %}
                             <tr>
                                 <td>{{ forecast.forecast_time|date:"g:i A" }}</td>
@@ -595,7 +594,22 @@
 {% if location.latitude and location.longitude %}
 <div class="row mb-4">
     <div class="col-12">
-        {% include 'weather/components/radar_map.html' with map_id='radarMap' lat=location.latitude lon=location.longitude location_name=location.display_name %}
+        <div class="card weather-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    {% include "weather/components/section_header.html" with icon="broadcast-tower" title="Radar" icon_class="text-white" %}
+                    {% include "weather/components/radar_timestamp.html" %}
+                </div>
+                <div class="btn-group">
+                    <button onclick="exportSectionAsImage('radarMap')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% include 'weather/components/radar_map.html' with map_id='radarMap' lat=location.latitude lon=location.longitude location_name=location.display_name no_wrapper=True hide_header=True %}
+            </div>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -653,6 +667,17 @@ async function loadNext24Hours() {
                 headers: { 'Content-Type': 'application/json' }
             });
             resp = await response.json();
+        }
+
+        // Debug: Log first few hours to see apparent temp data
+        if (resp && resp.hours && resp.hours.length > 0) {
+            console.log('Hourly forecast sample (first 3 hours):', resp.hours.slice(0, 3).map(h => ({
+                time: h.time,
+                temp: h.temp,
+                apparentTemp: h.apparentTemp,
+                wind: h.wind,
+                condition: h.condition
+            })));
         }
 
         // Store per-date sunrise/sunset map
@@ -730,6 +755,23 @@ async function loadNext24Hours() {
                 } else {
                     displayIconName = iconName || 'cloud';
                 }
+                // Calculate apparent temperature if not provided
+                let apparentTemp = hour.apparentTemp;
+                if (apparentTemp === null || apparentTemp === undefined) {
+                    // Try to extract humidity and wind speed from API response
+                    let humidity = null;
+                    if (hour.humidity !== undefined && hour.humidity !== null) {
+                        humidity = hour.humidity;
+                    } else if (hour.relativeHumidity !== undefined && hour.relativeHumidity !== null) {
+                        humidity = hour.relativeHumidity;
+                    }
+                    let windSpeed = null;
+                    if (hour.wind && typeof hour.wind === 'string') {
+                        const wsMatch = hour.wind.match(/(\d+)/);
+                        if (wsMatch) windSpeed = parseInt(wsMatch[1]);
+                    }
+                    apparentTemp = calculateApparentTemperature(hour.temp, humidity, windSpeed);
+                }
                 html += `
                     <div class="col-6 col-md-4 col-lg-3 col-xl-2">
                         <div class="card h-100 border-0">
@@ -738,6 +780,7 @@ async function loadNext24Hours() {
                                     <div class="fw-bold mb-1">${hour.time}</div>
                                     <i class=\"fas fa-${displayIconName} mb-2 forecast-icon\"></i>
                                     <div class="h5 mb-1">${hour.temp}&deg;F</div>
+                                    ${apparentTemp !== null && apparentTemp !== undefined && Math.abs(apparentTemp - hour.temp) >= 5 ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-temperature-high"></i> Feels like ${apparentTemp}&deg;F</small>` : ''}
                                     ${hour.wind ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
                                     ${hour.pop !== null && hour.pop !== undefined ? `<small class="d-block mb-2" style="opacity: 0.85;"><i class="fas fa-${popIcon}"></i> ${roundPop(hour.pop)}%</small>` : ''}
                                 </div>
@@ -781,54 +824,7 @@ const nwsForecasts = [
     {% endfor %}
 ];
 
-// Generic weather icon chooser (mirrors backend logic)
-function getWeatherIcon(conditions, isDaytime = true, pop = null) {
-    const c = (conditions || '').toLowerCase();
-    const isStorm = c.includes('storm') || c.includes('thunder') || c.includes('t-storm');
-    const isSnow = c.includes('snow') || c.includes('flurries') || c.includes('blizzard');
-    const isIce = c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet');
-    // Showers without snow/ice = rain showers; snow showers = snow
-    const isRain = (c.includes('rain') || c.includes('shower') || c.includes('drizzle')) && !isSnow && !isIce;
-    const isMixed = isRain && isSnow;  // Mixed precipitation
-
-    // If we have precipitation probability, adjust icon based on it
-    if (pop !== null && pop !== undefined) {
-        if (pop >= 40) {
-            // High chance: show precipitation type
-            if (isStorm) return 'bolt';
-            if (isSnow) return 'snowflake';
-            if (isIce) return 'icicles';
-            if (isRain) return 'cloud-rain';
-            // Fall through to default for non-precipitation conditions
-        } else if (pop >= 20) {
-            // Medium chance: show cloud + precipitation
-            if (isStorm) return 'cloud-bolt';
-            if (isMixed) return 'cloud-meatball';  // Wintry mix for mixed precip
-            if (isSnow) return 'cloud-snow';
-            if (isIce) return 'cloud-meatball';
-            if (isRain) return 'cloud-rain';
-            // Fall through to default for non-precipitation conditions
-        } else {
-            // Low chance: show just sky type
-            if (c.includes('sunny') || c.includes('clear')) return isDaytime ? 'sun' : 'moon';
-            if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
-            if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
-            // Fall through to default for other conditions
-        }
-    }
-
-    // Default behavior (no PoP or didn't match PoP conditions)
-    if (isStorm) return 'bolt';
-    if (isIce) return 'icicles';
-    if (isSnow) return 'snowflake';
-    if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
-    if (c.includes('rain') || c.includes('shower') || c.includes('drizzle')) return 'cloud-rain';
-    if (c.includes('wind') && !c.includes('cloudy')) return 'wind';
-    if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
-    if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return isDaytime ? 'sun' : 'moon';
-    if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
-    return isDaytime ? 'cloud-sun' : 'cloud-moon';
-}
+// getWeatherIcon function is now defined in weather.js - uses standardized logic across app
 
 // Precipitation icon based on probability and condition (mirrors backend logic)
 function getPrecipIcon(pop, condition, isDaytime = true) {
@@ -851,7 +847,8 @@ function updateCurrentConditionsIcon() {
     if (window.locationSunrise && window.locationSunset) {
         isDay = now >= window.locationSunrise && now < window.locationSunset;
     }
-    const iconName = getWeatherIcon(cond, isDay);
+    const pop = null; // No PoP for current conditions
+    const iconName = getWeatherIcon(cond, isDay, pop);
     iconEl.className = `fas fa-${iconName}`;
 }
 

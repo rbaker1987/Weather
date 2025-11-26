@@ -216,7 +216,8 @@ function loadBrowserLocation() {
                 const hour = new Date().getHours();
                 iconIsDay = hour >= 6 && hour < 18;
             }
-            const icon = getWeatherIcon(conditions, iconIsDay);
+            const pop = null; // No PoP for current conditions
+            const icon = getWeatherIcon(conditions, iconIsDay, pop);
             document.getElementById('browserWeatherIcon').className = `fas fa-${icon} fa-2x`;
 
             // Optionally display timezone-specific sunrise/sunset if container present (future enhancement placeholder)
@@ -263,20 +264,7 @@ function getWindDirection(degrees) {
     return dirs[idx];
 }
 
-function getWeatherIcon(conditions, isDaytime = true) {
-    const c = (conditions || '').toLowerCase();
-    if (c.includes('storm') || c.includes('thunder') || c.includes('t-storm')) return 'bolt';
-    if (c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet')) return 'icicles';
-    if (c.includes('snow') || c.includes('flurries') || c.includes('blizzard')) return 'snowflake';
-    if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
-    // Showers without snow/ice = rain showers
-    if ((c.includes('rain') || c.includes('shower') || c.includes('drizzle')) && !c.includes('snow') && !c.includes('ice') && !c.includes('freezing')) return 'cloud-rain';
-    if (c.includes('wind') && !c.includes('cloudy')) return 'wind';
-    if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
-    if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) return isDaytime ? 'sun' : 'moon';
-    if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
-    return isDaytime ? 'cloud-sun' : 'cloud-moon';
-}
+// getWeatherIcon function is now defined in weather.js - no need for duplicate here
 </script>
 
 <!-- HTML2Canvas for image export -->

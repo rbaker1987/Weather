@@ -1,15 +1,15 @@
 {% load ui_tags %}
 {# Reusable current-conditions card. Expects: location, colorize (bool), show_link (bool), show_footer (bool) #}
 {% with temp_class=location.current_temp|temp_bg_class %}
-{% if show_link %}<a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none text-dark">{% endif %}
+{% if show_link %}<a href="{% url 'weather:location-detail' location.id %}" class="text-decoration-none">{% endif %}
   <div class="card weather-card h-100 {% if colorize and temp_class %}border-0 {{ temp_class }}{% endif %}">
     <div class="card-body p-3">
       <div class="mb-3">
         <h6 class="card-title mb-0">
           {% if location.is_current_location %}<i class="fas fa-home text-info me-1" title="Current Location"></i>{% endif %}
-          {% if location.location_type == 'home' %}<i class="fas fa-home text-secondary me-1" title="Home"></i>
-          {% elif location.location_type == 'work' %}<i class="fas fa-briefcase text-secondary me-1" title="Work"></i>
-          {% elif location.location_type == 'school' %}<i class="fas fa-school text-secondary me-1" title="School"></i>
+          {% if location.location_type == 'home' %}<i class="fas fa-home me-1" title="Home"></i>
+          {% elif location.location_type == 'work' %}<i class="fas fa-briefcase me-1" title="Work"></i>
+          {% elif location.location_type == 'school' %}<i class="fas fa-school me-1" title="School"></i>
           {% endif %}
           {{ location.display_name|default:location.name }}
         </h6>
@@ -20,7 +20,7 @@
         <div>
           <h2 class="mb-0">{{ location.current_temp }}°F</h2>
           {% if location.current_temp|should_show_feels_like:location.current_apparent_temp %}
-          <p class="mb-0"><small class="text-muted"><i class="fas fa-temperature-high"></i> Feels like {{ location.current_apparent_temp }}°F</small></p>
+          <p class="mb-0"><small><i class="fas fa-temperature-high"></i> Feels like {{ location.current_apparent_temp }}°F</small></p>
           {% endif %}
           <p class="mb-0"><small>{{ location.current_conditions }}</small></p>
           {% if location.current_humidity %}
@@ -42,7 +42,7 @@
     </div>
 
     {% if show_footer and location.last_observation_time %}
-    <div class="card-footer small text-muted">
+    <div class="card-footer small">
       <i class="fas fa-clock"></i> Observed <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
     </div>
     {% endif %}

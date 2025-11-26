@@ -35,7 +35,11 @@ def condition_icon(forecast_or_text, period_type="day"):
     is_snow = any(k in cond for k in ("snow", "flurries", "blizzard"))
     is_ice = any(k in cond for k in ("ice", "icy", "freezing", "sleet"))
     # Showers without snow/ice = rain showers; snow showers = snow
-    is_rain = any(k in cond for k in ("rain", "shower", "drizzle")) and not is_snow and not is_ice
+    is_rain = (
+        any(k in cond for k in ("rain", "shower", "drizzle"))
+        and not is_snow
+        and not is_ice
+    )
     is_mixed = is_rain and is_snow  # Mixed precipitation
 
     # If we have precipitation probability, adjust icon based on it
@@ -146,8 +150,8 @@ def should_show_feels_like(forecast_or_temp, apparent_temp=None):
     except (TypeError, ValueError):
         return False
 
-    # Show if difference is 3 degrees or more
-    return abs(actual_val - apparent_val) >= 3
+    # Show if difference is 5 degrees or more
+    return abs(actual_val - apparent_val) >= 5
 
 
 @register.filter(name="pop_icon")
@@ -181,7 +185,9 @@ def is_mixed_precip(forecast_or_text):
     snow = any(k in cond for k in ("snow", "flurries", "blizzard"))
     ice = any(k in cond for k in ("ice", "icy", "freezing", "sleet"))
     # Showers without snow/ice = rain showers; snow showers = snow only
-    rain = any(k in cond for k in ("rain", "shower", "drizzle")) and not snow and not ice
+    rain = (
+        any(k in cond for k in ("rain", "shower", "drizzle")) and not snow and not ice
+    )
     return rain and snow
 
 
@@ -204,7 +210,9 @@ def is_snow_precip(forecast_or_text):
     snow = any(k in cond for k in ("snow", "flurries", "blizzard"))
     ice = any(k in cond for k in ("ice", "icy", "freezing", "sleet"))
     # Showers without snow/ice = rain showers; snow showers = snow only
-    rain = any(k in cond for k in ("rain", "shower", "drizzle")) and not snow and not ice
+    rain = (
+        any(k in cond for k in ("rain", "shower", "drizzle")) and not snow and not ice
+    )
     return snow and not rain
 
 
@@ -244,7 +252,11 @@ def needs_chance_layout(forecast_obj):
     is_snow = any(k in cond for k in ("snow", "flurries", "blizzard"))
     is_ice = any(k in cond for k in ("ice", "icy", "freezing", "sleet"))
     # Showers without snow/ice = rain showers; snow showers = snow only
-    is_rain = any(k in cond for k in ("rain", "shower", "drizzle")) and not is_snow and not is_ice
+    is_rain = (
+        any(k in cond for k in ("rain", "shower", "drizzle"))
+        and not is_snow
+        and not is_ice
+    )
     is_storm = any(k in cond for k in ("storm", "thunder", "t-storm"))
 
     # Mixed precipitation - only if both rain AND snow (snow showers = snow only)
