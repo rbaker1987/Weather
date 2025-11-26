@@ -1,0 +1,9 @@
+{% comment %}Reusable forecast update timestamp component.
+Params: location (required), extra_classes (optional), show_label (bool, default True){% endcomment %}
+{% if location and location.last_forecast_update %}
+{% with cls=extra_classes|default:'' %}
+<small class="forecast-updated {{ cls }}" style="opacity:0.9;">
+	{% if show_label|default:True %}Updated: {% endif %}<span class="js-localtime" data-dt="{{ location.last_forecast_update|date:'c' }}"></span>
+</small>
+{% endwith %}
+{% endif %}

@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from timezonefinder import TimezoneFinder
 
 from ..models import HourlyForecast, Location
+from ..utils.apparent_temperature import calculate_apparent_temperature
 
 # Simple in-memory cache for timezone lookups keyed by rounded lat/lon
 _TZ_CACHE = {}
@@ -200,6 +201,7 @@ class HourlyForecastForLocationAPIView(APIView):
                             "time": start_time.strftime("%I %p").lstrip("0"),
                             "start": start_time.isoformat(),
                             "temp": custom_forecast.temperature,
+                            "apparentTemp": custom_forecast.apparent_temperature,
                             "condition": custom_forecast.short_forecast,
                             "icon": self._get_weather_icon(
                                 custom_forecast.short_forecast, is_daytime
@@ -236,6 +238,54 @@ class HourlyForecastForLocationAPIView(APIView):
                             except (ValueError, TypeError):
                                 precip_prob = None
 
+                    # Extract apparent temperature (feels like)
+                    apparent_temp = None
+                    app_temp = period.get("apparentTemperature")
+                    if isinstance(app_temp, dict):
+                        value = app_temp.get("value")
+                        if value is not None:
+                            try:
+                                # Convert from Celsius to Fahrenheit if needed
+                                unit = app_temp.get("unitCode", "")
+                                if "wmoUnit:degC" in unit:
+                                    apparent_temp = int((value * 9/5) + 32)
+                                else:
+                                    apparent_temp = int(value)
+                            except (ValueError, TypeError):
+                                apparent_temp = None
+                    
+                    # Calculate apparent temperature if NWS didn't provide it
+                    if apparent_temp is None:
+                        try:
+                            temp = period.get("temperature")
+                            humidity_data = period.get("relativeHumidity")
+                            wind_speed_str = period.get("windSpeed", "")
+                            
+                            # Extract humidity percentage
+                            humidity = None
+                            if isinstance(humidity_data, dict):
+                                humidity = humidity_data.get("value")
+                            
+                            # Extract wind speed (format: "10 mph" or "5 to 10 mph")
+                            wind_speed = None
+                            if wind_speed_str:
+                                parts = wind_speed_str.split()
+                                if parts:
+                                    try:
+                                        wind_speed = int(parts[0])
+                                    except (ValueError, IndexError):
+                                        pass
+                            
+                            # Calculate if we have the required data
+                            if temp is not None and humidity is not None and wind_speed is not None:
+                                apparent_temp = calculate_apparent_temperature(
+                                    temperature_f=temp,
+                                    humidity=humidity,
+                                    wind_speed_mph=wind_speed
+                                )
+                        except Exception as e:
+                            logger.debug(f"Could not calculate apparent temperature: {e}")
+
                     # Determine is_daytime using that hour's date-specific sunrise/sunset
                     day_key = start_time.date().isoformat()
                     sr_raw = sun_events.get(day_key, {}).get("sunrise")
@@ -253,6 +303,7 @@ class HourlyForecastForLocationAPIView(APIView):
                             "time": start_time.strftime("%I %p").lstrip("0"),
                             "start": start_time.isoformat(),
                             "temp": period.get("temperature", "N/A"),
+                            "apparentTemp": apparent_temp,
                             "condition": period.get("shortForecast", "N/A"),
                             "icon": self._get_weather_icon(
                                 period.get("shortForecast", ""), is_daytime

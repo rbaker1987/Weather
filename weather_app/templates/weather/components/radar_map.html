@@ -2,8 +2,10 @@
 {# Required params: map_id, lat, lon, location_name #}
 {# Optional params: height (default: 600px), zoom (default: 8), show_marker (default: true) #}
 
-{% with height=height|default:"600px" zoom=zoom|default:8 show_marker=show_marker|default:True %}
+{% with height=height|default:"600px" zoom=zoom|default:8 show_marker=show_marker|default:True no_wrapper=no_wrapper|default:False hide_header=hide_header|default:False %}
+{% if not no_wrapper %}
 <div class="card weather-card">
+    {% if not hide_header %}
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
             <i class="fas fa-radar"></i> Radar for {{ location_name }}
@@ -12,7 +14,9 @@
             <i class="fas fa-download"></i>
         </button>
     </div>
+    {% endif %}
     <div class="card-body p-0">
+{% endif %}
         <div id="{{ map_id }}" style="height: {{ height }}; width: 100%; position: relative;">
             <div id="{{ map_id }}_controls" style="position: absolute; bottom: 10px; left: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 10px;">
                 <button id="{{ map_id }}_playPause" class="btn btn-sm btn-primary" title="Play/Pause">
@@ -22,8 +26,10 @@
                 <span id="{{ map_id }}_time" style="font-size: 0.85rem; min-width: 120px;">Loading...</span>
             </div>
         </div>
+{% if not no_wrapper %}
     </div>
 </div>
+{% endif %}
 
 <script>
 (function() {
@@ -42,6 +48,23 @@
         }
 
         const map = L.map(mapId).setView([lat, lon], zoom);
+
+        // Populate shared radar timestamp element if present and empty
+        try {
+            const rtEl = document.getElementById('radarTimestamp');
+            if (rtEl && !rtEl.getAttribute('data-dt')) {
+                const loadedAt = new Date();
+                rtEl.textContent = loadedAt.toLocaleString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit'
+                });
+                rtEl.setAttribute('data-dt', loadedAt.toISOString());
+            }
+        } catch (e) {
+            console.warn('Radar timestamp populate failed:', e);
+        }
 
         // Base map layers
         const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

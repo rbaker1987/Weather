@@ -674,17 +674,15 @@ class LocationViewSet(viewsets.ModelViewSet):
 
             # Create new forecasts
             for period in periods[:14]:  # Get up to 14 periods (7 days)
+                raw_start = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00"))
+                local_start = raw_start.astimezone(timezone.get_current_timezone())
+                raw_end = datetime.fromisoformat(period["endTime"].replace("Z", "+00:00"))
+                local_end = raw_end.astimezone(timezone.get_current_timezone())
                 DailyForecast.objects.create(
                     location=location,
-                    forecast_date=datetime.fromisoformat(
-                        period["startTime"].replace("Z", "+00:00")
-                    ).date(),
-                    period_start=datetime.fromisoformat(
-                        period["startTime"].replace("Z", "+00:00")
-                    ),
-                    period_end=datetime.fromisoformat(
-                        period["endTime"].replace("Z", "+00:00")
-                    ),
+                    forecast_date=local_start.date(),
+                    period_start=local_start,
+                    period_end=local_end,
                     is_daytime=period.get("isDaytime", True),
                     temperature=period.get("temperature"),
                     temperature_unit=period.get("temperatureUnit", "F"),
@@ -1327,6 +1325,25 @@ class DashboardView(TemplateView):
                 :8
             ]
         )
+        
+        # Ensure forecasts and current conditions for displayed locations
+        for location in locations:
+            # Check if we need to refresh data (older than 1 hour or no data)
+            needs_refresh = (
+                location.last_forecast_update is None or 
+                (timezone.now() - location.last_forecast_update > timedelta(hours=1)) or
+                location.last_observation_time is None or
+                (timezone.now() - location.last_observation_time > timedelta(hours=1))
+            )
+            if needs_refresh:
+                try:
+                    # Fetch current conditions
+                    fetch_current_conditions(location)
+                    # Fetch forecasts
+                    _refresh_forecasts_for_location(location)
+                    location.refresh_from_db()  # Reload to get updated data
+                except Exception as e:
+                    logger.warning(f"Failed to refresh data for {location.name}: {e}")
 
         # Get locations with current conditions
         locations_with_current = (
@@ -1549,10 +1566,14 @@ class TempLocationView(TemplateView):
 
                 # Parse periods into daily forecast objects
                 for period in periods[:14]:
+                    raw_start = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00"))
+                    local_start = raw_start.astimezone(timezone.get_current_timezone())
+                    raw_end = datetime.fromisoformat(period["endTime"].replace("Z", "+00:00"))
+                    local_end = raw_end.astimezone(timezone.get_current_timezone())
                     daily_forecasts.append(SimpleNamespace(
-                        forecast_date=datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).date(),
-                        period_start=datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")),
-                        period_end=datetime.fromisoformat(period["endTime"].replace("Z", "+00:00")),
+                        forecast_date=local_start.date(),
+                        period_start=local_start,
+                        period_end=local_end,
                         is_daytime=period.get("isDaytime", True),
                         temperature=period.get("temperature"),
                         temperature_unit=period.get("temperatureUnit", "F"),
@@ -1790,7 +1811,11 @@ class LocationListView(ListView):
         """Get active locations with forecast counts, favorite first."""
         # Filter by session - show all locations including disabled ones on location list page
         location_ids = self.request.session.get("location_ids", [])
-        queryset = Location.objects.filter(is_active=True, id__in=location_ids)
+        if location_ids:
+            queryset = Location.objects.filter(is_active=True, id__in=location_ids)
+        else:
+            # If no location_ids in session, show no locations
+            queryset = Location.objects.none()
 
         # Search functionality
         search = self.request.GET.get("search")
@@ -2308,7 +2333,11 @@ class ForecastListView(ListView):
                     ).exists()
                     if not has_after:
                         _refresh_forecasts_for_location(loc)
+        
+        # Filter forecasts by session location_ids to match location list
+        # Also include current location even if not in session
         qs = DailyForecast.objects.select_related("location").filter(
+            Q(location__id__in=location_ids) | Q(location__is_current_location=True),
             location__is_active=True,
             location__is_enabled=True,
             forecast_date__gte=timezone.now().date(),

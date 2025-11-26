@@ -22,6 +22,12 @@
 {% endblock %} {% block content %}
 
 <!-- Active Alerts (moved to very top) -->
+<!-- Hidden element holding favorite location forecast timestamp for dynamic headers -->
+{% if favorite_location and favorite_location.last_forecast_update %}
+<span id="favoriteLocationForecastTimestamp" data-dt="{{ favorite_location.last_forecast_update|date:'c' }}" style="display:none"></span>
+{% endif %}
+<!-- Templates for reusable dynamic components -->
+<template id="radarTimestampTemplate">{% include "weather/components/radar_timestamp.html" %}</template>
 <div class="row mb-4">
   <div class="col-12">
     <div class="card weather-card">
@@ -133,7 +139,10 @@
           <!-- Next 6 Hours Forecast (moved above daily forecast) -->
           <div class="card weather-card mb-4">
             <div class="card-header bg-light d-flex justify-content-between align-items-center">
-              <h5 class="mb-0"><i class="fas fa-clock"></i> Next 6 Hours for <span id="hourlyLocationTitle">Your Location</span></h5>
+                <div>
+                  <h5 class="mb-0"><i class="fas fa-clock"></i> Next 6 Hours for <span id="hourlyLocationTitle">Your Location</span></h5>
+                  {% include "weather/components/forecast_update_timestamp.html" with location=favorite_location extra_classes='text-white' show_label=True %}
+                </div>
               <button onclick="exportSectionAsImage('next6HoursBody')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
                 <i class="fas fa-download"></i>
               </button>
@@ -149,7 +158,10 @@
           <!-- Daily Forecast Cards -->
           <div class="card weather-card mb-4">
             <div class="card-header bg-light d-flex justify-content-between align-items-center">
-              <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Next 3 Days for <span id="forecastLocationTitle">Your Location</span></h5>
+              <div>
+                <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Next 3 Days for <span id="forecastLocationTitle">Your Location</span></h5>
+                {% include "weather/components/forecast_update_timestamp.html" with location=favorite_location extra_classes='text-white' show_label=True %}
+              </div>
               <button onclick="exportSectionAsImage('forecastCardBody')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
                 <i class="fas fa-download"></i>
               </button>
@@ -246,7 +258,7 @@
               isDay = startDate >= sr && startDate < ss;
             }
           }
-          const iconName = getWeatherIcon(hour.condition || '', isDay);
+          const iconName = getWeatherIcon(hour.condition || '', isDay, hour.pop);
           html += `
             <div class="col-6 col-md-4">
               <div class="card h-100 border-0">
@@ -254,6 +266,7 @@
                   <div class="fw-bold mb-2">${hour.time}</div>
                   <i class="fas fa-${iconName} mb-2" style="font-size: 2rem;"></i>
                   <div class="h4 mb-2">${hour.temp}&deg;F</div>
+                  ${hour.apparentTemp !== null && hour.apparentTemp !== undefined && Math.abs(hour.apparentTemp - hour.temp) >= 3 ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-temperature-high"></i> Feels like ${hour.apparentTemp}&deg;F</small>` : ''}
                   <small class="d-block mb-1" style="opacity: 0.9;">${hour.condition}</small>
                   ${hour.wind ? `<small class="mt-1 d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind} ${hour.windDir}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
                   ${hour.pop !== null && hour.pop !== undefined ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-cloud-rain"></i> ${hour.pop}%</small>` : ''}
@@ -280,6 +293,20 @@
     const showMarker = false;
 
     const map = L.map(mapId).setView([lat, lon], zoom);
+
+    // Set radar loaded timestamp
+    const rtEl = document.getElementById('radarTimestamp');
+    if (rtEl) {
+      const loadedAt = new Date();
+      const localeStr = loadedAt.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+      rtEl.textContent = localeStr;
+      rtEl.setAttribute('data-dt', loadedAt.toISOString());
+    }
 
     // Base map layers
     const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -412,17 +439,75 @@
       if (!iso) return;
       const d = new Date(iso);
       if (isNaN(d.getTime())) return;
-      el.textContent = d.toLocaleString(undefined, {
-        year: "numeric",
+      
+      // Show actual time with relative indicator
+      const now = new Date();
+      const diffMs = now - d;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      
+      const timeStr = d.toLocaleString(undefined, {
         month: "short",
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
       });
+      
+      let relativeStr = "";
+      if (diffMins < 60) {
+        relativeStr = " (" + diffMins + " min ago)";
+      } else if (diffHours < 24) {
+        relativeStr = " (" + diffHours + " hr ago)";
+      }
+      
+      el.textContent = timeStr + relativeStr;
     });
+
+    // Inject forecast update timestamps only into dynamic headers (exclude ones already having component)
+    const forecastTsEl = document.getElementById('favoriteLocationForecastTimestamp');
+    if (forecastTsEl) {
+      const ts = forecastTsEl.getAttribute('data-dt');
+      if (ts) {
+        const dynamicHeaderPatterns = ['Next 24 Hours', 'NWS Daily'];
+        document.querySelectorAll('.card-header').forEach(header => {
+          const h = header.querySelector('h5');
+          if (!h) return;
+          if (!dynamicHeaderPatterns.some(p => h.textContent.includes(p))) return;
+          // Skip if a sibling forecast-updated already exists
+          if (header.querySelector('.forecast-updated')) return;
+          const small = document.createElement('small');
+            small.className = 'forecast-updated text-white d-block mt-1';
+            small.style.opacity = '0.9';
+            small.innerHTML = 'Updated: <span class="js-localtime" data-dt="' + ts + '"></span>';
+            h.after(small);
+        });
+        // Format newly injected timestamps
+        document.querySelectorAll('.forecast-updated .js-localtime').forEach(el => {
+          const iso = el.getAttribute('data-dt');
+          if (!iso) return;
+          const d = new Date(iso);
+          if (isNaN(d.getTime())) return;
+          const now = new Date();
+          const diffMs = now - d;
+          const diffMins = Math.floor(diffMs / 60000);
+          const diffHours = Math.floor(diffMs / 3600000);
+          const timeStr = d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+          let relativeStr = '';
+          if (diffMins < 60) relativeStr = ' (' + diffMins + ' min ago)';
+          else if (diffHours < 24) relativeStr = ' (' + diffHours + ' hr ago)';
+          el.textContent = timeStr + relativeStr;
+        });
+      }
+    }
 
     // Auto-load browser location on page load
     loadBrowserLocation();
+    
+    // Set up auto-refresh every 10 minutes
+    setInterval(function() {
+      console.log("Auto-refreshing dashboard data...");
+      location.reload();
+    }, 600000); // 10 minutes = 600,000 milliseconds
   });
 
   // Browser Location Weather
@@ -497,12 +582,16 @@
           radarContainer.style.display = 'block';
           
           // Create radar map element and controls
+          const radarTimestampHTML = document.getElementById('radarTimestampTemplate')?.innerHTML || '';
           radarComponent.innerHTML = `
             <div class="card weather-card">
               <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                  <i class="fas fa-radar"></i> Radar for ${locationName}
-                </h5>
+                <div>
+                  <h5 class="mb-0">
+                    <i class="fas fa-broadcast-tower text-white"></i> Radar for ${locationName}
+                  </h5>
+                  ${radarTimestampHTML}
+                </div>
                 <button onclick="exportSectionAsImage('dashboardRadarMap')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
                   <i class="fas fa-download"></i>
                 </button>
@@ -666,7 +755,8 @@
           // Update weather icon based on current time of day
           const hour = new Date().getHours();
           const isDaytime = hour >= 6 && hour < 18;
-          const icon = getWeatherIcon(conditions, isDaytime);
+          const pop = obsData.properties?.precipitationLastHour?.value || null;
+          const icon = getWeatherIcon(conditions, isDaytime, pop);
           document.getElementById(
             "browserWeatherIcon"
           ).className = `fas fa-${icon} fa-2x`;
@@ -739,32 +829,6 @@
     return directions[index];
   }
 
-  function getWeatherIcon(conditions, isDaytime = true) {
-    const c = conditions.toLowerCase();
-    if (c.includes("storm") || c.includes("thunder") || c.includes("t-storm"))
-      return "bolt";
-    if (
-      c.includes("ice") ||
-      c.includes("icy") ||
-      c.includes("freezing") ||
-      c.includes("sleet")
-    )
-      return "icicles";
-    if (c.includes("snow") || c.includes("flurries") || c.includes("blizzard"))
-      return "snowflake";
-    if (c.includes("fog") || c.includes("mist") || c.includes("haze"))
-      return "smog";
-    // Showers without snow/ice = rain showers
-    if ((c.includes("rain") || c.includes("shower") || c.includes("drizzle")) && !c.includes("snow") && !c.includes("ice") && !c.includes("freezing"))
-      return "cloud-rain";
-    if (c.includes("wind") && !c.includes("cloudy")) return "wind";
-    if (c.includes("partly")) return isDaytime ? "cloud-sun" : "cloud-moon";
-    if (c.includes("sunny") || c.includes("clear") || c.includes("fair"))
-      return isDaytime ? "sun" : "moon";
-    if (c.includes("cloud") || c.includes("overcast")) return "cloud";
-    return isDaytime ? "cloud-sun" : "cloud-moon";
-  }
-
   // Store browser location coordinates for navigation
   let browserLocationCoords = null;
 
@@ -822,25 +886,39 @@
       if (!forecastResponse.ok) throw new Error("Unable to get forecast");
 
       const forecastData = await forecastResponse.json();
-      const periods = forecastData.properties.periods.slice(0, 6); // Get next 6 periods (3 days)
+      // Take a slightly larger slice to ensure we have full day/night pairs
+      const periods = forecastData.properties.periods.slice(0, 10); // Up to ~5 day/night periods
 
-      // Group by date
+      // Group by LOCAL date (avoid UTC date shifting previous day)
       const dayGroups = {};
       periods.forEach((period) => {
-        const date = period.startTime.split("T")[0];
-        if (!dayGroups[date]) {
-          dayGroups[date] = { date: new Date(date), day: null, night: null };
+        const start = new Date(period.startTime); // preserves provided offset
+        const localDateKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+        if (!dayGroups[localDateKey]) {
+          dayGroups[localDateKey] = { date: start, day: null, night: null };
         }
         if (period.isDaytime) {
-          dayGroups[date].day = period;
+          dayGroups[localDateKey].day = period;
         } else {
-          dayGroups[date].night = period;
+          dayGroups[localDateKey].night = period;
         }
       });
 
       // Render forecast cards - limit to exactly 3 cards
       let html = '<div class="row">';
-      const dayGroupArray = Object.values(dayGroups);
+      let dayGroupArray = Object.values(dayGroups);
+
+      // Filter out any groups that are strictly in the past (compare local midnight values)
+      const todayLocalMidnight = new Date();
+      todayLocalMidnight.setHours(0,0,0,0);
+      dayGroupArray = dayGroupArray.filter(g => {
+        const groupLocalMidnight = new Date(g.date.getFullYear(), g.date.getMonth(), g.date.getDate());
+        return groupLocalMidnight >= todayLocalMidnight;
+      });
+
+      // Ensure chronological order
+      dayGroupArray.sort((a, b) => a.date - b.date);
+
       const maxCards = 3;
       const cardsToDisplay = dayGroupArray.slice(0, maxCards);
 
@@ -887,10 +965,10 @@
 
     if (dayGroup.day) {
       const temp = dayGroup.day.temperature;
-      const icon = getWeatherIcon(dayGroup.day.shortForecast, true);
+      const pop = dayGroup.day.probabilityOfPrecipitation?.value;
+      const icon = getWeatherIcon(dayGroup.day.shortForecast, true, pop);
       const windSpeed = dayGroup.day.windSpeed ? dayGroup.day.windSpeed.split(' ')[0] : null;
       const windGust = dayGroup.day.windGust ? dayGroup.day.windGust.split(' ')[0] : null;
-      const pop = dayGroup.day.probabilityOfPrecipitation?.value;
 
       html += `
             <div class="p-3 text-center border-bottom flex-fill d-flex flex-column justify-content-between temp-bg-${temp}" style="min-height: 180px;">
@@ -912,10 +990,10 @@
 
     if (dayGroup.night) {
       const temp = dayGroup.night.temperature;
-      const icon = getWeatherIcon(dayGroup.night.shortForecast, false);
+      const pop = dayGroup.night.probabilityOfPrecipitation?.value;
+      const icon = getWeatherIcon(dayGroup.night.shortForecast, false, pop);
       const windSpeed = dayGroup.night.windSpeed ? dayGroup.night.windSpeed.split(' ')[0] : null;
       const windGust = dayGroup.night.windGust ? dayGroup.night.windGust.split(' ')[0] : null;
-      const pop = dayGroup.night.probabilityOfPrecipitation?.value;
 
       html += `
             <div class="p-3 text-center flex-fill d-flex flex-column justify-content-between night-temp-bg-${temp}" style="min-height: 180px;">
