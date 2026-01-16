@@ -896,6 +896,101 @@ class LocationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @action(detail=False, methods=["get"])
+    def geocode_search(self, request):
+        """Proxy geocoding search request to Nominatim API.
+        
+        Query parameters:
+        - q: Search query (required)
+        """
+        try:
+            q = request.query_params.get("q", "").strip()
+            if not q:
+                return Response(
+                    {"status": "error", "message": "Search query required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            import requests
+
+            headers = {"User-Agent": "WeatherApp/1.0"}
+            url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1"
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            results = response.json()
+
+            if not results:
+                return Response({"results": []})
+
+            # Return first result
+            result = results[0]
+            return Response({
+                "status": "success",
+                "results": [{
+                    "lat": float(result.get("lat", 0)),
+                    "lon": float(result.get("lon", 0)),
+                    "display_name": result.get("display_name", ""),
+                }]
+            })
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Geocoding search error: {str(e)}")
+            return Response(
+                {"status": "error", "message": "Geocoding service error"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except Exception as e:
+            logger.error(f"Geocoding search error: {str(e)}")
+            return Response(
+                {"status": "error", "message": f"Error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=False, methods=["get"])
+    def geocode_reverse(self, request):
+        """Proxy reverse geocoding request to Nominatim API.
+        
+        Query parameters:
+        - lat: Latitude (required)
+        - lon: Longitude (required)
+        """
+        try:
+            lat = request.query_params.get("lat", "").strip()
+            lon = request.query_params.get("lon", "").strip()
+
+            if not lat or not lon:
+                return Response(
+                    {"status": "error", "message": "Latitude and longitude required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            import requests
+
+            headers = {"User-Agent": "WeatherApp/1.0"}
+            url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            return Response({
+                "status": "success",
+                "address": data.get("address", {}),
+                "display_name": data.get("display_name", ""),
+            })
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Reverse geocoding error: {str(e)}")
+            return Response(
+                {"status": "error", "message": "Geocoding service error"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except Exception as e:
+            logger.error(f"Reverse geocoding error: {str(e)}")
+            return Response(
+                {"status": "error", "message": f"Error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 
 class HourlyForecastViewSet(viewsets.ReadOnlyModelViewSet):
     """API ViewSet for hourly forecasts."""

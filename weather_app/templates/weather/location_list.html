@@ -541,17 +541,17 @@ async function findLocationByText() {
     statusDiv.innerHTML = '<div class="alert alert-info">Searching location...</div>';
     if (addBtn) addBtn.disabled = true;
     try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
-        const resp = await fetch(url, { headers: { 'User-Agent': 'WeatherApp/1.0' } });
+        const url = `/api/locations/geocode_search/?q=${encodeURIComponent(q)}`;
+        const resp = await fetch(url);
         if (!resp.ok) throw new Error('Geocoding failed');
-        const results = await resp.json();
-        if (!results || results.length === 0) {
+        const data = await resp.json();
+        if (data.status !== 'success' || !data.results || data.results.length === 0) {
             statusDiv.innerHTML = '<div class="alert alert-warning">No results found. Try a more specific query.</div>';
             if (addBtn) addBtn.disabled = true;
             return;
         }
-        const lat = parseFloat(results[0].lat);
-        const lon = parseFloat(results[0].lon);
+        const lat = parseFloat(data.results[0].lat);
+        const lon = parseFloat(data.results[0].lon);
         input.dataset.latitude = lat.toFixed(6);
         input.dataset.longitude = lon.toFixed(6);
         if (addLatEl) addLatEl.value = lat.toFixed(6);
@@ -619,14 +619,9 @@ function useMyLocation() {
             statusDiv.innerHTML = '<div class="alert alert-info">Found coordinates, getting address...</div>';
 
             try {
-                // Use Nominatim reverse geocoding
+                // Use backend reverse geocoding proxy
                 const response = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
-                    {
-                        headers: {
-                            'User-Agent': 'WeatherApp/1.0'
-                        }
-                    }
+                    `/api/locations/geocode_reverse/?lat=${lat}&lon=${lon}`
                 );
 
                 if (!response.ok) {
@@ -634,6 +629,10 @@ function useMyLocation() {
                 }
 
                 const data = await response.json();
+                if (data.status !== 'success') {
+                    throw new Error(data.message || 'Geocoding failed');
+                }
+
                 const address = data.address;
 
                 // Build location string
@@ -960,8 +959,8 @@ function loadBrowserLocation() {
         const lon = pos.coords.longitude;
         window.browserLocationCoords = { lat, lon };
         try {
-            // Reverse geocode for display name
-            const geoResp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, { headers: { 'User-Agent': 'WeatherApp/1.0' } });
+            // Reverse geocode for display name using backend proxy
+            const geoResp = await fetch(`/api/locations/geocode_reverse/?lat=${lat}&lon=${lon}`);
             const geoData = await geoResp.json();
             const address = geoData.address || {};
             let locationName = address.city || address.town || address.village || address.county || 'Your Location';

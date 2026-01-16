@@ -164,27 +164,45 @@ function initLocationPickerMap() {
 
 function applySelectedLocation() {
     if (selectedTempLat !== null && selectedTempLon !== null) {
+        // Hide modal and drop focus before navigating to avoid aria-hidden focus warnings
+        const modalEl = document.getElementById('locationPickerModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modalInstance.hide();
+        if (document.activeElement) {
+            document.activeElement.blur();
+        }
+
         // Check if we're on model detail page or forecast detail page
         const currentPath = window.location.pathname;
         
         if (currentPath.includes('/models/')) {
-            // Model detail page - reload with new coordinates
+            // Models list or detail
+            const forecastDays = document.getElementById('forecastDays')?.value
+                || new URLSearchParams(window.location.search).get('forecast_days')
+                || '5';
             const modelMatch = currentPath.match(/\/models\/([^/]+)/);
             if (modelMatch) {
                 const modelName = modelMatch[1];
-                const forecastDays = new URLSearchParams(window.location.search).get('forecast_days') || '5';
-                window.location.href = `/models/${modelName}/?latitude=${selectedTempLat}&longitude=${selectedTempLon}&forecast_days=${forecastDays}`;
+                setTimeout(() => {
+                    window.location.href = `/models/${modelName}/?latitude=${selectedTempLat}&longitude=${selectedTempLon}&forecast_days=${forecastDays}`;
+                }, 150);
+            } else {
+                // Models list page: reload with custom coordinates so dropdown picks it up
+                setTimeout(() => {
+                    window.location.href = `/models/?latitude=${selectedTempLat}&longitude=${selectedTempLon}&forecast_days=${forecastDays}`;
+                }, 150);
             }
         } else if (currentPath.includes('/locations/') || currentPath.includes('/temp-location/')) {
             // Location detail or temp location page - reload with temp coordinates
-            window.location.href = `/temp-location/?latitude=${selectedTempLat}&longitude=${selectedTempLon}`;
+            setTimeout(() => {
+                window.location.href = `/temp-location/?latitude=${selectedTempLat}&longitude=${selectedTempLon}`;
+            }, 150);
         } else {
             // Default - go to temp location detail view
-            window.location.href = `/temp-location/?latitude=${selectedTempLat}&longitude=${selectedTempLon}`;
+            setTimeout(() => {
+                window.location.href = `/temp-location/?latitude=${selectedTempLat}&longitude=${selectedTempLon}`;
+            }, 150);
         }
-        
-        // Close modal
-        bootstrap.Modal.getInstance(document.getElementById('locationPickerModal')).hide();
     } else {
         alert('Please select a location on the map first.');
     }
