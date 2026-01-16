@@ -8,24 +8,6 @@
     .model-selector {
         background: white;
         padding: 1.5rem;
-// Helper: map model name to card and checkbox DOM nodes
-function getModelDomRefs(modelName) {
-    const cardIdMap = {
-        'GFS': 'model-gfs',
-        'ICON': 'model-icon',
-        'ECMWF': 'model-ecmwf',
-        'AIFS': 'model-aifs',
-        'GEM': 'model-gem',
-        'HRRR': 'model-hrrr',
-        'NAM': 'model-nam',
-        'RGEM': 'model-gem-regional'
-    };
-    const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-    const cardId = cardIdMap[modelName] || fallbackId;
-    const card = document.getElementById(cardId);
-    const checkbox = card ? card.querySelector('input.model-select-checkbox') : null;
-    return { card, checkbox };
-}
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         margin-bottom: 2rem;
@@ -68,7 +50,7 @@ function getModelDomRefs(modelName) {
         <select id="locationSelect" class="form-select" onchange="loadModelData()">
             <option value="">Choose a location...</option>
             {% for loc in locations %}
-                <option value="{{ loc.id }}" data-lat="{{ loc.latitude }}" data-lon="{{ loc.longitude }}">{{ loc.name }}</option>
+                <option value="{{ loc.id }}" data-lat="{{ loc.latitude }}" data-lon="{{ loc.longitude }}" {% if loc.id == default_location_id %}selected{% endif %}>{{ loc.name }}</option>
             {% endfor %}
         </select>
     </div>
@@ -102,7 +84,7 @@ function getModelDomRefs(modelName) {
     <div class="col-md-3">
         <div class="model-card" id="model-gfs" data-model="GFS" onclick="cardClick(event)">
             <h6>
-                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="GFS" onchange="onModelSelectionChange()">
+                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="GFS" onchange="onModelSelectionChange()" checked>
                 GFS <span class="badge bg-primary model-badge">NOAA (US)</span>
             </h6>
         </div>
@@ -110,7 +92,7 @@ function getModelDomRefs(modelName) {
     <div class="col-md-3">
         <div class="model-card" id="model-icon" data-model="ICON" onclick="cardClick(event)">
             <h6>
-                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="ICON" onchange="onModelSelectionChange()">
+                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="ICON" onchange="onModelSelectionChange()" checked>
                 ICON <span class="badge bg-warning text-dark model-badge">DWD (DE)</span>
             </h6>
         </div>
@@ -118,7 +100,7 @@ function getModelDomRefs(modelName) {
     <div class="col-md-3">
         <div class="model-card" id="model-ecmwf" data-model="ECMWF" onclick="cardClick(event)">
             <h6>
-                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="ECMWF" onchange="onModelSelectionChange()">
+                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="ECMWF" onchange="onModelSelectionChange()" checked>
                 ECMWF <span class="badge bg-success model-badge">ECMWF (EU)</span>
             </h6>
         </div>
@@ -134,7 +116,7 @@ function getModelDomRefs(modelName) {
     <div class="col-md-3">
         <div class="model-card" id="model-gem" data-model="GEM" onclick="cardClick(event)">
             <h6>
-                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="GEM" onchange="onModelSelectionChange()">
+                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="GEM" onchange="onModelSelectionChange()" checked>
                 GEM <span class="badge bg-danger model-badge">CMC (CA)</span>
             </h6>
         </div>
@@ -164,7 +146,7 @@ function getModelDomRefs(modelName) {
         </div>
     </div>
 </div>
- 
+
 
 <!-- Comparison Results -->
 <div id="modelResults" style="display: none;">
@@ -173,8 +155,26 @@ function getModelDomRefs(modelName) {
         <h4 class="mb-3" id="chartTitle"><i class="fas fa-temperature-high"></i> Model Comparison</h4>
         <canvas id="tempChart" height="80"></canvas>
     </div>
-    
-    <!-- Detailed Comparison Table removed as requested -->
+
+</div>
+
+<!-- Model Details Modal -->
+<div class="modal fade" id="modelDetailsModal" tabindex="-1" aria-labelledby="modelDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modelDetailsModalLabel">Model Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modelDetailsBody">
+                <!-- Details will be injected here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 </div>
 
 <!-- Loading Indicator -->
@@ -192,7 +192,6 @@ function getModelDomRefs(modelName) {
     <p class="text-muted">Choose a location from the dropdown above to see forecasts from multiple weather prediction models.</p>
 </div>
 {% endblock %}
-
 {% block extra_js %}
 <!-- Model comparison scripts -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -203,6 +202,25 @@ let precipChart = null;
 let currentModelData = null;
 let currentTempLevel = 'surface';
 
+// Helper: map model name to card and checkbox DOM nodes
+function getModelDomRefs(modelName) {
+    const cardIdMap = {
+        'GFS': 'model-gfs',
+        'ICON': 'model-icon',
+        'ECMWF': 'model-ecmwf',
+        'AIFS': 'model-aifs',
+        'GEM': 'model-gem',
+        'HRRR': 'model-hrrr',
+        'NAM': 'model-nam',
+        'RGEM': 'model-gem-regional'
+    };
+    const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    const cardId = cardIdMap[modelName] || fallbackId;
+    const card = document.getElementById(cardId);
+    const checkbox = card ? card.querySelector('input.model-select-checkbox') : null;
+    return { card, checkbox };
+}
+
 async function loadModelData() {
     const locationSelect = document.getElementById('locationSelect');
     if (!locationSelect) {
@@ -211,33 +229,28 @@ async function loadModelData() {
     }
     const selectedOption = locationSelect.options[locationSelect.selectedIndex];
     const forecastDays = document.getElementById('forecastDays').value;
-    
     if (!selectedOption.value) {
         document.getElementById('modelResults').style.display = 'none';
         document.getElementById('placeholderMessage').style.display = 'block';
         return;
     }
-    
     const lat = selectedOption.dataset.lat;
     const lon = selectedOption.dataset.lon;
-    
     // Get all available models from the model cards
     const modelCards = document.querySelectorAll('.model-card[data-model]');
     const models = Array.from(modelCards).map(card => card.dataset.model).join(',');
-    
     // Show loading indicator
     document.getElementById('loadingIndicator').style.display = 'block';
     document.getElementById('modelResults').style.display = 'none';
     document.getElementById('placeholderMessage').style.display = 'none';
-    
     try {
         // Fetch all model data from our API endpoint
-        const apiUrl = `/api/model-comparison/?latitude=${lat}&longitude=${lon}&forecast_days=${forecastDays}&models=${models}`;
-        const response = await fetch(apiUrl);
-        
-        if (!response.ok) {
-            throw new Error(`API returned ${response.status}`);
+        const response = await fetch(`/api/model-comparison/?latitude=${lat}&longitude=${lon}&models=${models}&forecast_days=${forecastDays}`);
+        const result = await response.json();
+        if (!result || result.status !== 'success' || !result.models) {
+            throw new Error('No model data returned');
         }
+<<<<<<< HEAD
         
         const results = await response.json();
         console.log('API response structure:', results);
@@ -260,6 +273,14 @@ async function loadModelData() {
                 // Out of domain; mark card and skip without logging as error
                 modelData[modelName] = null;
                 const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+=======
+        // Process each model's data
+        const modelData = {};
+        for (const model of result.models) {
+            const modelName = model.name;
+            if (model.skipped) {
+                // Mark card as out of domain
+>>>>>>> e3a8b9efac21bfc53ab60e2bad1196fa0b4a416e
                 const cardIdMap = {
                     'GFS': 'model-gfs',
                     'ICON': 'model-icon',
@@ -270,6 +291,7 @@ async function loadModelData() {
                     'NAM': 'model-nam',
                     'RGEM': 'model-gem-regional'
                 };
+                const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
                 const cardId = cardIdMap[modelName] || fallbackId;
                 const card = document.getElementById(cardId);
                 if (card) {
@@ -283,12 +305,11 @@ async function loadModelData() {
                     timeSpan.innerHTML = `<i class="fas fa-ban"></i> Out of domain`;
                 }
                 continue;
-            } else if (result.error || !result.data) {
-                console.error(`Error from ${modelName}:`, result.error);
+            } else if (model.error || !model.data) {
+                console.error(`Error from ${modelName}:`, model.error);
                 modelData[modelName] = null;
             } else {
-                modelData[modelName] = result.data;
-                
+                modelData[modelName] = model.data;
                 // Update model card with run time
                 const cardIdMap = {
                     'GFS': 'model-gfs',
@@ -300,16 +321,14 @@ async function loadModelData() {
                     'NAM': 'model-nam',
                     'RGEM': 'model-gem-regional'
                 };
-                
                 let runTimeStr = '—';
-                if (result.data.hourly?.time?.[0]) {
-                    const runTime = new Date(result.data.hourly.time[0]);
+                if (model.data.hourly?.time?.[0]) {
+                    const runTime = new Date(model.data.hourly.time[0]);
                     const month = (runTime.getMonth() + 1).toString().padStart(2, '0');
                     const day = runTime.getDate().toString().padStart(2, '0');
                     const hour = runTime.getUTCHours().toString().padStart(2, '0');
                     runTimeStr = `${month}/${day} ${hour}Z`;
                 }
-                
                 const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
                 const cardId = cardIdMap[modelName] || fallbackId;
                 const card = document.getElementById(cardId);
@@ -321,15 +340,13 @@ async function loadModelData() {
                         const header = card.querySelector('h6');
                         if (header) header.appendChild(timeSpan); else card.appendChild(timeSpan);
                     }
-                    timeSpan.innerHTML = `<i class="fas fa-clock"></i> ${runTimeStr}`;
+                    timeSpan.innerHTML = `<i class=\"fas fa-clock\"></i> ${runTimeStr}`;
                 }
             }
         }
-        
         // Store and display the data
         currentModelData = modelData;
         displayModelComparison(modelData);
-        
     } catch (error) {
         console.error('Error loading model data:', error);
         alert('Error loading model data. Please try again.');
@@ -338,6 +355,7 @@ async function loadModelData() {
     }
 }
 
+// Fix: Add missing cardClick and onModelSelectionChange functions
 function getSelectedModels() {
     const boxes = document.querySelectorAll('.model-select-checkbox');
     const selected = new Set();
@@ -353,7 +371,6 @@ function hasValidData(arr) {
 function displayModelComparison(modelData) {
     document.getElementById('modelResults').style.display = 'block';
     const selectedModels = getSelectedModels();
-    
     // Prepare data for charts
     const times = modelData.GFS?.hourly?.time || [];
     const gfsTemp = modelData.GFS?.hourly?.temperature_2m || [];
@@ -364,43 +381,6 @@ function displayModelComparison(modelData) {
     const hrrrTemp = modelData.HRRR?.hourly?.temperature_2m || [];
     const namTemp = modelData.NAM?.hourly?.temperature_2m || [];
     const rgemTemp = modelData.RGEM?.hourly?.temperature_2m || [];
-    
-    
-
-    // Pressure level temps (raw arrays)
-    const gfsTemp925 = modelData.GFS?.hourly?.temperature_925hPa || [];
-    const iconTemp925 = modelData.ICON?.hourly?.temperature_925hPa || [];
-    const ecmwfTemp925 = modelData.ECMWF?.hourly?.temperature_925hPa || [];
-    const aifsTemp925 = modelData.AIFS?.hourly?.temperature_925hPa || [];
-    const gemTemp925 = modelData.GEM?.hourly?.temperature_925hPa || [];
-    const hrrrTemp925 = modelData.HRRR?.hourly?.temperature_925hPa || [];
-    const namTemp925 = modelData.NAM?.hourly?.temperature_925hPa || [];
-    const rgemTemp925 = modelData.RGEM?.hourly?.temperature_925hPa || [];
-    
-    
-
-    const gfsTemp850 = modelData.GFS?.hourly?.temperature_850hPa || [];
-    const iconTemp850 = modelData.ICON?.hourly?.temperature_850hPa || [];
-    const ecmwfTemp850 = modelData.ECMWF?.hourly?.temperature_850hPa || [];
-    const aifsTemp850 = modelData.AIFS?.hourly?.temperature_850hPa || [];
-    const gemTemp850 = modelData.GEM?.hourly?.temperature_850hPa || [];
-    const hrrrTemp850 = modelData.HRRR?.hourly?.temperature_850hPa || [];
-    const namTemp850 = modelData.NAM?.hourly?.temperature_850hPa || [];
-    const rgemTemp850 = modelData.RGEM?.hourly?.temperature_850hPa || [];
-    
-    
-    
-    const gfsPrecip = modelData.GFS?.hourly?.precipitation || [];
-    const iconPrecip = modelData.ICON?.hourly?.precipitation || [];
-    const ecmwfPrecip = modelData.ECMWF?.hourly?.precipitation || [];
-    const aifsPrecip = modelData.AIFS?.hourly?.precipitation || [];
-    const gemPrecip = modelData.GEM?.hourly?.precipitation || [];
-    const hrrrPrecip = modelData.HRRR?.hourly?.precipitation || [];
-    const namPrecip = modelData.NAM?.hourly?.precipitation || [];
-    const rgemPrecip = modelData.RGEM?.hourly?.precipitation || [];
-    
-    
-    
     // Sample every 3 hours for cleaner charts
     const sampledTimes = times.filter((_, i) => i % 3 === 0);
     const sampledGfsTemp = gfsTemp.filter((_, i) => i % 3 === 0);
@@ -411,78 +391,6 @@ function displayModelComparison(modelData) {
     const sampledHrrrTemp = hrrrTemp.filter((_, i) => i % 3 === 0);
     const sampledNamTemp = namTemp.filter((_, i) => i % 3 === 0);
     const sampledRgemTemp = rgemTemp.filter((_, i) => i % 3 === 0);
-    
-    
-
-    // Sample 925 mb
-    const sampledGfsTemp925 = gfsTemp925.filter((_, i) => i % 3 === 0);
-    const sampledIconTemp925 = iconTemp925.filter((_, i) => i % 3 === 0);
-    const sampledEcmwfTemp925 = ecmwfTemp925.filter((_, i) => i % 3 === 0);
-    const sampledAifsTemp925 = aifsTemp925.filter((_, i) => i % 3 === 0);
-    const sampledGemTemp925 = gemTemp925.filter((_, i) => i % 3 === 0);
-    const sampledHrrrTemp925 = hrrrTemp925.filter((_, i) => i % 3 === 0);
-    const sampledNamTemp925 = namTemp925.filter((_, i) => i % 3 === 0);
-    const sampledRgemTemp925 = rgemTemp925.filter((_, i) => i % 3 === 0);
-    
-    
-
-    // Sample 850 mb
-    const sampledGfsTemp850 = gfsTemp850.filter((_, i) => i % 3 === 0);
-    const sampledIconTemp850 = iconTemp850.filter((_, i) => i % 3 === 0);
-    const sampledEcmwfTemp850 = ecmwfTemp850.filter((_, i) => i % 3 === 0);
-    const sampledAifsTemp850 = aifsTemp850.filter((_, i) => i % 3 === 0);
-    const sampledGemTemp850 = gemTemp850.filter((_, i) => i % 3 === 0);
-    const sampledHrrrTemp850 = hrrrTemp850.filter((_, i) => i % 3 === 0);
-    const sampledNamTemp850 = namTemp850.filter((_, i) => i % 3 === 0);
-    const sampledRgemTemp850 = rgemTemp850.filter((_, i) => i % 3 === 0);
-    
-    
-
-    const sampledGfsPrecip = gfsPrecip.filter((_, i) => i % 3 === 0);
-    const sampledIconPrecip = iconPrecip.filter((_, i) => i % 3 === 0);
-    const sampledEcmwfPrecip = ecmwfPrecip.filter((_, i) => i % 3 === 0);
-    const sampledAifsPrecip = aifsPrecip.filter((_, i) => i % 3 === 0);
-    const sampledGemPrecip = gemPrecip.filter((_, i) => i % 3 === 0);
-    const sampledHrrrPrecip = hrrrPrecip.filter((_, i) => i % 3 === 0);
-    const sampledNamPrecip = namPrecip.filter((_, i) => i % 3 === 0);
-    const sampledRgemPrecip = rgemPrecip.filter((_, i) => i % 3 === 0);
-    
-    
-
-    // Select level arrays
-    const arr = (currentTempLevel === '925') 
-        ? {
-            GFS: sampledGfsTemp925, 
-            ICON: sampledIconTemp925, 
-            ECMWF: sampledEcmwfTemp925, 
-            AIFS: sampledAifsTemp925, 
-            GEM: sampledGemTemp925,
-            HRRR: sampledHrrrTemp925, 
-            NAM: sampledNamTemp925, 
-            RGEM: sampledRgemTemp925
-        } 
-        : (currentTempLevel === '850') 
-        ? {
-            GFS: sampledGfsTemp850, 
-            ICON: sampledIconTemp850, 
-            ECMWF: sampledEcmwfTemp850, 
-            AIFS: sampledAifsTemp850, 
-            GEM: sampledGemTemp850,
-            HRRR: sampledHrrrTemp850, 
-            NAM: sampledNamTemp850, 
-            RGEM: sampledRgemTemp850
-        } 
-        : {
-            GFS: sampledGfsTemp, 
-            ICON: sampledIconTemp, 
-            ECMWF: sampledEcmwfTemp, 
-            AIFS: sampledAifsTemp, 
-            GEM: sampledGemTemp,
-            HRRR: sampledHrrrTemp, 
-            NAM: sampledNamTemp, 
-            RGEM: sampledRgemTemp
-        };
-    
     // Format time labels
     const labels = sampledTimes.map(t => {
         const date = new Date(t);
@@ -493,137 +401,85 @@ function displayModelComparison(modelData) {
         labelsCount: labels.length,
         selectedModels: Array.from(selectedModels),
         datasetCounts: {
-            GFS: arr.GFS?.length,
-            ICON: arr.ICON?.length,
-            ECMWF: arr.ECMWF?.length,
-            GEM: arr.GEM?.length
+            GFS: sampledGfsTemp?.length,
+            ICON: sampledIconTemp?.length,
+            ECMWF: sampledEcmwfTemp?.length,
+            GEM: sampledGemTemp?.length
         }
     });
     
     // Update chart title with temperature level
     const tempLevelLabel = currentTempLevel === '925' ? '925 mb' : currentTempLevel === '850' ? '850 mb' : 'Surface (2m)';
-    document.getElementById('chartTitle').innerHTML = `<i class="fas fa-temperature-high"></i> Model Comparison — Temperature: ${tempLevelLabel}`;
-    
+    document.getElementById('chartTitle').innerHTML = `<i class='fas fa-temperature-high'></i> Model Comparison — Temperature: ${tempLevelLabel}`;
     // Create temperature chart
     if (tempChart) tempChart.destroy();
     const tempCtx = document.getElementById('tempChart').getContext('2d');
     const globalTempDatasets = [
-        { label: 'GFS', data: arr.GFS, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
-        { label: 'ICON', data: arr.ICON, borderColor: '#ffc107', backgroundColor: 'rgba(255, 193, 7, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
-        { label: 'ECMWF', data: arr.ECMWF, borderColor: '#198754', backgroundColor: 'rgba(25, 135, 84, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
-        { label: 'AIFS', data: arr.AIFS, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
-        { label: 'GEM', data: arr.GEM, borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 }
+        { label: 'GFS', data: sampledGfsTemp, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
+        { label: 'ICON', data: sampledIconTemp, borderColor: '#ffc107', backgroundColor: 'rgba(255, 193, 7, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
+        { label: 'ECMWF', data: sampledEcmwfTemp, borderColor: '#198754', backgroundColor: 'rgba(25, 135, 84, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
+        { label: 'AIFS', data: sampledAifsTemp, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
+        { label: 'GEM', data: sampledGemTemp, borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 }
     ];
     const regionalTempDatasets = [
-        { label: 'HRRR', data: arr.HRRR, borderColor: '#6610f2', backgroundColor: 'rgba(102, 16, 242, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 },
-        { label: 'NAM', data: arr.NAM, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 },
-        { label: 'RGEM', data: arr.RGEM, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 }
+        { label: 'HRRR', data: sampledHrrrTemp, borderColor: '#6610f2', backgroundColor: 'rgba(102, 16, 242, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 },
+        { label: 'NAM', data: sampledNamTemp, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 },
+        { label: 'RGEM', data: sampledRgemTemp, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 }
     ];
     const tempDatasetsAll = globalTempDatasets.concat(regionalTempDatasets);
-    // Filter out datasets with no valid data and only include selected models
     const tempDatasets = tempDatasetsAll.filter(ds => selectedModels.has(ds.label) && hasValidData(ds.data));
-    
-    // Prepare precipitation datasets with bar type and right y-axis
-    const globalPrecipDatasets = [
-        { label: 'GFS Precip', data: sampledGfsPrecip, backgroundColor: 'rgba(13, 110, 253, 0.4)', type: 'bar', yAxisID: 'y1' },
-        { label: 'ICON Precip', data: sampledIconPrecip, backgroundColor: 'rgba(255, 193, 7, 0.4)', type: 'bar', yAxisID: 'y1' },
-        { label: 'ECMWF Precip', data: sampledEcmwfPrecip, backgroundColor: 'rgba(25, 135, 84, 0.4)', type: 'bar', yAxisID: 'y1' },
-        { label: 'AIFS Precip', data: sampledAifsPrecip, backgroundColor: 'rgba(13, 202, 240, 0.4)', type: 'bar', yAxisID: 'y1' },
-        { label: 'GEM Precip', data: sampledGemPrecip, backgroundColor: 'rgba(220, 53, 69, 0.4)', type: 'bar', yAxisID: 'y1' }
+        { label: 'RGEM', data: sampledRgemTemp, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5] }
     ];
-    const regionalPrecipDatasets = [
-        { label: 'HRRR Precip', data: sampledHrrrPrecip, backgroundColor: 'rgba(102, 16, 242, 0.4)', type: 'bar', yAxisID: 'y1' },
-        { label: 'NAM Precip', data: sampledNamPrecip, backgroundColor: 'rgba(32, 201, 151, 0.4)', type: 'bar', yAxisID: 'y1' },
-        { label: 'RGEM Precip', data: sampledRgemPrecip, backgroundColor: 'rgba(108, 117, 125, 0.4)', type: 'bar', yAxisID: 'y1' }
-    ];
-    const precipDatasetsAll = globalPrecipDatasets.concat(regionalPrecipDatasets);
-    // Filter out precipitation datasets with no valid data and only include selected models
-    const precipDatasets = precipDatasetsAll.filter(ds => {
-        const modelName = ds.label.replace(' Precip', '');
-        return selectedModels.has(modelName) && hasValidData(ds.data);
-    });
-    
-    // Combine temperature and precipitation datasets
-    const combinedDatasets = tempDatasets.concat(precipDatasets);
-    
-    console.log('Creating chart with datasets:', combinedDatasets.length, 'datasets');
-    console.log('First few datasets:', combinedDatasets.slice(0, 3).map(d => ({
-        label: d.label,
-        dataLength: d.data?.length,
-        hasData: hasValidData(d.data),
-        sampleValues: d.data?.slice(0, 3)
-    })));
-    
+    const tempDatasetsAll = globalTempDatasets.concat(regionalTempDatasets);
+    const tempDatasets = tempDatasetsAll.filter(ds => selectedModels.has(ds.label));
+>>>>>>> e3a8b9efac21bfc53ab60e2bad1196fa0b4a416e
     tempChart = new Chart(tempCtx, {
         type: 'line',
-        data: { labels: labels, datasets: combinedDatasets },
+        data: { labels: labels, datasets: tempDatasets },
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            spanGaps: true, // This allows the chart to skip over null values
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                },
-                annotation: {
-                    annotations: {
-                        freezingLine: {
-                            type: 'line',
-                            yMin: 32,
-                            yMax: 32,
-                            borderColor: 'rgb(0, 150, 255)',
-                            borderWidth: 2,
-                            borderDash: [6, 6]
-                        }
-                    }
-                }
+            spanGaps: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { 
+                legend: { position: 'top' }, 
+                tooltip: {}, 
+                annotation: { annotations: {} } 
             },
-            scales: {
-                y: {
+            scales: { 
+                y: { 
                     type: 'linear',
                     position: 'left',
-                    title: {
-                        display: true,
-                        text: 'Temperature (°F)'
-                    }
+                    title: { display: true, text: 'Temperature (°F)' } 
                 },
                 y1: {
                     type: 'linear',
                     position: 'right',
-                    title: {
-                        display: true,
-                        text: 'Precipitation (inches)'
-                    },
-                    grid: {
-                        drawOnChartArea: false
-                    }
+                    title: { display: true, text: 'Precipitation (inches)' },
+                    grid: { drawOnChartArea: false }
                 }
             }
         }
     });
-    // Detailed Comparison Table removed: no table population
+}
+function cardClick(event) {
+    if (event.target.classList.contains('model-select-checkbox')) {
+        return;
+    }
+    const card = event.currentTarget;
+    const modelName = card.dataset.model;
+    showModelDetails(modelName);
 }
 
-function changeTempLevel() {
-    const select = document.getElementById('tempLevelSelect');
-    currentTempLevel = select.value;
-    if (currentModelData) {
-        displayModelComparison(currentModelData);
-    }
+function showModelDetails(modelName) {
+    window.location.href = `/models/${encodeURIComponent(modelName)}/`;
 }
 
 function onModelSelectionChange() {
     if (currentModelData) displayModelComparison(currentModelData);
 }
 
-// Auto-load first location on page load
 document.addEventListener('DOMContentLoaded', function() {
-    // Default selection: 4 globals GFS, ICON, ECMWF, GEM
     const defaults = new Set(['GFS','ICON','ECMWF','GEM']);
     document.querySelectorAll('.model-select-checkbox').forEach(cb => {
         cb.checked = defaults.has(cb.dataset.model);
@@ -635,13 +491,11 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Check if we have custom coordinates in URL (from map selection)
     const urlParams = new URLSearchParams(window.location.search);
     const customLat = urlParams.get('latitude');
     const customLon = urlParams.get('longitude');
     
     if (customLat && customLon) {
-        // Add custom location option
         const option = document.createElement('option');
         option.value = 'custom';
         option.dataset.lat = customLat;
@@ -651,36 +505,11 @@ document.addEventListener('DOMContentLoaded', function() {
         locationSelect.appendChild(option);
         loadModelData();
     } else if (locationSelect.options && locationSelect.options.length > 1) {
-        locationSelect.selectedIndex = 1; // Select first actual location (skip "Choose a location...")
+        locationSelect.selectedIndex = 1;
         loadModelData();
     }
 });
-
-function openModelDetails(modelName) {
-    const locationSelect = document.getElementById('locationSelect');
-    const forecastDays = document.getElementById('forecastDays').value;
-    if (!locationSelect || locationSelect.selectedIndex < 1) {
-        alert('Select a location first.');
-        return;
-    }
-    const opt = locationSelect.options[locationSelect.selectedIndex];
-    const lat = opt.dataset.lat;
-    const lon = opt.dataset.lon;
-    const url = `/models/${modelName}/?latitude=${lat}&longitude=${lon}&forecast_days=${forecastDays}`;
-    window.location = url;
-}
-
-function cardClick(e) {
-    // Prevent navigation when clicking the checkbox directly
-    if (e.target && e.target.matches('input.model-select-checkbox')) return;
-    const card = e.currentTarget;
-    const model = card.getAttribute('data-model');
-    if (model) openModelDetails(model);
-}
 </script>
-
-<!-- Include location picker map component -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-{% include "weather/components/location_picker_map.html" %}
-
 {% endblock %}
+
+

@@ -674,9 +674,13 @@ class LocationViewSet(viewsets.ModelViewSet):
 
             # Create new forecasts
             for period in periods[:14]:  # Get up to 14 periods (7 days)
-                raw_start = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00"))
+                raw_start = datetime.fromisoformat(
+                    period["startTime"].replace("Z", "+00:00")
+                )
                 local_start = raw_start.astimezone(timezone.get_current_timezone())
-                raw_end = datetime.fromisoformat(period["endTime"].replace("Z", "+00:00"))
+                raw_end = datetime.fromisoformat(
+                    period["endTime"].replace("Z", "+00:00")
+                )
                 local_end = raw_end.astimezone(timezone.get_current_timezone())
                 DailyForecast.objects.create(
                     location=location,
@@ -1420,15 +1424,17 @@ class DashboardView(TemplateView):
                 :8
             ]
         )
-        
+
         # Ensure forecasts and current conditions for displayed locations
         for location in locations:
             # Check if we need to refresh data (older than 1 hour or no data)
             needs_refresh = (
-                location.last_forecast_update is None or 
-                (timezone.now() - location.last_forecast_update > timedelta(hours=1)) or
-                location.last_observation_time is None or
-                (timezone.now() - location.last_observation_time > timedelta(hours=1))
+                location.last_forecast_update is None
+                or (timezone.now() - location.last_forecast_update > timedelta(hours=1))
+                or location.last_observation_time is None
+                or (
+                    timezone.now() - location.last_observation_time > timedelta(hours=1)
+                )
             )
             if needs_refresh:
                 try:
@@ -1521,11 +1527,22 @@ class ModelsView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Get all active locations for the selector
         location_ids = self.request.session.get("location_ids", [])
-        context["locations"] = Location.objects.filter(
+        locations_qs = Location.objects.filter(
             is_active=True, id__in=location_ids
         ).order_by("-is_current_location", "display_order", "name")
+        locations = list(locations_qs)
+        context["locations"] = locations
+        # Default to current location if no location is set
+        current_location = next(
+            (loc for loc in locations if getattr(loc, "is_current_location", False)),
+            None,
+        )
+        context["default_location_id"] = (
+            current_location.id
+            if current_location
+            else (locations[0].id if locations else None)
+        )
         context["page_title"] = "Weather Models"
         return context
 
@@ -1606,16 +1623,22 @@ class TempLocationView(TemplateView):
             try:
                 observation_stations_url = properties.get("observationStations")
                 if observation_stations_url:
-                    stations_response = requests.get(observation_stations_url, headers=headers, timeout=10)
+                    stations_response = requests.get(
+                        observation_stations_url, headers=headers, timeout=10
+                    )
                     stations_response.raise_for_status()
                     stations_data = stations_response.json()
 
                     stations = stations_data.get("features", [])
                     if stations:
-                        station_id = stations[0].get("properties", {}).get("stationIdentifier")
+                        station_id = (
+                            stations[0].get("properties", {}).get("stationIdentifier")
+                        )
                         if station_id:
                             obs_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
-                            obs_response = requests.get(obs_url, headers=headers, timeout=10)
+                            obs_response = requests.get(
+                                obs_url, headers=headers, timeout=10
+                            )
                             obs_response.raise_for_status()
                             obs_data = obs_response.json()
 
@@ -1624,36 +1647,61 @@ class TempLocationView(TemplateView):
                             if temp_c:
                                 location.current_temp = int(temp_c * 9 / 5 + 32)
 
-                            location.current_conditions = obs_props.get("textDescription", "")
+                            location.current_conditions = obs_props.get(
+                                "textDescription", ""
+                            )
 
-                            humidity = obs_props.get("relativeHumidity", {}).get("value")
+                            humidity = obs_props.get("relativeHumidity", {}).get(
+                                "value"
+                            )
                             if humidity:
                                 location.current_humidity = int(humidity)
 
                             wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
                             if wind_speed_kmh is not None:
-                                location.current_wind_speed = int(wind_speed_kmh * 0.621371)
+                                location.current_wind_speed = int(
+                                    wind_speed_kmh * 0.621371
+                                )
 
                             wind_gust_kmh = obs_props.get("windGust", {}).get("value")
                             if wind_gust_kmh is not None:
-                                location.current_wind_gust = int(wind_gust_kmh * 0.621371)
+                                location.current_wind_gust = int(
+                                    wind_gust_kmh * 0.621371
+                                )
 
-                            wind_dir_deg = obs_props.get("windDirection", {}).get("value")
+                            wind_dir_deg = obs_props.get("windDirection", {}).get(
+                                "value"
+                            )
                             if wind_dir_deg is not None:
                                 deg = float(wind_dir_deg)
-                                directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-                                location.current_wind_direction = directions[int((deg + 22.5) / 45) % 8]
+                                directions = [
+                                    "N",
+                                    "NE",
+                                    "E",
+                                    "SE",
+                                    "S",
+                                    "SW",
+                                    "W",
+                                    "NW",
+                                ]
+                                location.current_wind_direction = directions[
+                                    int((deg + 22.5) / 45) % 8
+                                ]
 
                             timestamp = obs_props.get("timestamp")
                             if timestamp:
-                                location.last_observation_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                                location.last_observation_time = datetime.fromisoformat(
+                                    timestamp.replace("Z", "+00:00")
+                                )
             except Exception as e:
                 print(f"Warning: Could not fetch current conditions: {str(e)}")
 
             # Get forecast URL
             forecast_url = properties.get("forecast")
             if forecast_url:
-                forecast_response = requests.get(forecast_url, headers=headers, timeout=10)
+                forecast_response = requests.get(
+                    forecast_url, headers=headers, timeout=10
+                )
                 forecast_response.raise_for_status()
                 forecast_data = forecast_response.json()
 
@@ -1661,23 +1709,33 @@ class TempLocationView(TemplateView):
 
                 # Parse periods into daily forecast objects
                 for period in periods[:14]:
-                    raw_start = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00"))
+                    raw_start = datetime.fromisoformat(
+                        period["startTime"].replace("Z", "+00:00")
+                    )
                     local_start = raw_start.astimezone(timezone.get_current_timezone())
-                    raw_end = datetime.fromisoformat(period["endTime"].replace("Z", "+00:00"))
+                    raw_end = datetime.fromisoformat(
+                        period["endTime"].replace("Z", "+00:00")
+                    )
                     local_end = raw_end.astimezone(timezone.get_current_timezone())
-                    daily_forecasts.append(SimpleNamespace(
-                        forecast_date=local_start.date(),
-                        period_start=local_start,
-                        period_end=local_end,
-                        is_daytime=period.get("isDaytime", True),
-                        temperature=period.get("temperature"),
-                        temperature_unit=period.get("temperatureUnit", "F"),
-                        wind_speed=self._parse_wind_speed(period.get("windSpeed", "")),
-                        wind_direction=period.get("windDirection", ""),
-                        short_forecast=period.get("shortForecast", ""),
-                        detailed_forecast=period.get("detailedForecast", ""),
-                        precipitation_probability=period.get("probabilityOfPrecipitation", {}).get("value"),
-                    ))
+                    daily_forecasts.append(
+                        SimpleNamespace(
+                            forecast_date=local_start.date(),
+                            period_start=local_start,
+                            period_end=local_end,
+                            is_daytime=period.get("isDaytime", True),
+                            temperature=period.get("temperature"),
+                            temperature_unit=period.get("temperatureUnit", "F"),
+                            wind_speed=self._parse_wind_speed(
+                                period.get("windSpeed", "")
+                            ),
+                            wind_direction=period.get("windDirection", ""),
+                            short_forecast=period.get("shortForecast", ""),
+                            detailed_forecast=period.get("detailedForecast", ""),
+                            precipitation_probability=period.get(
+                                "probabilityOfPrecipitation", {}
+                            ).get("value"),
+                        )
+                    )
 
             # Fetch alerts
             try:
@@ -1697,15 +1755,17 @@ class TempLocationView(TemplateView):
                     if expires:
                         expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
 
-                    active_alerts.append(SimpleNamespace(
-                        event=props.get("event", "Unknown"),
-                        headline=props.get("headline", ""),
-                        description=props.get("description", ""),
-                        severity=props.get("severity", "unknown").lower(),
-                        urgency=props.get("urgency", "unknown").lower(),
-                        onset=onset,
-                        expires=expires,
-                    ))
+                    active_alerts.append(
+                        SimpleNamespace(
+                            event=props.get("event", "Unknown"),
+                            headline=props.get("headline", ""),
+                            description=props.get("description", ""),
+                            severity=props.get("severity", "unknown").lower(),
+                            urgency=props.get("urgency", "unknown").lower(),
+                            onset=onset,
+                            expires=expires,
+                        )
+                    )
             except Exception as e:
                 print(f"Warning: Failed to fetch alerts: {str(e)}")
 
@@ -1717,11 +1777,17 @@ class TempLocationView(TemplateView):
         # Group daily forecasts by date
         grouped_forecasts = []
         if daily_forecasts:
-            for date, periods in groupby(daily_forecasts, key=lambda f: f.forecast_date):
+            for date, periods in groupby(
+                daily_forecasts, key=lambda f: f.forecast_date
+            ):
                 periods_list = list(periods)
                 day_forecast = next((p for p in periods_list if p.is_daytime), None)
-                night_forecast = next((p for p in periods_list if not p.is_daytime), None)
-                grouped_forecasts.append({"date": date, "day": day_forecast, "night": night_forecast})
+                night_forecast = next(
+                    (p for p in periods_list if not p.is_daytime), None
+                )
+                grouped_forecasts.append(
+                    {"date": date, "day": day_forecast, "night": night_forecast}
+                )
 
         context["location"] = location
         context["latitude"] = lat
@@ -1741,7 +1807,9 @@ class TempLocationView(TemplateView):
             locations_qs = Location.objects.filter(is_active=True)
             if location_ids:
                 locations_qs = locations_qs.filter(id__in=location_ids)
-            context["locations"] = locations_qs.order_by("-is_current_location", "display_order", "name")
+            context["locations"] = locations_qs.order_by(
+                "-is_current_location", "display_order", "name"
+            )
         except Exception:
             context["locations"] = Location.objects.none()
 
@@ -1753,6 +1821,7 @@ class TempLocationView(TemplateView):
         if not wind_speed_str:
             return 0
         import re
+
         numbers = re.findall(r"\d+", str(wind_speed_str))
         if numbers:
             if len(numbers) > 1:
@@ -1769,23 +1838,55 @@ class ModelDetailView(TemplateView):
     # Supported model configurations (subset, HRDPS removed)
     MODEL_CONFIGS = {
         # max_days chosen to reflect typical availability from Open-Meteo for each model
-        "GFS": {"url": "https://api.open-meteo.com/v1/gfs", "models": None, "max_days": 16},
-        "ICON": {"url": "https://api.open-meteo.com/v1/dwd-icon", "models": None, "max_days": 7},
-        "ECMWF": {"url": "https://api.open-meteo.com/v1/ecmwf", "models": None, "max_days": 10},
-        "AIFS": {"url": "https://api.open-meteo.com/v1/ecmwf", "models": "ecmwf_aifs025", "max_days": 10},
-        "GEM": {"url": "https://api.open-meteo.com/v1/gem", "models": None, "max_days": 10},
-        "HRRR": {"url": "https://api.open-meteo.com/v1/forecast", "models": "ncep_hrrr_conus", "max_days": 2},
-        "NAM": {"url": "https://api.open-meteo.com/v1/forecast", "models": "ncep_nam_conus", "max_days": 3},
-        "RGEM": {"url": "https://api.open-meteo.com/v1/gem", "models": "cmc_gem_rdps", "max_days": 2},
+        "GFS": {
+            "url": "https://api.open-meteo.com/v1/gfs",
+            "models": None,
+            "max_days": 16,
+        },
+        "ICON": {
+            "url": "https://api.open-meteo.com/v1/dwd-icon",
+            "models": None,
+            "max_days": 7,
+        },
+        "ECMWF": {
+            "url": "https://api.open-meteo.com/v1/ecmwf",
+            "models": None,
+            "max_days": 10,
+        },
+        "AIFS": {
+            "url": "https://api.open-meteo.com/v1/ecmwf",
+            "models": "ecmwf_aifs025",
+            "max_days": 10,
+        },
+        "GEM": {
+            "url": "https://api.open-meteo.com/v1/gem",
+            "models": None,
+            "max_days": 10,
+        },
+        "HRRR": {
+            "url": "https://api.open-meteo.com/v1/forecast",
+            "models": "ncep_hrrr_conus",
+            "max_days": 2,
+        },
+        "NAM": {
+            "url": "https://api.open-meteo.com/v1/forecast",
+            "models": "ncep_nam_conus",
+            "max_days": 3,
+        },
+        "RGEM": {
+            "url": "https://api.open-meteo.com/v1/gem",
+            "models": "cmc_gem_rdps",
+            "max_days": 2,
+        },
     }
 
     EXTENDED_HOURLY = (
         # Temperatures (include higher pressure levels; interpolate pseudo 650/550/450 later)
-        "temperature_2m,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,apparent_temperature,"\
+        "temperature_2m,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,apparent_temperature,"
         # Humidity
-        "relativehumidity_2m,relativehumidity_925hPa,relativehumidity_850hPa,relativehumidity_700hPa,relativehumidity_500hPa,"\
+        "relativehumidity_2m,relativehumidity_925hPa,relativehumidity_850hPa,relativehumidity_700hPa,relativehumidity_500hPa,"
         # Other surface / diagnostic fields
-        "dewpoint_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"\
+        "dewpoint_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
         # Precipitation & cloud
         "precipitation,snowfall,cloudcover,pressure_msl"
     )
@@ -1857,7 +1958,9 @@ class ModelDetailView(TemplateView):
             }
 
             try:
-                resp = requests.get(config["url"], params=params, headers=headers, timeout=30)
+                resp = requests.get(
+                    config["url"], params=params, headers=headers, timeout=30
+                )
                 resp.raise_for_status()
                 data = resp.json()
                 # Determine run time from first hourly time
@@ -1872,6 +1975,7 @@ class ModelDetailView(TemplateView):
             error = "Latitude/longitude not provided and no fallback location available"
 
         import json
+
         context.update(
             {
                 "model_name": model_name,
@@ -2303,7 +2407,9 @@ class LocationDetailView(DetailView):
             locations_qs = Location.objects.filter(is_active=True)
             if location_ids:
                 locations_qs = locations_qs.filter(id__in=location_ids)
-            context["locations"] = locations_qs.order_by("-is_current_location", "display_order", "name")
+            context["locations"] = locations_qs.order_by(
+                "-is_current_location", "display_order", "name"
+            )
         except Exception:
             # Fallback: empty list if any error occurs
             context["locations"] = Location.objects.none()
@@ -2428,7 +2534,7 @@ class ForecastListView(ListView):
                     ).exists()
                     if not has_after:
                         _refresh_forecasts_for_location(loc)
-        
+
         # Filter forecasts by session location_ids to match location list
         # Also include current location even if not in session
         qs = DailyForecast.objects.select_related("location").filter(
