@@ -1543,6 +1543,10 @@ class ModelsView(TemplateView):
             if current_location
             else (locations[0].id if locations else None)
         )
+        # Include climate normals for the current location
+        if current_location:
+            context["avg_high_temp"] = current_location.avg_high_temp
+            context["avg_low_temp"] = current_location.avg_low_temp
         context["page_title"] = "Weather Models"
         return context
 

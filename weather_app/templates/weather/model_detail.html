@@ -102,7 +102,7 @@
   const t925 = every3(hourly.temperature_925hPa||[]);
   const t850 = every3(hourly.temperature_850hPa||[]);
   const t700 = every3(hourly.temperature_700hPa||[]);
-  const tempLabels = every3(hourly.time||[]).map(t=>{const d=new Date(t);return d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit'})});
+  const tempLabels = every3(hourly.time||[]).map(t=>{const d=new Date(t);return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit'})});
   
   // Calculate stats - filter out null/undefined values
   const allTemps = (hourly.temperature_2m || []).filter(t => t !== null && t !== undefined && !isNaN(t));
@@ -132,7 +132,119 @@
   
   tempDatasets.push({label:'Apparent',data:apparent,borderColor:'#ff6b6b',backgroundColor:'rgba(255,107,107,.12)',tension:.3,borderDash:[4,4]});
   
-  window.tempDetailChart = new Chart(tempCtx,{type:'line',data:{labels:tempLabels,datasets:tempDatasets},options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top'},tooltip:{},annotation:{annotations:{freezingLine:{type:'line',yMin:32,yMax:32,borderColor:'rgba(0,150,255,0.8)',borderWidth:2,borderDash:[6,6],label:{enabled:true,content:'32°F Freeze',position:'start',backgroundColor:'rgba(0,150,255,0.15)',color:'#003f5c',padding:4,font:{style:'bold',size:11}}}}}},scales:{y:{title:{display:true,text:'Temperature (°F)'}}}}});
+  // Fetch climate normals from API instead of using forecast data range
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentLat = urlParams.get('latitude');
+  const currentLon = urlParams.get('longitude');
+  
+  let avgHighTemp = null;
+  let avgLowTemp = null;
+  
+  // Function to create/update chart with climate normals
+  function createTempChart(highTemp, lowTemp) {
+    // Destroy previous chart if it exists and is a valid Chart.js instance
+    if(window.tempDetailChart && typeof window.tempDetailChart.destroy === 'function') {
+      window.tempDetailChart.destroy();
+    }
+    
+    const annotations = {
+      freezingLine:{
+        type:'line',
+        yMin:32,
+        yMax:32,
+        borderColor:'#000000',
+        borderWidth:2,
+        borderDash:[5,5],
+        label:{enabled:true,content:'32°F Freeze',position:'start',backgroundColor:'rgba(0,0,0,0.1)',color:'#000000',padding:4,font:{weight:'bold',size:11}}
+      }
+    };
+    
+    if(highTemp !== null) {
+      annotations.averageHighLine = {
+        type:'line',
+        yMin:highTemp,
+        yMax:highTemp,
+        borderColor:'#dc3545',
+        borderWidth:2,
+        borderDash:[5,5],
+        label:{enabled:true,content:'Avg High',position:'start'}
+      };
+    }
+    
+    if(lowTemp !== null) {
+      annotations.averageLowLine = {
+        type:'line',
+        yMin:lowTemp,
+        yMax:lowTemp,
+        borderColor:'#0dcaf0',
+        borderWidth:2,
+        borderDash:[5,5],
+        label:{enabled:true,content:'Avg Low',position:'start'}
+      };
+    }
+    
+    window.tempDetailChart = new Chart(tempCtx,{
+      type:'line',
+      data:{labels:tempLabels,datasets:tempDatasets},
+      options:{
+        responsive:true,
+        interaction:{mode:'index',intersect:false},
+        plugins:{
+          legend:{position:'top'},
+          tooltip:{},
+          annotation:{annotations:annotations}
+        },
+        scales:{y:{title:{display:true,text:'Temperature (°F)'}}}
+      }
+    });
+  }
+  
+  // Try to fetch climate normals from API
+  if(currentLat && currentLon) {
+    // First try to get location_id from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    let locationIdToFetch = urlParams.get('location_id');
+    
+    // If not in URL, try to get from the dropdown
+    if(!locationIdToFetch || locationIdToFetch === 'custom') {
+      const locationSelect = document.getElementById('detailLocationSelect');
+      if(locationSelect && locationSelect.options && locationSelect.options.length > 0) {
+        const selected = locationSelect.options[locationSelect.selectedIndex];
+        if(selected && selected.value && selected.value !== '' && selected.value !== 'custom') {
+          locationIdToFetch = selected.value;
+        }
+      }
+    }
+    
+    // If we have a valid location_id, fetch climate normals
+    if(locationIdToFetch && locationIdToFetch !== 'custom') {
+      console.log('model_detail: Fetching climate normals for location_id:', locationIdToFetch);
+      fetch(`/api/climate-normals/?location_id=${locationIdToFetch}`)
+        .then(r => r.json())
+        .then(data => {
+          console.log('model_detail: Climate normals response:', data);
+          if((data.status === 'success' || data.status === 'cached') && data.avg_high_temp !== null && data.avg_low_temp !== null) {
+            avgHighTemp = data.avg_high_temp;
+            avgLowTemp = data.avg_low_temp;
+            console.log('model_detail: Creating chart with climate normals:', {avgHighTemp, avgLowTemp});
+            createTempChart(avgHighTemp, avgLowTemp);
+          } else {
+            console.log('model_detail: No valid climate normals, creating basic chart');
+            createTempChart(null, null);
+          }
+        })
+        .catch(e => {
+          console.warn('model_detail: Could not fetch climate normals:', e);
+          createTempChart(null, null);
+        });
+    } else {
+      console.log('model_detail: No valid location to fetch normals for, creating basic chart');
+      createTempChart(null, null);
+    }
+  } else {
+    console.log('model_detail: No coordinates in URL, creating basic chart');
+    createTempChart(null, null);
+  }
 
   // Humidity + period precipitation chart
   const rh2m = every3(hourly.relativehumidity_2m||[]);
@@ -332,11 +444,16 @@ document.addEventListener('DOMContentLoaded', function(){
     if(!opt || !opt.dataset.lat) return;
     const lat = opt.dataset.lat;
     const lon = opt.dataset.lon;
+    const locationId = opt.value; // Get the location ID from the option
     const selectedModel = modelSel ? modelSel.value : '{{ model_name }}';
     rebuildDayOptions(selectedModel);
     const days = ensureDaysWithinModel(selectedModel);
     const base = `/models/${selectedModel}/`;
-    const url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
+    // Include location_id in the URL if it's a saved location (not 'custom')
+    let url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
+    if(locationId && locationId !== 'custom') {
+      url += `&location_id=${locationId}`;
+    }
     window.location = url;
   }
   
