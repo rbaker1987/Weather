@@ -4,6 +4,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import views
+from .api.climate_normals_api import ClimateNormalsAPIView
 from .api.hourly_forecast_api import HourlyForecastForLocationAPIView
 from .api.model_comparison_api import ModelComparisonAPIView
 from .api.summarize_api import SummarizeForecastAPIView
@@ -43,6 +44,11 @@ urlpatterns = [
         ModelComparisonAPIView.as_view(),
         name="model-comparison",
     ),
+    path(
+        "api/climate-normals/",
+        ClimateNormalsAPIView.as_view(),
+        name="climate-normals",
+    ),
     # Web interface
     path("", views.DashboardView.as_view(), name="dashboard"),
     path("locations/", views.LocationListView.as_view(), name="location-list"),
@@ -55,7 +61,9 @@ urlpatterns = [
     path("forecasts/", views.ForecastListView.as_view(), name="forecast-list"),
     path("alerts/", views.AlertListView.as_view(), name="alert-list"),
     path("models/", views.ModelsView.as_view(), name="models"),
-    path("models/<str:model_name>/", views.ModelDetailView.as_view(), name="model-detail"),
+    path(
+        "models/<str:model_name>/", views.ModelDetailView.as_view(), name="model-detail"
+    ),
     # DRF browsable API
     path("api-auth/", include("rest_framework.urls")),
 ]

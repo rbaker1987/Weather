@@ -150,9 +150,9 @@
 
 <!-- Comparison Results -->
 <div id="modelResults" style="display: none;">
-    <!-- Temperature Comparison Chart -->
+    <!-- Temperature and Precipitation Comparison Chart -->
     <div class="chart-container">
-        <h4 class="mb-3" id="chartTitle"><i class="fas fa-temperature-high"></i> Model Comparison</h4>
+        <h4 class="mb-3" id="chartTitle"><i class="fas fa-temperature-high"></i> Model Comparison — Temperature & Precipitation</h4>
         <canvas id="tempChart" height="80"></canvas>
     </div>
 
@@ -198,7 +198,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script>
 let tempChart = null;
-let precipChart = null;
 let currentModelData = null;
 let currentTempLevel = 'surface';
 
@@ -236,6 +235,28 @@ async function loadModelData() {
     }
     const lat = selectedOption.dataset.lat;
     const lon = selectedOption.dataset.lon;
+    const locationId = selectedOption.value;
+
+    // Fetch climate normals for this location if not already set
+    if (locationId !== 'custom') {
+        console.log(`Fetching climate normals for location ${locationId}`);
+        fetch(`/api/climate-normals/?location_id=${locationId}`)
+            .then(r => {
+                console.log(`Climate normals API response status: ${r.status}`);
+                return r.json();
+            })
+            .then(data => {
+                console.log('Climate normals API response:', data);
+                if (data.status === 'success' || data.status === 'cached') {
+                    console.log('Climate normals updated, refreshing chart');
+                    window.updateClimateNormals && window.updateClimateNormals();
+                } else {
+                    console.warn('Climate normals API returned non-success status:', data.status);
+                }
+            })
+            .catch(e => console.warn('Could not fetch climate normals:', e));
+    }
+
     // Get all available models from the model cards
     const modelCards = document.querySelectorAll('.model-card[data-model]');
     const models = Array.from(modelCards).map(card => card.dataset.model).join(',');
@@ -250,37 +271,12 @@ async function loadModelData() {
         if (!result || result.status !== 'success' || !result.models) {
             throw new Error('No model data returned');
         }
-<<<<<<< HEAD
-        
-        const results = await response.json();
-        console.log('API response structure:', results);
-        
-        // Handle both response formats: {status, models: [...]} or {GFS: {}, ICON: {}}
-        let resultsToProcess = results;
-        if (results.status === 'success' && results.models) {
-            // New format: convert array to object
-            resultsToProcess = {};
-            results.models.forEach(model => {
-                resultsToProcess[model.name] = model;
-            });
-        }
-        
-        const modelData = {};
-        
-        // Process results and update cards
-        for (const [modelName, result] of Object.entries(resultsToProcess)) {
-            if (result.skipped) {
-                // Out of domain; mark card and skip without logging as error
-                modelData[modelName] = null;
-                const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-=======
         // Process each model's data
         const modelData = {};
         for (const model of result.models) {
             const modelName = model.name;
             if (model.skipped) {
                 // Mark card as out of domain
->>>>>>> e3a8b9efac21bfc53ab60e2bad1196fa0b4a416e
                 const cardIdMap = {
                     'GFS': 'model-gfs',
                     'ICON': 'model-icon',
@@ -371,6 +367,44 @@ function hasValidData(arr) {
 function displayModelComparison(modelData) {
     document.getElementById('modelResults').style.display = 'block';
     const selectedModels = getSelectedModels();
+
+    // Fetch fresh climate normals for the current location
+    const locationSelect = document.getElementById('locationSelect');
+    const selectedOption = locationSelect?.options[locationSelect.selectedIndex];
+    const locationId = selectedOption?.value;
+
+    let avgHighTemp = null;
+    let avgLowTemp = null;
+
+    // Fetch climate normals if we have a real location
+    if (locationId && locationId !== 'custom') {
+        console.log(`displayModelComparison: Fetching normals for location ${locationId}`);
+        fetch(`/api/climate-normals/?location_id=${locationId}`)
+            .then(r => {
+                console.log(`displayModelComparison: API response status: ${r.status}`);
+                return r.json();
+            })
+            .then(data => {
+                console.log('displayModelComparison: API response data:', data);
+                if ((data.status === 'success' || data.status === 'cached') && data.avg_high_temp !== null && data.avg_low_temp !== null) {
+                    avgHighTemp = data.avg_high_temp;
+                    avgLowTemp = data.avg_low_temp;
+                    console.log('displayModelComparison: Got normals, refreshing chart with', {avgHighTemp, avgLowTemp});
+                    // Refresh the chart with updated climate normals
+                    refreshChartWithClimateNormals(currentModelData, avgHighTemp, avgLowTemp);
+                } else {
+                    console.warn('displayModelComparison: No valid normals returned', data);
+                }
+            })
+            .catch(e => console.warn('displayModelComparison: Error fetching climate normals:', e));
+    }
+
+    // Display chart with initial climate normals (will update when fetched)
+    refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp);
+}
+
+function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
+    const selectedModels = getSelectedModels();
     // Prepare data for charts
     const times = modelData.GFS?.hourly?.time || [];
     const gfsTemp = modelData.GFS?.hourly?.temperature_2m || [];
@@ -381,6 +415,17 @@ function displayModelComparison(modelData) {
     const hrrrTemp = modelData.HRRR?.hourly?.temperature_2m || [];
     const namTemp = modelData.NAM?.hourly?.temperature_2m || [];
     const rgemTemp = modelData.RGEM?.hourly?.temperature_2m || [];
+
+    // Precipitation data
+    const gfsPrec = modelData.GFS?.hourly?.precipitation || [];
+    const iconPrec = modelData.ICON?.hourly?.precipitation || [];
+    const ecmwfPrec = modelData.ECMWF?.hourly?.precipitation || [];
+    const aifsPrec = modelData.AIFS?.hourly?.precipitation || [];
+    const gemPrec = modelData.GEM?.hourly?.precipitation || [];
+    const hrrrPrec = modelData.HRRR?.hourly?.precipitation || [];
+    const namPrec = modelData.NAM?.hourly?.precipitation || [];
+    const rgemPrec = modelData.RGEM?.hourly?.precipitation || [];
+
     // Sample every 3 hours for cleaner charts
     const sampledTimes = times.filter((_, i) => i % 3 === 0);
     const sampledGfsTemp = gfsTemp.filter((_, i) => i % 3 === 0);
@@ -391,12 +436,23 @@ function displayModelComparison(modelData) {
     const sampledHrrrTemp = hrrrTemp.filter((_, i) => i % 3 === 0);
     const sampledNamTemp = namTemp.filter((_, i) => i % 3 === 0);
     const sampledRgemTemp = rgemTemp.filter((_, i) => i % 3 === 0);
+
+    // Sampled precipitation
+    const sampledGfsPrec = gfsPrec.filter((_, i) => i % 3 === 0);
+    const sampledIconPrec = iconPrec.filter((_, i) => i % 3 === 0);
+    const sampledEcmwfPrec = ecmwfPrec.filter((_, i) => i % 3 === 0);
+    const sampledAifsPrec = aifsPrec.filter((_, i) => i % 3 === 0);
+    const sampledGemPrec = gemPrec.filter((_, i) => i % 3 === 0);
+    const sampledHrrrPrec = hrrrPrec.filter((_, i) => i % 3 === 0);
+    const sampledNamPrec = namPrec.filter((_, i) => i % 3 === 0);
+    const sampledRgemPrec = rgemPrec.filter((_, i) => i % 3 === 0);
+
     // Format time labels
     const labels = sampledTimes.map(t => {
         const date = new Date(t);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit' });
+        return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit' });
     });
-    
+
     console.log('Chart data check:', {
         labelsCount: labels.length,
         selectedModels: Array.from(selectedModels),
@@ -407,61 +463,149 @@ function displayModelComparison(modelData) {
             GEM: sampledGemTemp?.length
         }
     });
-    
+
     // Update chart title with temperature level
     const tempLevelLabel = currentTempLevel === '925' ? '925 mb' : currentTempLevel === '850' ? '850 mb' : 'Surface (2m)';
     document.getElementById('chartTitle').innerHTML = `<i class='fas fa-temperature-high'></i> Model Comparison — Temperature: ${tempLevelLabel}`;
-    // Create temperature chart
+
+    // Note: avgHighTemp and avgLowTemp are passed as function parameters, not from template context
+
+    // Store current location ID for climate normals refresh
+    const locationSelect = document.getElementById('locationSelect');
+    const selectedOption = locationSelect?.options[locationSelect.selectedIndex];
+    window.currentLocationId = selectedOption?.value;
+    window.updateClimateNormals = function() {
+        // Fetch updated climate normals and refresh the chart
+        if (window.currentLocationId && window.currentLocationId !== 'custom') {
+            fetch(`/api/climate-normals/?location_id=${window.currentLocationId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success' && currentModelData) {
+                        // Re-display the chart with updated climate normals
+                        displayModelComparison(currentModelData);
+                    }
+                })
+                .catch(e => console.warn('Could not update climate normals:', e));
+        }
+    };
+
+    // Create combined chart with temperature and precipitation
     if (tempChart) tempChart.destroy();
     const tempCtx = document.getElementById('tempChart').getContext('2d');
+
+    // Temperature datasets (line chart, left y-axis)
     const globalTempDatasets = [
-        { label: 'GFS', data: sampledGfsTemp, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
-        { label: 'ICON', data: sampledIconTemp, borderColor: '#ffc107', backgroundColor: 'rgba(255, 193, 7, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
-        { label: 'ECMWF', data: sampledEcmwfTemp, borderColor: '#198754', backgroundColor: 'rgba(25, 135, 84, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
-        { label: 'AIFS', data: sampledAifsTemp, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 },
-        { label: 'GEM', data: sampledGemTemp, borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2 }
+        { label: 'GFS Temp', data: sampledGfsTemp, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
+        { label: 'ICON Temp', data: sampledIconTemp, borderColor: '#ffc107', backgroundColor: 'rgba(255, 193, 7, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
+        { label: 'ECMWF Temp', data: sampledEcmwfTemp, borderColor: '#198754', backgroundColor: 'rgba(25, 135, 84, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
+        { label: 'AIFS Temp', data: sampledAifsTemp, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
+        { label: 'GEM Temp', data: sampledGemTemp, borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' }
     ];
     const regionalTempDatasets = [
-        { label: 'HRRR', data: sampledHrrrTemp, borderColor: '#6610f2', backgroundColor: 'rgba(102, 16, 242, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 },
-        { label: 'NAM', data: sampledNamTemp, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 },
-        { label: 'RGEM', data: sampledRgemTemp, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2 }
+        { label: 'HRRR Temp', data: sampledHrrrTemp, borderColor: '#6610f2', backgroundColor: 'rgba(102, 16, 242, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
+        { label: 'NAM Temp', data: sampledNamTemp, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
+        { label: 'RGEM Temp', data: sampledRgemTemp, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' }
     ];
-    const tempDatasetsAll = globalTempDatasets.concat(regionalTempDatasets);
-    const tempDatasets = tempDatasetsAll.filter(ds => selectedModels.has(ds.label) && hasValidData(ds.data));
-        { label: 'RGEM', data: sampledRgemTemp, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5] }
+
+    // Precipitation datasets (bar chart, right y-axis)
+    const globalPrecipDatasets = [
+        { label: 'GFS Precip', data: sampledGfsPrec, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
+        { label: 'ICON Precip', data: sampledIconPrec, borderColor: '#ffc107', backgroundColor: 'rgba(255, 193, 7, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
+        { label: 'ECMWF Precip', data: sampledEcmwfPrec, borderColor: '#198754', backgroundColor: 'rgba(25, 135, 84, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
+        { label: 'AIFS Precip', data: sampledAifsPrec, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
+        { label: 'GEM Precip', data: sampledGemPrec, borderColor: '#dc3545', backgroundColor: 'rgba(220, 53, 69, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true }
     ];
+    const regionalPrecipDatasets = [
+        { label: 'HRRR Precip', data: sampledHrrrPrec, borderColor: '#6610f2', backgroundColor: 'rgba(102, 16, 242, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
+        { label: 'NAM Precip', data: sampledNamPrec, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
+        { label: 'RGEM Precip', data: sampledRgemPrec, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true }
+    ];
+
+    // Combine all datasets
     const tempDatasetsAll = globalTempDatasets.concat(regionalTempDatasets);
-    const tempDatasets = tempDatasetsAll.filter(ds => selectedModels.has(ds.label));
->>>>>>> e3a8b9efac21bfc53ab60e2bad1196fa0b4a416e
+    const precipDatasetsAll = globalPrecipDatasets.concat(regionalPrecipDatasets);
+
+    // Filter by selected models - temperature lines
+    const tempDatasets = tempDatasetsAll.filter(ds => {
+        const modelName = ds.label.split(' ')[0];
+        return selectedModels.has(modelName) && hasValidData(ds.data);
+    });
+
+    // Filter by selected models - precipitation bars
+    const precipDatasets = precipDatasetsAll.filter(ds => {
+        const modelName = ds.label.split(' ')[0];
+        return selectedModels.has(modelName) && hasValidData(ds.data);
+    });
+
+    // Combine all datasets for the chart
+    const allDatasets = tempDatasets.concat(precipDatasets);
+
     tempChart = new Chart(tempCtx, {
-        type: 'line',
-        data: { labels: labels, datasets: tempDatasets },
+        type: 'bar',
+        data: { labels: labels, datasets: allDatasets },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             spanGaps: true,
             interaction: { mode: 'index', intersect: false },
-            plugins: { 
-                legend: { position: 'top' }, 
-                tooltip: {}, 
-                annotation: { annotations: {} } 
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: {},
+                annotation: {
+                    drawTime: 'beforeDatasetsDraw',
+                    annotations: {
+                        freezingLine: {
+                            type: 'line',
+                            yMin: 32,
+                            yMax: 32,
+                            borderColor: '#000000',
+                            borderWidth: 2,
+                            borderDash: [5, 5]
+                        },
+                        ...(avgHighTemp !== null && {
+                            averageHighLine: {
+                                type: 'line',
+                                yMin: avgHighTemp,
+                                yMax: avgHighTemp,
+                                borderColor: '#dc3545',
+                                borderWidth: 2,
+                                borderDash: [5, 5]
+                            }
+                        }),
+                        ...(avgLowTemp !== null && {
+                            averageLowLine: {
+                                type: 'line',
+                                yMin: avgLowTemp,
+                                yMax: avgLowTemp,
+                                borderColor: '#0dcaf0',
+                                borderWidth: 2,
+                                borderDash: [5, 5]
+                            }
+                        })
+                    }
+                }
             },
-            scales: { 
-                y: { 
+            scales: {
+                y: {
                     type: 'linear',
                     position: 'left',
-                    title: { display: true, text: 'Temperature (°F)' } 
+                    title: { display: true, text: 'Temperature (°F)' }
                 },
                 y1: {
                     type: 'linear',
                     position: 'right',
                     title: { display: true, text: 'Precipitation (inches)' },
-                    grid: { drawOnChartArea: false }
+                    grid: { drawOnChartArea: false },
+                    beginAtZero: true
                 }
             }
         }
     });
 }
+function onModelSelectionChange() {
+    if (currentModelData) displayModelComparison(currentModelData);
+}
+
 function cardClick(event) {
     if (event.target.classList.contains('model-select-checkbox')) {
         return;
@@ -475,10 +619,6 @@ function showModelDetails(modelName) {
     window.location.href = `/models/${encodeURIComponent(modelName)}/`;
 }
 
-function onModelSelectionChange() {
-    if (currentModelData) displayModelComparison(currentModelData);
-}
-
 document.addEventListener('DOMContentLoaded', function() {
     const defaults = new Set(['GFS','ICON','ECMWF','GEM']);
     document.querySelectorAll('.model-select-checkbox').forEach(cb => {
@@ -490,12 +630,41 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn('locationSelect element not found; skipping auto-load');
         return;
     }
-    
+
     const urlParams = new URLSearchParams(window.location.search);
     const customLat = urlParams.get('latitude');
     const customLon = urlParams.get('longitude');
-    
+    const locationIdFromUrl = urlParams.get('location_id');
+
+    console.log('DOMContentLoaded - URL params:', {customLat, customLon, locationIdFromUrl});
+    console.log('Available location options:', Array.from(locationSelect.options).map(o => ({value: o.value, text: o.text})));
+
+    // First check if we have a location_id in the URL (from detail page)
+    if(locationIdFromUrl && locationIdFromUrl !== 'custom') {
+        console.log(`Looking for location with ID: ${locationIdFromUrl}`);
+        // Find and select the location with this ID
+        let found = false;
+        for(let i = 0; i < locationSelect.options.length; i++) {
+            console.log(`Checking option ${i}: value="${locationSelect.options[i].value}"`);
+            if(locationSelect.options[i].value === locationIdFromUrl) {
+                console.log(`FOUND location at index ${i}, selecting it`);
+                locationSelect.selectedIndex = i;
+                found = true;
+                break;
+            }
+        }
+        if(found) {
+            console.log('Location found, calling loadModelData()');
+            loadModelData();
+            return;
+        } else {
+            console.warn(`Location with ID ${locationIdFromUrl} not found in dropdown`);
+        }
+    }
+
+    // Fall back to custom coordinates if we have lat/lon but no location_id
     if (customLat && customLon) {
+        console.log('Creating custom location option');
         const option = document.createElement('option');
         option.value = 'custom';
         option.dataset.lat = customLat;
@@ -505,6 +674,7 @@ document.addEventListener('DOMContentLoaded', function() {
         locationSelect.appendChild(option);
         loadModelData();
     } else if (locationSelect.options && locationSelect.options.length > 1) {
+        console.log('No location_id or custom coords, selecting first option');
         locationSelect.selectedIndex = 1;
         loadModelData();
     }

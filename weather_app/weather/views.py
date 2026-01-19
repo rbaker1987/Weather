@@ -903,7 +903,7 @@ class LocationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def geocode_search(self, request):
         """Proxy geocoding search request to Nominatim API.
-        
+
         Query parameters:
         - q: Search query (required)
         """
@@ -918,8 +918,10 @@ class LocationViewSet(viewsets.ModelViewSet):
             import requests
 
             headers = {"User-Agent": "WeatherApp/1.0"}
-            url = f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1"
-            
+            url = (
+                f"https://nominatim.openstreetmap.org/search?q={q}&format=json&limit=1"
+            )
+
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             results = response.json()
@@ -929,14 +931,18 @@ class LocationViewSet(viewsets.ModelViewSet):
 
             # Return first result
             result = results[0]
-            return Response({
-                "status": "success",
-                "results": [{
-                    "lat": float(result.get("lat", 0)),
-                    "lon": float(result.get("lon", 0)),
-                    "display_name": result.get("display_name", ""),
-                }]
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "results": [
+                        {
+                            "lat": float(result.get("lat", 0)),
+                            "lon": float(result.get("lon", 0)),
+                            "display_name": result.get("display_name", ""),
+                        }
+                    ],
+                }
+            )
         except requests.exceptions.RequestException as e:
             logger.error(f"Geocoding search error: {str(e)}")
             return Response(
@@ -953,7 +959,7 @@ class LocationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def geocode_reverse(self, request):
         """Proxy reverse geocoding request to Nominatim API.
-        
+
         Query parameters:
         - lat: Latitude (required)
         - lon: Longitude (required)
@@ -972,16 +978,18 @@ class LocationViewSet(viewsets.ModelViewSet):
 
             headers = {"User-Agent": "WeatherApp/1.0"}
             url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
-            
+
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
 
-            return Response({
-                "status": "success",
-                "address": data.get("address", {}),
-                "display_name": data.get("display_name", ""),
-            })
+            return Response(
+                {
+                    "status": "success",
+                    "address": data.get("address", {}),
+                    "display_name": data.get("display_name", ""),
+                }
+            )
         except requests.exceptions.RequestException as e:
             logger.error(f"Reverse geocoding error: {str(e)}")
             return Response(
@@ -1543,6 +1551,10 @@ class ModelsView(TemplateView):
             if current_location
             else (locations[0].id if locations else None)
         )
+        # Include climate normals for the current location
+        if current_location:
+            context["avg_high_temp"] = current_location.avg_high_temp
+            context["avg_low_temp"] = current_location.avg_low_temp
         context["page_title"] = "Weather Models"
         return context
 
