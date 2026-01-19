@@ -1,0 +1,841 @@
+{% extends "weather/base.html" %}
+{% load static %}
+
+{% block title %}Custom Forecast Builder - Ralph's Weather{% endblock %}
+
+{% block extra_css %}
+<style>
+    .builder-section { background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+    .day-builder-card { border: 2px solid #e9ecef; border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; background: #f8f9fa; }
+    .reference-data { background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #0d6efd; }
+    .reference-data h6 { color: #0d6efd; margin-bottom: 0.75rem; }
+    .model-temp { display: block; padding: 0.35rem 0.5rem; margin: 0.25rem 0; border-radius: 4px; background: #e9ecef; font-size: 0.85rem; }
+    .model-data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 0.5rem; }
+    .model-data-table th, .model-data-table td { padding: 0.5rem; border: 1px solid #dee2e6; text-align: center; }
+    .model-data-table th { background: #0d6efd; color: white; font-weight: bold; }
+    .model-data-table td:first-child { text-align: left; font-weight: 500; background: #f8f9fa; }
+    .model-data-table .temp-cell { background: #e7f3ff; font-weight: 600; }
+    .input-section { background: white; padding: 1rem; border-radius: 8px; border-left: 4px solid #198754; }
+    .input-section h6 { color: #198754; margin-bottom: 0.75rem; }
+    
+    /* Forecast display matching NWS Daily style */
+    .forecast-display { margin-top: 2rem; }
+    .forecast-period-card { 
+        padding: 1.5rem;
+        text-align: center;
+        min-height: 180px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .forecast-period-card.morning-period {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .forecast-period-card .period-badge {
+        margin-bottom: 0.5rem;
+    }
+    .forecast-period-card .period-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
+    }
+    .forecast-period-card .period-temp {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    .forecast-period-card .period-details {
+        opacity: 0.85;
+        font-size: 1rem;
+    }
+    .forecast-period-card .period-details i {
+        margin-right: 0.25rem;
+    }
+    .forecast-period-card .period-description {
+        margin-top: 0.75rem;
+        font-size: 1.05rem;
+        opacity: 0.9;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    /* Special chance layouts from forecast_period_card.html */
+    .chance-mixed-block {
+        position: relative;
+        display: inline-block;
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
+    }
+    .chance-mixed-main {
+        display: block;
+    }
+    .chance-mixed-sub {
+        position: absolute;
+        bottom: -0.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.6rem;
+        display: flex;
+        gap: 0.15rem;
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="fas fa-sliders-h"></i> Custom Forecast Builder</h2>
+
+<!-- Location Selection -->
+<div class="builder-section">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-8">
+            <label for="locationSelect" class="form-label"><strong>Select Location</strong></label>
+            <select id="locationSelect" class="form-select" onchange="loadLocation()">
+                <option value="">Choose a location...</option>
+                {% for loc in locations %}
+                    <option value="{{ loc.id }}" data-lat="{{ loc.latitude }}" data-lon="{{ loc.longitude }}" {% if loc.id|stringformat:"s" == location_id %}selected{% endif %}>{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Day Builder Cards Container -->
+<div id="dayBuilderContainer"></div>
+<div class="mt-4 mb-4" id="addDayContainer">
+    <button class="btn btn-primary" onclick="addDay()">
+        <i class="fas fa-plus"></i> Add Day
+    </button>
+</div>
+
+<!-- Forecast Display -->
+<div id="forecastDisplay" class="forecast-display" style="display: none;">
+    <div class="card weather-card">
+        <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <img src="{% static 'weather/img/logo-mark.svg' %}" alt="Ralph's Weather" style="height: 50px;">
+                    <div>
+                        <div id="forecastLocationName" style="font-size: 1.3rem; font-weight: 600;">
+                            <i class="fas fa-map-marker-alt"></i> <span id="locationNameText"></span>
+                        </div>
+                        <div id="forecastTimestamp" style="font-size: 0.9rem; opacity: 0.9;">
+                            <i class="fas fa-clock"></i> <span id="timestampText"></span>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-sm text-white" onclick="exportForecast()" style="background: transparent; border: 1px solid white;">
+                    <i class="fas fa-download"></i> Export as JPG
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3" id="forecastCards"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Reference Data (hidden, passed from server) -->
+{{ nws_forecast_periods|json_script:"nwsForecastData" }}
+{{ climate_normals|json_script:"climateNormalsData" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+let forecastDays = [];
+let nwsForecast = [];
+let climateNormals = {};
+let currentLocation = { latitude: "{{ latitude|default:'' }}", longitude: "{{ longitude|default:'' }}", location_id: "{{ location_id|default:'' }}" };
+let dayCounter = 0;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    // Parse server data
+    try {
+        const nwsElement = document.getElementById('nwsForecastData');
+        const climateElement = document.getElementById('climateNormalsData');
+        
+        nwsForecast = nwsElement ? JSON.parse(nwsElement.textContent) : [];
+        climateNormals = climateElement ? JSON.parse(climateElement.textContent) : {};
+        
+        // Auto-load 7 days if location selected
+        if (currentLocation.location_id) {
+            loadInitialDays();
+        }
+    } catch (e) {
+        console.error('Error parsing data:', e);
+    }
+});
+
+async function loadInitialDays() {
+    // Generate 7 days automatically
+    for (let i = 0; i < 7; i++) {
+        await addDay();
+    }
+}
+
+function loadLocation() {
+    const select = document.getElementById('locationSelect');
+    const locationId = select.value;
+    
+    if (locationId) {
+        // Reload page with location_id to fetch reference data
+        window.location.href = `/forecasts/custom/?location_id=${locationId}`;
+    }
+}
+
+async function addDay() {
+    dayCounter++;
+    const dayIndex = forecastDays.length;
+    const baseDate = new Date();
+    const today = new Date(baseDate);
+    today.setDate(baseDate.getDate() + dayIndex);
+    const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    console.log(`Day ${dayIndex}: baseDate=${baseDate.toISOString()}, today=${today.toISOString()}, dateStr=${dateStr}`);
+    
+    // Get NWS reference for this day (if available)
+    // NWS forecast periods: day period for this date, and night period (which belongs to next calendar day)
+    let nwsDay = {};
+    let nwsNight = {};
+    let nwsNextDayMorning = {}; // Night from this day is morning for next day
+    
+    // Simple indexing: check if first period is day or night
+    const firstIsDaytime = nwsForecast[0]?.isDaytime ?? true;
+    const offset = firstIsDaytime ? 0 : 1;
+    const dayPeriodIndex = dayIndex * 2 + offset;
+    
+    nwsDay = nwsForecast[dayPeriodIndex] || {};
+    nwsNight = nwsForecast[dayPeriodIndex + 1] || {};
+    // The night period is actually the morning of the next day
+    nwsNextDayMorning = nwsNight;
+    
+    // Fetch model data for this date
+    let modelData = await fetchModelDataForDate(dayIndex, today);
+    
+    // Determine default values: use NWS if available, otherwise model average
+    let defaultMorning = '';
+    let defaultAfternoon = '';
+    let defaultMorningWeather = '';
+    let defaultAfternoonWeather = '';
+    
+    // Check if this is today and past 8am
+    let recordedLow = null;
+    const now = new Date();
+    const isToday = dayIndex === 0;
+    const isPast8AM = now.getHours() >= 8;
+    
+    // Get NWS night from previous day (which is morning for this day)
+    const previousNwsNight = dayIndex > 0 ? nwsForecast[dayPeriodIndex - 1] || {} : {};
+    
+    // Set defaults based on NWS or model data
+    if (previousNwsNight.temperature) {
+        // Use previous day's night as this day's morning low
+        defaultMorning = previousNwsNight.temperature;
+        defaultMorningWeather = previousNwsNight.shortForecast || '';
+    } else if (modelData.modelAverages) {
+        defaultMorning = modelData.modelAverages.avgLow;
+    }
+    
+    if (nwsDay.temperature) {
+        // Use this day's forecast
+        defaultAfternoon = nwsDay.temperature;
+        defaultAfternoonWeather = nwsDay.shortForecast || '';
+    } else if (modelData.modelAverages) {
+        defaultAfternoon = modelData.modelAverages.avgHigh;
+    }
+    
+    // Don't show morning if past 8am on current day
+    if (isToday && isPast8AM) {
+        defaultMorning = '';
+    }
+    
+    // Override morning with recorded low if available
+    // (now handled in the isToday check above)    
+    const card = document.createElement('div');
+    card.className = 'day-builder-card';
+    card.id = `day-${dayCounter}`;
+    card.innerHTML = `
+        <h4>${dateStr}</h4>
+        
+        <!-- Reference Data -->
+        <div class="reference-data">
+            <h6><i class="fas fa-info-circle"></i> Reference Data</h6>
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Climate Normals:</strong><br>
+                    ${climateNormals.avg_high ? `High: ${Math.round(climateNormals.avg_high)}°F` : 'N/A'}<br>
+                    ${climateNormals.avg_low ? `Low: ${Math.round(climateNormals.avg_low)}°F` : 'N/A'}
+                </div>
+                <div class="col-md-4">
+                    <strong>NWS Forecast:</strong><br>
+                    ${previousNwsNight.temperature ? `Morning: ${previousNwsNight.temperature}°F` : 'N/A'}<br>
+                    ${previousNwsNight.shortForecast ? `<small class="text-muted">${previousNwsNight.shortForecast}</small><br>` : ''}
+                    ${nwsDay.temperature ? `Afternoon: ${nwsDay.temperature}°F` : 'N/A'}<br>
+                    ${nwsDay.shortForecast ? `<small class="text-muted">${nwsDay.shortForecast}</small><br>` : ''}
+                    ${recordedLow ? `<strong class="text-success">Recorded Low: ${recordedLow}°F</strong>` : ''}
+                </div>
+                <div class="col-md-5">
+                    <strong>Model Forecasts (Models × Times):</strong><br>
+                    <div id="modelChart-${dayCounter}"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Input Section -->
+        <div class="input-section">
+            <h6><i class="fas fa-edit"></i> Your Forecast</h6>
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Morning Temp (°F)</label>
+                    <input type="number" class="form-control" id="morning-${dayCounter}" placeholder="e.g., 45" ${defaultMorning ? `value="${defaultMorning}"` : ''}>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Morning Weather</label>
+                    <input type="text" class="form-control" id="morning-weather-${dayCounter}" placeholder="e.g., Partly Cloudy" ${defaultMorningWeather ? `value="${defaultMorningWeather}"` : ''}>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Afternoon Temp (°F)</label>
+                    <input type="number" class="form-control" id="afternoon-${dayCounter}" placeholder="e.g., 62" ${defaultAfternoon ? `value="${defaultAfternoon}"` : ''}>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Afternoon Weather</label>
+                    <input type="text" class="form-control" id="afternoon-weather-${dayCounter}" placeholder="e.g., Mostly Sunny" ${defaultAfternoonWeather ? `value="${defaultAfternoonWeather}"` : ''}>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    ${dayIndex < 7 ? '' : `<button class="btn btn-danger w-100" onclick="removeDay(${dayCounter})">
+                        <i class="fas fa-trash"></i> Remove
+                    </button>`}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('dayBuilderContainer').appendChild(card);
+    
+    // Render model data table
+    if (modelData.chartData && Object.keys(modelData.chartData).length > 0) {
+        createModelDataTable(dayCounter, modelData.chartData, modelData.times);
+    }
+    
+    forecastDays.push({
+        id: dayCounter,
+        date: today,
+        dateStr: dateStr
+    });
+    
+    updateForecastDisplay();
+}
+
+async function fetchRecordedLow() {
+    try {
+        // Get NWS observation station
+        const pointsResp = await fetch(`https://api.weather.gov/points/${currentLocation.latitude},${currentLocation.longitude}`, {
+            headers: { 'User-Agent': 'WeatherApp/1.0' }
+        });
+        
+        if (!pointsResp.ok) return null;
+        
+        const pointsData = await pointsResp.json();
+        const stationsUrl = pointsData.properties?.observationStations;
+        
+        if (!stationsUrl) return null;
+        
+        // Get nearest station
+        const stationsResp = await fetch(stationsUrl, {
+            headers: { 'User-Agent': 'WeatherApp/1.0' }
+        });
+        
+        if (!stationsResp.ok) return null;
+        
+        const stationsData = await stationsResp.json();
+        const stationId = stationsData.features?.[0]?.properties?.stationIdentifier;
+        
+        if (!stationId) return null;
+        
+        // Get observations from midnight to now
+        const now = new Date();
+        const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const startTime = midnight.toISOString();
+        
+        const obsResp = await fetch(`https://api.weather.gov/stations/${stationId}/observations?start=${startTime}`, {
+            headers: { 'User-Agent': 'WeatherApp/1.0' }
+        });
+        
+        if (!obsResp.ok) return null;
+        
+        const obsData = await obsResp.json();
+        const observations = obsData.features || [];
+        
+        // Find minimum temperature in Fahrenheit
+        let minTemp = null;
+        for (const obs of observations) {
+            const tempC = obs.properties?.temperature?.value;
+            if (tempC !== null && tempC !== undefined) {
+                const tempF = (tempC * 9/5) + 32;
+                if (minTemp === null || tempF < minTemp) {
+                    minTemp = tempF;
+                }
+            }
+        }
+        
+        return minTemp !== null ? Math.round(minTemp) : null;
+    } catch (e) {
+        console.error('Error fetching recorded low:', e);
+        return null;
+    }
+}
+
+async function fetchModelDataForDate(dayIndex, localDay) {
+    if (!currentLocation.latitude || !currentLocation.longitude) {
+        return { chartData: {}, modelAverages: null };
+    }
+    
+    try {
+        const resp = await fetch(`/api/model-comparison/?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}&models=GFS,ICON,ECMWF,AIFS,GEM,HRRR,NAM,RGEM&forecast_days=7`);
+        const data = await resp.json();
+        
+        console.log('API Response:', data);
+        // Log raw precip data for first model
+        if (data.models && data.models.length > 0) {
+            const firstModel = data.models[0];
+            if (firstModel.data?.hourly?.precipitation) {
+                console.log(`${firstModel.name} full precip array:`, firstModel.data.hourly.precipitation.slice(0, 168));
+            }
+        }
+        
+        if (data.status === 'success' && data.models) {
+            let chartData = {};
+            let allTemps = [];
+            
+            // Get first model's hourly data to find start time and array length
+            let firstModelData = null;
+            let forecastStartTime = null;
+            for (const model of data.models) {
+                if (model.data && model.data.hourly && model.data.hourly.time && model.data.hourly.time.length > 0) {
+                    firstModelData = model.data.hourly;
+                    const firstTime = firstModelData.time[0];
+                    // Handle both Unix timestamp (number) and ISO string formats
+                    if (typeof firstTime === 'string') {
+                        forecastStartTime = Math.floor(new Date(firstTime).getTime() / 1000);
+                    } else {
+                        forecastStartTime = firstTime;
+                    }
+                    console.log(`Found forecast start time from ${model.name}:`, forecastStartTime, new Date(forecastStartTime * 1000));
+                    break;
+                }
+            }
+            
+            if (!forecastStartTime) {
+                console.error('No forecast data found');
+                return { chartData: {}, times: [], modelAverages: null };
+            }
+            
+            // Get user's timezone offset
+            const now = new Date();
+            const tzOffset = now.getTimezoneOffset() / 60; // Offset in hours
+            const tzOffsetMs = now.getTimezoneOffset() * 60 * 1000; // Offset in milliseconds
+            
+            console.log('Timezone offset (hours):', tzOffset);
+            console.log('Local day:', localDay);
+            
+            // Calculate UTC time at local midnight
+            const localMidnight = new Date(localDay.getFullYear(), localDay.getMonth(), localDay.getDate(), 0, 0, 0);
+            const utcAtMidnight = new Date(localMidnight.getTime() + tzOffsetMs);
+            
+            // Calculate local day start and end in UTC
+            const localDayStartUTC = utcAtMidnight;
+            const localDayEndUTC = new Date(utcAtMidnight.getTime() + 24 * 60 * 60 * 1000);
+            
+            console.log('Local day UTC range:', localDayStartUTC, 'to', localDayEndUTC);
+            
+            // Find which 0Z, 6Z, 12Z, 18Z periods fall within this local day
+            const times = [];
+            const utcHours = [0, 6, 12, 18];
+            
+            for (let utcHour of utcHours) {
+                // Start with the candidate UTC date from local midnight
+                let candidateUtcTime = new Date(Date.UTC(
+                    utcAtMidnight.getUTCFullYear(), 
+                    utcAtMidnight.getUTCMonth(), 
+                    utcAtMidnight.getUTCDate(), 
+                    utcHour
+                ));
+                
+                console.log(`UTC hour ${utcHour}: candidate time =`, candidateUtcTime);
+                
+                // If this is before local day start in UTC, try next day
+                if (candidateUtcTime < localDayStartUTC) {
+                    candidateUtcTime = new Date(candidateUtcTime);
+                    candidateUtcTime.setUTCDate(candidateUtcTime.getUTCDate() + 1);
+                    console.log(`  -> moved to next day:`, candidateUtcTime);
+                }
+                
+                // Check if this period falls within the local day
+                if (candidateUtcTime >= localDayStartUTC && candidateUtcTime < localDayEndUTC) {
+                    // Convert UTC hour to local hour for display
+                    let localHour = (utcHour - tzOffset) % 24;
+                    if (localHour < 0) localHour += 24;
+                    
+                    const ampm = localHour >= 12 ? 'PM' : 'AM';
+                    const displayHourAmpm = localHour % 12 === 0 ? 12 : localHour % 12;
+                    
+                    const utcTimeSeconds = Math.floor(candidateUtcTime.getTime() / 1000);
+                    const utcDate = new Date(candidateUtcTime.getTime());
+                    const dateStr = utcDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    
+                    console.log(`  -> INCLUDED: local hour ${localHour} (${displayHourAmpm}${ampm}), UTC seconds=${utcTimeSeconds}`);
+                    
+                    times.push({
+                        utcTimeSeconds: utcTimeSeconds,
+                        label: `${displayHourAmpm}${ampm}`,
+                        dateLabel: dateStr,
+                        utcLabel: `${utcHour.toString().padStart(2, '0')}Z`
+                    });
+                } else {
+                    console.log(`  -> excluded from local day range`);
+                }
+            }
+            
+            // Sort times by UTC timestamp to ensure chronological order
+            times.sort((a, b) => a.utcTimeSeconds - b.utcTimeSeconds);
+            
+            console.log('Final times array:', times);
+            
+            // Extract temperatures for each model
+            for (const model of data.models) {
+                if (model.data && model.data.hourly && !model.skipped) {
+                    const temps = model.data.hourly.temperature_2m || [];
+                    const precips = model.data.hourly.precipitation || [];
+                    chartData[model.name] = {};
+                    
+                    console.log(`${model.name}: ${temps.length} temperatures, ${precips.length} precip values`);
+                    console.log(`  Precips sample:`, precips.slice(0, 5));
+                    
+                    for (const timeObj of times) {
+                        // Find index by calculating hours from forecast start
+                        const hoursFromStart = (timeObj.utcTimeSeconds - forecastStartTime) / 3600;
+                        const index = Math.round(hoursFromStart);
+                        
+                        console.log(`  ${timeObj.utcLabel}: hoursFromStart=${hoursFromStart}, index=${index}`);
+                        
+                        if (index >= 0 && index < temps.length && temps[index] !== null && temps[index] !== undefined) {
+                            const temp = Math.round(temps[index]);
+                            
+                            // Sum hourly precipitation for the 6 hours leading up to this forecast time
+                            let totalPrecip = 0;
+                            for (let i = Math.max(0, index - 5); i <= index; i++) {
+                                if (precips[i] !== null && precips[i] !== undefined) {
+                                    totalPrecip += precips[i];
+                                }
+                            }
+                            
+                            chartData[model.name][timeObj.utcLabel] = {
+                                temp: temp,
+                                precip: totalPrecip
+                            };
+                            allTemps.push(temps[index]);
+                            console.log(`    -> Found temp: ${temps[index]}°C -> ${temp}°F, precip (6hr sum): ${totalPrecip}mm -> ${(totalPrecip / 25.4).toFixed(2)}"`);
+                        } else {
+                            chartData[model.name][timeObj.utcLabel] = null;
+                            console.log(`    -> No data (index out of range or null)`);
+                        }
+                    }
+                }
+            }
+            
+            console.log('Final chartData:', chartData);
+            
+            // Calculate average temps from all models' readings (excluding nulls)
+            let modelAverages = null;
+            if (allTemps.length > 0) {
+                const avgTemp = Math.round(allTemps.reduce((a, b) => a + b, 0) / allTemps.length);
+                modelAverages = { avgHigh: avgTemp, avgLow: avgTemp };
+            }
+            
+            return { 
+                chartData: chartData,
+                times: times,
+                modelAverages: modelAverages
+            };
+        }
+    } catch (e) {
+        console.error('Error fetching model data:', e);
+    }
+    
+    return { chartData: {}, times: [], modelAverages: null };
+}
+
+function removeDay(dayId) {
+    document.getElementById(`day-${dayId}`)?.remove();
+    forecastDays = forecastDays.filter(d => d.id !== dayId);
+    updateForecastDisplay();
+}
+
+function createModelDataTable(dayId, chartData, times) {
+    const container = document.getElementById(`modelChart-${dayId}`);
+    if (!container) return;
+    
+    const models = Object.keys(chartData);
+    
+    // Build table HTML
+    let html = `<table class="model-data-table">
+        <thead>
+            <tr>
+                <th>Model</th>
+                ${times.map(t => `<th>${t.dateLabel}<br>${t.label}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    for (const model of models) {
+        html += `<tr><td>${model}</td>`;
+        for (const time of times) {
+            const data = chartData[model][time.utcLabel];
+            if (data !== null && data !== undefined) {
+                const precipInches = (data.precip / 25.4).toFixed(2);
+                const precipStr = data.precip > 0 ? `<div style="font-size: 0.8em; color: #0066cc;">${precipInches}"</div>` : '';
+                html += `<td class="temp-cell">${data.temp}°${precipStr}</td>`;
+            } else {
+                html += `<td class="temp-cell">—</td>`;
+            }
+        }
+        html += `</tr>`;
+    }
+    
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+}
+
+function updateForecastDisplay() {
+    const container = document.getElementById('forecastCards');
+    const displaySection = document.getElementById('forecastDisplay');
+    
+    if (forecastDays.length === 0) {
+        displaySection.style.display = 'none';
+        return;
+    }
+    
+    displaySection.style.display = 'block';
+    
+    // Update location name
+    const locationSelect = document.getElementById('locationSelect');
+    const selectedOption = locationSelect.options[locationSelect.selectedIndex];
+    const locationName = selectedOption.text || 'Custom Location';
+    document.getElementById('locationNameText').textContent = locationName;
+    
+    // Update timestamp
+    const now = new Date();
+    const timestampText = now.toLocaleDateString('en-US', { 
+        weekday: 'short', 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+    document.getElementById('timestampText').textContent = timestampText;
+    
+    container.innerHTML = '';
+    
+    forecastDays.forEach(day => {
+        const morningTemp = document.getElementById(`morning-${day.id}`)?.value;
+        const afternoonTemp = document.getElementById(`afternoon-${day.id}`)?.value;
+        const morningWeather = document.getElementById(`morning-weather-${day.id}`)?.value;
+        const afternoonWeather = document.getElementById(`afternoon-weather-${day.id}`)?.value;
+        
+        if (!morningTemp && !afternoonTemp && !morningWeather && !afternoonWeather) return;
+        
+        // Determine weather icon based on conditions (matching ui_tags.py logic)
+        function getWeatherIcon(description) {
+            if (!description) return 'fa-cloud';
+            const cond = description.toLowerCase();
+            
+            const isStorm = cond.includes('storm') || cond.includes('thunder') || cond.includes('t-storm');
+            const isSnow = cond.includes('snow') || cond.includes('flurries') || cond.includes('blizzard');
+            const isIce = cond.includes('ice') || cond.includes('icy') || cond.includes('freezing') || cond.includes('sleet');
+            const isRain = (cond.includes('rain') || cond.includes('shower') || cond.includes('drizzle')) && !isSnow && !isIce;
+            
+            if (isStorm) return 'fa-bolt';
+            if (isIce) return 'fa-icicles';
+            if (isSnow) return 'fa-snowflake';
+            if (cond.includes('fog') || cond.includes('mist') || cond.includes('haze')) return 'fa-smog';
+            if (isRain) return 'fa-cloud-rain';
+            if (cond.includes('wind')) return 'fa-wind';
+            if (cond.includes('partly')) return 'fa-cloud-sun';
+            if (cond.includes('sunny') || cond.includes('clear') || cond.includes('fair')) return 'fa-sun';
+            if (cond.includes('cloud') || cond.includes('overcast')) return 'fa-cloud';
+            return 'fa-cloud-sun';
+        }
+        
+        // Determine if special layout is needed (matching needs_chance_layout logic)
+        function needsChanceLayout(description) {
+            if (!description) return null;
+            const cond = description.toLowerCase();
+            
+            const isSnow = cond.includes('snow') || cond.includes('flurries') || cond.includes('blizzard');
+            const isIce = cond.includes('ice') || cond.includes('icy') || cond.includes('freezing') || cond.includes('sleet');
+            const isRain = (cond.includes('rain') || cond.includes('shower') || cond.includes('drizzle')) && !isSnow && !isIce;
+            const isStorm = cond.includes('storm') || cond.includes('thunder') || cond.includes('t-storm');
+            
+            // Mixed precipitation - both rain AND snow
+            if (isRain && isSnow) return 'mixed';
+            
+            // Check for "chance" or "likely" keywords indicating lower probability
+            const hasChanceKeyword = cond.includes('chance') || cond.includes('likely') || cond.includes('slight');
+            
+            if (hasChanceKeyword) {
+                if (isStorm) return 'storm';
+                if (isSnow && !isRain) return 'snow';
+            }
+            
+            return null;
+        }
+        
+        // Generate icon HTML based on layout type
+        function generateIconHTML(description, layout) {
+            if (layout === 'mixed') {
+                return `
+                    <div class="chance-mixed-block">
+                        <i class="fas fa-cloud chance-mixed-main"></i>
+                        <span class="chance-mixed-sub">
+                            <i class="fas fa-tint"></i>
+                            <i class="fas fa-snowflake"></i>
+                            <i class="fas fa-tint"></i>
+                        </span>
+                    </div>
+                `;
+            } else if (layout === 'storm') {
+                return `
+                    <div class="chance-mixed-block">
+                        <i class="fas fa-cloud chance-mixed-main"></i>
+                        <span class="chance-mixed-sub">
+                            <i class="fas fa-bolt"></i>
+                            <i class="fas fa-bolt"></i>
+                        </span>
+                    </div>
+                `;
+            } else if (layout === 'snow') {
+                return `
+                    <div class="chance-mixed-block">
+                        <i class="fas fa-cloud chance-mixed-main"></i>
+                        <span class="chance-mixed-sub">
+                            <i class="fas fa-snowflake"></i>
+                            <i class="fas fa-snowflake"></i>
+                        </span>
+                    </div>
+                `;
+            } else {
+                const icon = getWeatherIcon(description);
+                return `<i class="fas ${icon}"></i>`;
+            }
+        }
+        
+        function getTempClass(temp) {
+            const t = Math.round(parseFloat(temp));
+            if (t >= 110) return 'temp-bg-110';
+            if (t >= 100) return 'temp-bg-100';
+            if (t >= 90) return 'temp-bg-90';
+            if (t >= 80) return 'temp-bg-80';
+            if (t >= 70) return 'temp-bg-70';
+            if (t >= 60) return 'temp-bg-60';
+            if (t >= 50) return 'temp-bg-50';
+            if (t >= 40) return 'temp-bg-40';
+            if (t >= 33) return 'temp-bg-33';
+            if (t >= 30) return 'temp-bg-30';
+            if (t >= 20) return 'temp-bg-20';
+            if (t >= 10) return 'temp-bg-10';
+            if (t >= 0) return 'temp-bg-0';
+            return 'temp-bg-below-0';
+        }
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'col';
+        
+        const dayOfWeek = day.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        const afternoonLayout = needsChanceLayout(afternoonWeather);
+        const morningLayout = needsChanceLayout(morningWeather);
+        
+        wrapper.innerHTML = `
+            <div class="card border-0 h-100">
+                <div class="card-header text-center py-2">
+                    <strong>${dayOfWeek}</strong>
+                </div>
+                <div class="card-body p-0">
+                    ${morningTemp ? `
+                    <div class="forecast-period-card morning-period ${getTempClass(morningTemp)}">
+                        <div>
+                            <div class="period-badge">
+                                <span class="badge bg-secondary"><i class="fas fa-moon"></i> Morning</span>
+                            </div>
+                            <div class="period-icon">
+                                ${generateIconHTML(morningWeather, morningLayout)}
+                            </div>
+                            <div class="period-temp">${morningTemp}°F</div>
+                        </div>
+                        ${morningWeather ? `<p class="period-description mb-0">${morningWeather}</p>` : ''}
+                    </div>
+                    ` : ''}
+                    ${afternoonTemp ? `
+                    <div class="forecast-period-card night-${getTempClass(afternoonTemp)}">
+                        <div>
+                            <div class="period-badge">
+                                <span class="badge bg-warning text-dark"><i class="fas fa-sun"></i> Afternoon</span>
+                            </div>
+                            <div class="period-icon">
+                                ${generateIconHTML(afternoonWeather, afternoonLayout)}
+                            </div>
+                            <div class="period-temp">${afternoonTemp}°F</div>
+                        </div>
+                        ${afternoonWeather ? `<p class="period-description mb-0">${afternoonWeather}</p>` : ''}
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        container.appendChild(wrapper);
+    });
+}
+
+// Update display on input changes
+document.addEventListener('input', function(e) {
+    if (e.target.matches('[id^="morning-"], [id^="afternoon-"], [id^="weather-"]')) {
+        updateForecastDisplay();
+    }
+});
+
+async function exportForecast() {
+    const element = document.getElementById('forecastDisplay');
+    const button = event.target;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+    
+    try {
+        const canvas = await html2canvas(element, {
+            backgroundColor: '#ffffff',
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false
+        });
+        
+        const link = document.createElement('a');
+        link.download = `custom-forecast-${new Date().toISOString().split('T')[0]}.jpg`;
+        link.href = canvas.toDataURL('image/jpeg', 0.95);
+        link.click();
+        
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-download"></i> Export as JPG';
+    } catch (e) {
+        console.error('Export error:', e);
+        alert('Error exporting forecast. Please try again.');
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-download"></i> Export as JPG';
+    }
+}
+</script>
+{% endblock %}
