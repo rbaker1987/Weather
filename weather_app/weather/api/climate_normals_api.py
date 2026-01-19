@@ -22,14 +22,16 @@ class ClimateNormalsAPIView(APIView):
         location_id = request.query_params.get("location_id")
 
         if not location_id:
-            return Response(
-                {"error": "location_id parameter is required"}, status=400
-            )
-        
+            return Response({"error": "location_id parameter is required"}, status=400)
+
         # Don't fetch for custom locations (from map picker)
         if location_id == "custom":
             return Response(
-                {"error": "Cannot fetch climate normals for custom locations", "status": "custom_location"}, status=400
+                {
+                    "error": "Cannot fetch climate normals for custom locations",
+                    "status": "custom_location",
+                },
+                status=400,
             )
 
         try:
@@ -64,14 +66,13 @@ class ClimateNormalsAPIView(APIView):
                         "avg_low_temp": avg_low,
                     }
                 )
-            else:
-                return Response(
-                    {
-                        "status": "error",
-                        "error": "Could not fetch climate data from NWS",
-                    },
-                    status=500,
-                )
+            return Response(
+                {
+                    "status": "error",
+                    "error": "Could not fetch climate data from NWS",
+                },
+                status=500,
+            )
 
         except Exception as e:
             logger.error(f"Error fetching climate normals: {str(e)}")
@@ -93,19 +94,19 @@ class ClimateNormalsAPIView(APIView):
                 return None, None
 
             properties = points_data["properties"]
-            
+
             # Get the relative location info which gives us the nearest city
             relative_location = properties.get("relativeLocation", {})
             if not relative_location or not relative_location.get("properties"):
                 return None, None
-            
+
             rel_props = relative_location["properties"]
             city = rel_props.get("city")
             state = rel_props.get("state")
-            
+
             if not city or not state:
                 return None, None
-            
+
             logger.info(f"Found nearest location: {city}, {state}")
 
             # Get the forecast grid point
@@ -144,7 +145,9 @@ class ClimateNormalsAPIView(APIView):
             if highs and lows:
                 avg_high = sum(highs) / len(highs)
                 avg_low = sum(lows) / len(lows)
-                logger.info(f"Climate normals for {city}, {state}: High={avg_high}°F, Low={avg_low}°F")
+                logger.info(
+                    f"Climate normals for {city}, {state}: High={avg_high}°F, Low={avg_low}°F"
+                )
                 return round(avg_high, 1), round(avg_low, 1)
 
             return None, None

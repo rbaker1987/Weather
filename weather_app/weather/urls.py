@@ -61,7 +61,9 @@ urlpatterns = [
     path("forecasts/", views.ForecastListView.as_view(), name="forecast-list"),
     path("alerts/", views.AlertListView.as_view(), name="alert-list"),
     path("models/", views.ModelsView.as_view(), name="models"),
-    path("models/<str:model_name>/", views.ModelDetailView.as_view(), name="model-detail"),
+    path(
+        "models/<str:model_name>/", views.ModelDetailView.as_view(), name="model-detail"
+    ),
     # DRF browsable API
     path("api-auth/", include("rest_framework.urls")),
 ]

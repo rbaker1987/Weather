@@ -236,7 +236,7 @@ async function loadModelData() {
     const lat = selectedOption.dataset.lat;
     const lon = selectedOption.dataset.lon;
     const locationId = selectedOption.value;
-    
+
     // Fetch climate normals for this location if not already set
     if (locationId !== 'custom') {
         console.log(`Fetching climate normals for location ${locationId}`);
@@ -256,7 +256,7 @@ async function loadModelData() {
             })
             .catch(e => console.warn('Could not fetch climate normals:', e));
     }
-    
+
     // Get all available models from the model cards
     const modelCards = document.querySelectorAll('.model-card[data-model]');
     const models = Array.from(modelCards).map(card => card.dataset.model).join(',');
@@ -367,15 +367,15 @@ function hasValidData(arr) {
 function displayModelComparison(modelData) {
     document.getElementById('modelResults').style.display = 'block';
     const selectedModels = getSelectedModels();
-    
+
     // Fetch fresh climate normals for the current location
     const locationSelect = document.getElementById('locationSelect');
     const selectedOption = locationSelect?.options[locationSelect.selectedIndex];
     const locationId = selectedOption?.value;
-    
+
     let avgHighTemp = null;
     let avgLowTemp = null;
-    
+
     // Fetch climate normals if we have a real location
     if (locationId && locationId !== 'custom') {
         console.log(`displayModelComparison: Fetching normals for location ${locationId}`);
@@ -398,7 +398,7 @@ function displayModelComparison(modelData) {
             })
             .catch(e => console.warn('displayModelComparison: Error fetching climate normals:', e));
     }
-    
+
     // Display chart with initial climate normals (will update when fetched)
     refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp);
 }
@@ -415,7 +415,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const hrrrTemp = modelData.HRRR?.hourly?.temperature_2m || [];
     const namTemp = modelData.NAM?.hourly?.temperature_2m || [];
     const rgemTemp = modelData.RGEM?.hourly?.temperature_2m || [];
-    
+
     // Precipitation data
     const gfsPrec = modelData.GFS?.hourly?.precipitation || [];
     const iconPrec = modelData.ICON?.hourly?.precipitation || [];
@@ -425,7 +425,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const hrrrPrec = modelData.HRRR?.hourly?.precipitation || [];
     const namPrec = modelData.NAM?.hourly?.precipitation || [];
     const rgemPrec = modelData.RGEM?.hourly?.precipitation || [];
-    
+
     // Sample every 3 hours for cleaner charts
     const sampledTimes = times.filter((_, i) => i % 3 === 0);
     const sampledGfsTemp = gfsTemp.filter((_, i) => i % 3 === 0);
@@ -436,7 +436,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const sampledHrrrTemp = hrrrTemp.filter((_, i) => i % 3 === 0);
     const sampledNamTemp = namTemp.filter((_, i) => i % 3 === 0);
     const sampledRgemTemp = rgemTemp.filter((_, i) => i % 3 === 0);
-    
+
     // Sampled precipitation
     const sampledGfsPrec = gfsPrec.filter((_, i) => i % 3 === 0);
     const sampledIconPrec = iconPrec.filter((_, i) => i % 3 === 0);
@@ -446,13 +446,13 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const sampledHrrrPrec = hrrrPrec.filter((_, i) => i % 3 === 0);
     const sampledNamPrec = namPrec.filter((_, i) => i % 3 === 0);
     const sampledRgemPrec = rgemPrec.filter((_, i) => i % 3 === 0);
-    
+
     // Format time labels
     const labels = sampledTimes.map(t => {
         const date = new Date(t);
         return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit' });
     });
-    
+
     console.log('Chart data check:', {
         labelsCount: labels.length,
         selectedModels: Array.from(selectedModels),
@@ -463,13 +463,13 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
             GEM: sampledGemTemp?.length
         }
     });
-    
+
     // Update chart title with temperature level
     const tempLevelLabel = currentTempLevel === '925' ? '925 mb' : currentTempLevel === '850' ? '850 mb' : 'Surface (2m)';
     document.getElementById('chartTitle').innerHTML = `<i class='fas fa-temperature-high'></i> Model Comparison — Temperature: ${tempLevelLabel}`;
-    
+
     // Note: avgHighTemp and avgLowTemp are passed as function parameters, not from template context
-    
+
     // Store current location ID for climate normals refresh
     const locationSelect = document.getElementById('locationSelect');
     const selectedOption = locationSelect?.options[locationSelect.selectedIndex];
@@ -488,11 +488,11 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
                 .catch(e => console.warn('Could not update climate normals:', e));
         }
     };
-    
+
     // Create combined chart with temperature and precipitation
     if (tempChart) tempChart.destroy();
     const tempCtx = document.getElementById('tempChart').getContext('2d');
-    
+
     // Temperature datasets (line chart, left y-axis)
     const globalTempDatasets = [
         { label: 'GFS Temp', data: sampledGfsTemp, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.1)', tension: 0.4, spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
@@ -506,7 +506,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
         { label: 'NAM Temp', data: sampledNamTemp, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
         { label: 'RGEM Temp', data: sampledRgemTemp, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' }
     ];
-    
+
     // Precipitation datasets (bar chart, right y-axis)
     const globalPrecipDatasets = [
         { label: 'GFS Precip', data: sampledGfsPrec, borderColor: '#0d6efd', backgroundColor: 'rgba(13, 110, 253, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
@@ -520,26 +520,26 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
         { label: 'NAM Precip', data: sampledNamPrec, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
         { label: 'RGEM Precip', data: sampledRgemPrec, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true }
     ];
-    
+
     // Combine all datasets
     const tempDatasetsAll = globalTempDatasets.concat(regionalTempDatasets);
     const precipDatasetsAll = globalPrecipDatasets.concat(regionalPrecipDatasets);
-    
+
     // Filter by selected models - temperature lines
     const tempDatasets = tempDatasetsAll.filter(ds => {
         const modelName = ds.label.split(' ')[0];
         return selectedModels.has(modelName) && hasValidData(ds.data);
     });
-    
+
     // Filter by selected models - precipitation bars
     const precipDatasets = precipDatasetsAll.filter(ds => {
         const modelName = ds.label.split(' ')[0];
         return selectedModels.has(modelName) && hasValidData(ds.data);
     });
-    
+
     // Combine all datasets for the chart
     const allDatasets = tempDatasets.concat(precipDatasets);
-    
+
     tempChart = new Chart(tempCtx, {
         type: 'bar',
         data: { labels: labels, datasets: allDatasets },
@@ -548,8 +548,8 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
             maintainAspectRatio: true,
             spanGaps: true,
             interaction: { mode: 'index', intersect: false },
-            plugins: { 
-                legend: { position: 'top' }, 
+            plugins: {
+                legend: { position: 'top' },
                 tooltip: {},
                 annotation: {
                     drawTime: 'beforeDatasetsDraw',
@@ -585,8 +585,8 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
                     }
                 }
             },
-            scales: { 
-                y: { 
+            scales: {
+                y: {
                     type: 'linear',
                     position: 'left',
                     title: { display: true, text: 'Temperature (°F)' }
@@ -630,15 +630,15 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn('locationSelect element not found; skipping auto-load');
         return;
     }
-    
+
     const urlParams = new URLSearchParams(window.location.search);
     const customLat = urlParams.get('latitude');
     const customLon = urlParams.get('longitude');
     const locationIdFromUrl = urlParams.get('location_id');
-    
+
     console.log('DOMContentLoaded - URL params:', {customLat, customLon, locationIdFromUrl});
     console.log('Available location options:', Array.from(locationSelect.options).map(o => ({value: o.value, text: o.text})));
-    
+
     // First check if we have a location_id in the URL (from detail page)
     if(locationIdFromUrl && locationIdFromUrl !== 'custom') {
         console.log(`Looking for location with ID: ${locationIdFromUrl}`);
@@ -661,7 +661,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.warn(`Location with ID ${locationIdFromUrl} not found in dropdown`);
         }
     }
-    
+
     // Fall back to custom coordinates if we have lat/lon but no location_id
     if (customLat && customLon) {
         console.log('Creating custom location option');

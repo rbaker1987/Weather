@@ -1,7 +1,9 @@
 """Management command to populate climate normals for locations."""
+
 import requests
 from django.core.management.base import BaseCommand
 from django.db import transaction
+
 from weather.models import Location
 
 
@@ -22,7 +24,9 @@ class Command(BaseCommand):
         if location_id:
             locations = Location.objects.filter(id=location_id)
         else:
-            locations = Location.objects.filter(latitude__isnull=False, longitude__isnull=False)
+            locations = Location.objects.filter(
+                latitude__isnull=False, longitude__isnull=False
+            )
 
         self.stdout.write(f"Processing {locations.count()} location(s)...")
 
@@ -44,16 +48,14 @@ class Command(BaseCommand):
                     )
                 else:
                     self.stdout.write(
-                        self.style.WARNING(f"    ✗ Could not retrieve climate data")
+                        self.style.WARNING("    ✗ Could not retrieve climate data")
                     )
             except Exception as e:
                 self.stdout.write(
                     self.style.ERROR(f"    ✗ Error for {location.name}: {str(e)}")
                 )
 
-        self.stdout.write(
-            self.style.SUCCESS("✓ Climate normals population complete!")
-        )
+        self.stdout.write(self.style.SUCCESS("✓ Climate normals population complete!"))
 
     def _fetch_climate_normals(self, latitude, longitude):
         """
@@ -72,7 +74,7 @@ class Command(BaseCommand):
                 return None, None
 
             properties = points_data["properties"]
-            
+
             # Get the forecast grid point
             forecast_url = properties.get("forecast")
             if not forecast_url:
@@ -115,4 +117,3 @@ class Command(BaseCommand):
         except requests.exceptions.RequestException as e:
             self.stdout.write(self.style.ERROR(f"NWS API error: {str(e)}"))
             return None, None
-

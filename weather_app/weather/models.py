@@ -109,10 +109,14 @@ class Location(TimeStampedModel):
 
     # Climate normals (average high/low for this date)
     avg_high_temp = models.FloatField(
-        null=True, blank=True, help_text="Average high temperature for this location (°F)"
+        null=True,
+        blank=True,
+        help_text="Average high temperature for this location (°F)",
     )
     avg_low_temp = models.FloatField(
-        null=True, blank=True, help_text="Average low temperature for this location (°F)"
+        null=True,
+        blank=True,
+        help_text="Average low temperature for this location (°F)",
     )
 
     class LocationType(models.TextChoices):
