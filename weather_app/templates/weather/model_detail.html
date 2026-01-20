@@ -45,6 +45,7 @@ Weather{% endblock %} {% block extra_css %}
     <small class="text-muted">
       <i class="fas fa-clock"></i> Model Run: {{ run_time|date:'Y-m-d H:i' }} UTC
       {% if model_source %}<span class="ms-2 badge bg-info">{{ model_source }}</span>{% endif %}
+      {% if ensemble and ensemble != 'det' %}<span class="ms-2 badge bg-secondary">Ens: {{ ensemble }}</span>{% endif %}
     </small>
     {% endif %}
   </div>

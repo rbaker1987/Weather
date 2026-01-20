@@ -1932,6 +1932,11 @@ class ModelDetailView(TemplateView):
                 forecast_days = str(req_days_int)
             except ValueError:
                 forecast_days = str(config_max_days)
+        # Ensemble selection (for GFS/GEFS via NOMADS)
+        ensemble = request.GET.get("ens", "det").lower()
+        valid_ens = {"det", "control", "mean"} | {f"p{i:02d}" for i in range(1, 31)}
+        if ensemble not in valid_ens:
+            ensemble = "det"
         location_obj = None
         if not (lat and lon):
             location_ids = request.session.get("location_ids", [])
@@ -1950,17 +1955,34 @@ class ModelDetailView(TemplateView):
         model_source = "Open-Meteo"
         if lat and lon:
             import requests
-            from .noaa_service import fetch_noaa_forecast, NOAA_MODELS
             from datetime import datetime
+            from .noaa_service import fetch_noaa_forecast, NOAA_MODELS
+            from .noaa_nomads import fetch_gfs_nomads
 
-            # Try NOAA first if model is available
-            if model_name in NOAA_MODELS:
+            # Prefer NOMADS GRIB for GFS deterministic/ensemble to get full fields
+            if model_name == "GFS":
+                try:
+                    nomads_data = fetch_gfs_nomads(float(lat), float(lon), ensemble)
+                    if nomads_data:
+                        data = nomads_data
+                        model_source = nomads_data.get("model_source", "NOAA-NOMADS")
+                        if data.get("hourly", {}).get("time"):
+                            first_time = data["hourly"]["time"][0]
+                            run_time = datetime.fromisoformat(
+                                str(first_time).replace("Z", "+00:00")
+                            )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        f"NOMADS fetch failed for {model_name} ({ensemble}), falling back: {exc}"
+                    )
+
+            # If no data yet and model in NOAA set, try gridpoint API (surface-only)
+            if not data and model_name in NOAA_MODELS:
                 try:
                     noaa_data = fetch_noaa_forecast(float(lat), float(lon), model_name)
                     if noaa_data:
                         data = noaa_data
                         model_source = "NOAA"
-                        # Get run time from first hourly time
                         if data.get("hourly", {}).get("time"):
                             first_time = data["hourly"]["time"][0]
                             run_time = datetime.fromisoformat(
@@ -1986,7 +2008,6 @@ class ModelDetailView(TemplateView):
                 if config["models"]:
                     params["models"] = config["models"]
 
-                # Add cache-busting headers to ensure latest data
                 headers = {
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     "Pragma": "no-cache",
@@ -1999,7 +2020,6 @@ class ModelDetailView(TemplateView):
                     resp.raise_for_status()
                     data = resp.json()
                     model_source = "Open-Meteo"
-                    # Determine run time from first hourly time
                     if data.get("hourly", {}).get("time"):
                         first_time = data["hourly"]["time"][0]
                         run_time = datetime.fromisoformat(
@@ -2047,6 +2067,7 @@ class ModelDetailView(TemplateView):
                 "error": error,
                 "run_time": run_time,
                 "model_source": model_source,
+                "ensemble": ensemble,
                 "latitude": lat,
                 "longitude": lon,
                 "forecast_days": forecast_days,
