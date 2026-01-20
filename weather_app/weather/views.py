@@ -1947,42 +1947,66 @@ class ModelDetailView(TemplateView):
         data = None
         error = None
         run_time = None
+        model_source = "Open-Meteo"
         if lat and lon:
             import requests
+            from .noaa_service import fetch_noaa_forecast, NOAA_MODELS
+            from datetime import datetime
 
-            params = {
-                "latitude": lat,
-                "longitude": lon,
-                "hourly": self.EXTENDED_HOURLY,
-                "temperature_unit": "fahrenheit",
-                "precipitation_unit": "inch",
-                "windspeed_unit": "mph",
-                "timezone": "auto",
-                "forecast_days": forecast_days,
-            }
-            if config["models"]:
-                params["models"] = config["models"]
+            # Try NOAA first if model is available
+            if model_name in NOAA_MODELS:
+                try:
+                    noaa_data = fetch_noaa_forecast(float(lat), float(lon), model_name)
+                    if noaa_data:
+                        data = noaa_data
+                        model_source = "NOAA"
+                        # Get run time from first hourly time
+                        if data.get("hourly", {}).get("time"):
+                            first_time = data["hourly"]["time"][0]
+                            run_time = datetime.fromisoformat(
+                                first_time.replace("Z", "+00:00")
+                            )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        f"NOAA fetch failed for {model_name}, falling back to Open-Meteo: {exc}"
+                    )
 
-            # Add cache-busting headers to ensure latest data
-            headers = {
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-            }
+            # Fallback to Open-Meteo if NOAA unavailable or failed
+            if not data:
+                params = {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "hourly": self.EXTENDED_HOURLY,
+                    "temperature_unit": "fahrenheit",
+                    "precipitation_unit": "inch",
+                    "windspeed_unit": "mph",
+                    "timezone": "auto",
+                    "forecast_days": forecast_days,
+                }
+                if config["models"]:
+                    params["models"] = config["models"]
 
-            try:
-                resp = requests.get(
-                    config["url"], params=params, headers=headers, timeout=30
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                # Determine run time from first hourly time
-                if data.get("hourly", {}).get("time"):
-                    from datetime import datetime
+                # Add cache-busting headers to ensure latest data
+                headers = {
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                }
 
-                    first_time = data["hourly"]["time"][0]
-                    run_time = datetime.fromisoformat(first_time.replace("Z", "+00:00"))
-            except Exception as exc:  # noqa: BLE001
-                error = str(exc)
+                try:
+                    resp = requests.get(
+                        config["url"], params=params, headers=headers, timeout=30
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    model_source = "Open-Meteo"
+                    # Determine run time from first hourly time
+                    if data.get("hourly", {}).get("time"):
+                        first_time = data["hourly"]["time"][0]
+                        run_time = datetime.fromisoformat(
+                            first_time.replace("Z", "+00:00")
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    error = str(exc)
         else:
             error = "Latitude/longitude not provided and no fallback location available"
 
@@ -2022,6 +2046,7 @@ class ModelDetailView(TemplateView):
                 "data_json": json.dumps(data) if data is not None else "null",
                 "error": error,
                 "run_time": run_time,
+                "model_source": model_source,
                 "latitude": lat,
                 "longitude": lon,
                 "forecast_days": forecast_days,

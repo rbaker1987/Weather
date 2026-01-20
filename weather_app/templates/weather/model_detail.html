@@ -44,6 +44,7 @@ Weather{% endblock %} {% block extra_css %}
     {% if run_time %}
     <small class="text-muted">
       <i class="fas fa-clock"></i> Model Run: {{ run_time|date:'Y-m-d H:i' }} UTC
+      {% if model_source %}<span class="ms-2 badge bg-info">{{ model_source }}</span>{% endif %}
     </small>
     {% endif %}
   </div>
