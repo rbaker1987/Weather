@@ -141,10 +141,13 @@ function loadBrowserLocation() {
         window.browserLocationCoords = { lat, lon };
         try {
             // Reverse geocode for display name
-            const geoResp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, { headers: { 'User-Agent': 'WeatherApp/1.0' } });
+            const geoResp = await fetch(`/api/locations/geocode_reverse/?lat=${lat}&lon=${lon}`);
             const geoData = await geoResp.json();
+            if (geoData.status !== 'success') {
+                throw new Error('Reverse geocoding failed');
+            }
             const address = geoData.address || {};
-            let locationName = address.city || address.town || address.village || address.county || 'Your Location';
+            let locationName = address.city || address.town || address.village || address.county || geoData.display_name || 'Your Location';
             document.getElementById('browserLocationName').textContent = locationName;
 
             // NWS: find nearest station and get latest observation
