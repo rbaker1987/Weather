@@ -62,9 +62,7 @@ Weather{% endblock %} {% block extra_css %}
 </div>
 <!-- Toggles replicated from main models page -->
 <div class="row g-3 align-items-end mb-4">
-  {% include "weather/components/location_selector.html" with locations=locations
-  latitude=latitude longitude=longitude location_col_class='col-md-4'
-  map_btn_col_class='col-md-1' %}
+  {% include "weather/components/location_selector.html" with locations=locations latitude=latitude longitude=longitude location_col_class='col-md-4' map_btn_col_class='col-md-1' %}
   <div class="col-md-2">
     <label for="detailForecastDays" class="form-label">Forecast Days</label>
     <select id="detailForecastDays" class="form-select">
@@ -151,6 +149,10 @@ Weather{% endblock %} {% block extra_css %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script>
+  // Make location data available globally to setupModelDetailListeners
+  const detailLocations = {{ locations_json|safe }};
+  const detailLocationList = Array.isArray(detailLocations) ? detailLocations : [];
+  
   (function() {
     const data = {{ data_json|safe }};
     if(!data) return;
@@ -451,10 +453,94 @@ Weather{% endblock %} {% block extra_css %}
   })();
 
   // Handle location / forecast day / model changes -> reload detail
-  document.addEventListener('DOMContentLoaded', function(){
-    const locSel = document.getElementById('detailLocationSelect');
+  // Set up event listeners early, before DOMContentLoaded
+  let setupRetries = 0;
+  const MAX_RETRIES = 50;  // Allow up to 50 retries (5 seconds at 100ms intervals)
+
+  function buildLocationSelectFallback(daysSel){
+    const row = daysSel ? daysSel.closest('.row') : document.querySelector('.row.g-3.align-items-end.mb-4');
+    if(!row) return null;
+    const col = document.createElement('div');
+    col.className = 'col-md-4';
+    col.innerHTML = '<label for="detailLocationSelect" class="form-label">Location</label><select id="detailLocationSelect" class="form-select"></select>';
+    if(daysSel && daysSel.parentElement){
+      row.insertBefore(col, daysSel.parentElement);
+    } else {
+      row.prepend(col);
+    }
+    return col.querySelector('#detailLocationSelect');
+  }
+
+  function populateLocationSelect(select){
+    if(!select) return;
+    select.innerHTML = '';
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLat = urlParams.get('latitude');
+    const urlLon = urlParams.get('longitude');
+    let matched = false;
+    detailLocationList.forEach(loc => {
+      if(loc.latitude === null || loc.longitude === null) return;
+      const opt = document.createElement('option');
+      opt.value = loc.id;
+      opt.dataset.lat = loc.latitude;
+      opt.dataset.lon = loc.longitude;
+      if(loc.is_current_location) opt.dataset.current = '1';
+      opt.textContent = loc.display_name;
+      if(urlLat && urlLon && String(loc.latitude) === String(urlLat) && String(loc.longitude) === String(urlLon)){
+        opt.selected = true;
+        matched = true;
+      }
+      select.appendChild(opt);
+    });
+    if(urlLat && urlLon && !matched){
+      const opt = document.createElement('option');
+      opt.value = 'custom';
+      opt.dataset.lat = urlLat;
+      opt.dataset.lon = urlLon;
+      opt.textContent = `Map Location (${parseFloat(urlLat).toFixed(4)}, ${parseFloat(urlLon).toFixed(4)})`;
+      opt.selected = true;
+      select.appendChild(opt);
+    }
+    if(!select.options.length){
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '-- No location selected --';
+      select.appendChild(opt);
+    }
+  }
+  
+  function setupModelDetailListeners(){
+    let locSel = document.getElementById('detailLocationSelect');
     const daysSel = document.getElementById('detailForecastDays');
     const modelSel = document.getElementById('detailModelSelect');
+    if(!locSel){
+      locSel = buildLocationSelectFallback(daysSel);
+      populateLocationSelect(locSel);
+    } else if(locSel && locSel.options.length === 0 && detailLocationList.length){
+      populateLocationSelect(locSel);
+    }
+    
+    console.log('setupModelDetailListeners called (attempt', setupRetries + 1 + '): locSel=', !!locSel, 'daysSel=', !!daysSel, 'modelSel=', !!modelSel);
+    
+    if(!locSel || !daysSel || !modelSel) {
+      if(setupRetries < MAX_RETRIES) {
+        setupRetries++;
+        console.warn('Model detail selectors not found, retrying (attempt ' + (setupRetries + 1) + ')...');
+        // Log what we can find to debug
+        if(setupRetries === 1 || setupRetries === MAX_RETRIES) {
+          console.log('DOM search debug - looking for detailLocationSelect:');
+          const allSelects = document.querySelectorAll('select');
+          console.log('Total selects in page:', allSelects.length);
+          allSelects.forEach((sel, idx) => console.log(`  Select ${idx}: id="${sel.id}" class="${sel.className}"`));
+        }
+        setTimeout(setupModelDetailListeners, 100);
+        return;
+      } else {
+        console.error('Model detail selectors not found after max retries. locSel:', locSel, 'daysSel:', daysSel, 'modelSel:', modelSel);
+        return;
+      }
+    }
+    
     const modelMaxDaysMap = {GFS:16,ICON:7,ECMWF:10,AIFS:10,GEM:10,HRRR:2,NAM:3,RGEM:2};
     const baseDayOptions = [2,3,5,7,10,14,16];
 
@@ -510,6 +596,7 @@ Weather{% endblock %} {% block extra_css %}
       const lon = opt.dataset.lon;
       const locationId = opt.value; // Get the location ID from the option
       const selectedModel = modelSel ? modelSel.value : '{{ model_name }}';
+      console.log('reloadDetail: lat=', lat, 'lon=', lon, 'model=', selectedModel);
       rebuildDayOptions(selectedModel);
       const days = ensureDaysWithinModel(selectedModel);
       const base = `/models/${selectedModel}/`;
@@ -518,33 +605,78 @@ Weather{% endblock %} {% block extra_css %}
       if(locationId && locationId !== 'custom') {
         url += `&location_id=${locationId}`;
       }
+      console.log('Navigating to:', url);
       window.location = url;
     }
 
     // Preserve current coordinates when changing only forecast days or model
     function reloadWithCurrentCoords(forceExpand){
       if(!daysSel) return;
-      const urlParams = new URLSearchParams(window.location.search);
-      const currentLat = urlParams.get('latitude');
-      const currentLon = urlParams.get('longitude');
+      // Get selected model FIRST before any DOM manipulation
+      const selectedModel = modelSel ? modelSel.value : '{{ model_name }}';
+      console.log('reloadWithCurrentCoords: selectedModel=', selectedModel, 'forceExpand=', forceExpand);
+      
+      // Prefer the currently selected location in the dropdown (avoids stale URL coords)
+      let lat = null;
+      let lon = null;
+      let locationId = null;
+      if(locSel && locSel.options && locSel.selectedIndex >= 0){
+        const opt = locSel.options[locSel.selectedIndex];
+        lat = opt?.dataset?.lat || null;
+        lon = opt?.dataset?.lon || null;
+        locationId = opt?.value || null;
+      }
+      // Fallback to URL params if no dropdown coordinates
+      if(!lat || !lon){
+        const urlParams = new URLSearchParams(window.location.search);
+        lat = urlParams.get('latitude');
+        lon = urlParams.get('longitude');
+        locationId = urlParams.get('location_id');
+      }
 
-      if(currentLat && currentLon) {
-        const selectedModel = modelSel ? modelSel.value : '{{ model_name }}';
+      if(lat && lon) {
+        console.log('reloadWithCurrentCoords: using coords lat=', lat, 'lon=', lon);
         rebuildDayOptions(selectedModel);
         const days = forceExpand ? expandDaysToModelMax(selectedModel) : ensureDaysWithinModel(selectedModel);
         const base = `/models/${selectedModel}/`;
-        const url = `${base}?latitude=${currentLat}&longitude=${currentLon}&forecast_days=${days}`;
+        let url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
+        if(locationId && locationId !== 'custom') {
+          url += `&location_id=${locationId}`;
+        }
+        console.log('Navigating to:', url);
         window.location = url;
       } else {
+        console.log('No coordinates found, calling reloadDetail');
         reloadDetail();
       }
     }
-    if(locSel) locSel.addEventListener('change', reloadDetail);
-    if(daysSel) daysSel.addEventListener('change', function(){ reloadWithCurrentCoords(false); });
-    if(modelSel) modelSel.addEventListener('change', function(){ reloadWithCurrentCoords(true); });
+    
+    // Attach event listeners
+    locSel.addEventListener('change', function(){
+      console.log('Location changed');
+      reloadDetail();
+    });
+    daysSel.addEventListener('change', function(){
+      console.log('Days changed');
+      reloadWithCurrentCoords(false);
+    });
+    modelSel.addEventListener('change', function(){
+      console.log('Model changed');
+      reloadWithCurrentCoords(true);
+    });
+    
     // Initial prune based on current model on page load
     rebuildDayOptions(modelSel ? modelSel.value : '{{ model_name }}');
-  });
+    console.log('Event listeners attached successfully');
+  }
+  
+  // Try to setup immediately, and also on DOMContentLoaded
+  if(document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupModelDetailListeners);
+  } else {
+    setupModelDetailListeners();
+  }
+
 </script>
 
 <!-- Include location picker map component -->
