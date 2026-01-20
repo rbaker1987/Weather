@@ -543,11 +543,14 @@
         try {
           // Get location name
           const geoResponse = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${lat}&lon=${lon}&zoom=14`,
-            { headers: { "User-Agent": "WeatherApp/1.0" } }
+            `/api/locations/geocode_reverse/?lat=${lat}&lon=${lon}`
           );
           const geoData = await geoResponse.json();
           console.log("Geocoding response:", geoData);
+
+          if (geoData.status !== "success") {
+            throw new Error("Reverse geocoding failed");
+          }
 
           const address = geoData.address || {};
           // Prefer more specific local names; fall back sensibly

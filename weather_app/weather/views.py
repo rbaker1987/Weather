@@ -1988,6 +1988,32 @@ class ModelDetailView(TemplateView):
 
         import json
 
+        # Get locations from session if available, otherwise show all active locations
+        location_ids = request.session.get("location_ids", [])
+        if location_ids:
+            locations_qs = Location.objects.filter(
+                is_active=True,
+                id__in=location_ids,
+            ).order_by("-is_current_location", "display_order", "name")
+        else:
+            # Fallback: show all active locations if session is empty
+            locations_qs = Location.objects.filter(
+                is_active=True
+            ).order_by("-is_current_location", "display_order", "name")
+
+        # Convert to list to ensure it's always a renderable object
+        locations_list = list(locations_qs)
+        locations_payload = [
+            {
+                "id": str(loc.id),
+                "display_name": loc.display_name,
+                "latitude": float(loc.latitude) if loc.latitude is not None else None,
+                "longitude": float(loc.longitude) if loc.longitude is not None else None,
+                "is_current_location": loc.is_current_location,
+            }
+            for loc in locations_list
+        ]
+
         context.update(
             {
                 "model_name": model_name,
@@ -1999,10 +2025,8 @@ class ModelDetailView(TemplateView):
                 "latitude": lat,
                 "longitude": lon,
                 "forecast_days": forecast_days,
-                "locations": Location.objects.filter(
-                    is_active=True,
-                    id__in=request.session.get("location_ids", []),
-                ).order_by("-is_current_location", "display_order", "name"),
+                "locations": locations_list,
+                "locations_json": json.dumps(locations_payload),
                 "available_models": list(self.MODEL_CONFIGS.keys()),
                 "page_title": f"{model_name} Model Details",
             }

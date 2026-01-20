@@ -2,9 +2,11 @@
 <div class="{{ location_col_class|default:'col-md-6' }}">
   <label for="detailLocationSelect" class="form-label">Location</label>
   <select id="detailLocationSelect" class="form-select">
-    {% for loc in locations %}
-      <option value="{{ loc.id }}" data-lat="{{ loc.latitude }}" data-lon="{{ loc.longitude }}" {% if loc.is_current_location %}data-current="1"{% endif %} {% if current_location_id and loc.id == current_location_id %}selected{% endif %}>{{ loc.display_name }}</option>
-    {% endfor %}
+    {% if locations %}
+      {% for loc in locations %}
+        <option value="{{ loc.id }}" data-lat="{{ loc.latitude }}" data-lon="{{ loc.longitude }}" {% if loc.is_current_location %}data-current="1"{% endif %} {% if current_location_id and loc.id == current_location_id %}selected{% endif %}>{{ loc.display_name }}</option>
+      {% endfor %}
+    {% endif %}
     {% if latitude and longitude %}
       {% with has_match=False %}
         {% for loc in locations %}
@@ -16,6 +18,8 @@
           <option value="custom" data-lat="{{ latitude }}" data-lon="{{ longitude }}" selected>📍 Map Location ({{ latitude|floatformat:4 }}, {{ longitude|floatformat:4 }})</option>
         {% endif %}
       {% endwith %}
+    {% else %}
+      <option value="">-- No location selected --</option>
     {% endif %}
   </select>
 </div>
