@@ -407,14 +407,23 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const selectedModels = getSelectedModels();
     // Prepare data for charts
     const times = modelData.GFS?.hourly?.time || [];
-    const gfsTemp = modelData.GFS?.hourly?.temperature_2m || [];
-    const iconTemp = modelData.ICON?.hourly?.temperature_2m || [];
-    const ecmwfTemp = modelData.ECMWF?.hourly?.temperature_2m || [];
-    const aifsTemp = modelData.AIFS?.hourly?.temperature_2m || [];
-    const gemTemp = modelData.GEM?.hourly?.temperature_2m || [];
-    const hrrrTemp = modelData.HRRR?.hourly?.temperature_2m || [];
-    const namTemp = modelData.NAM?.hourly?.temperature_2m || [];
-    const rgemTemp = modelData.RGEM?.hourly?.temperature_2m || [];
+    
+    // Select temperature field based on currentTempLevel
+    let tempField = 'temperature_2m';  // default surface
+    if (currentTempLevel === '925') {
+        tempField = 'temperature_925hPa';
+    } else if (currentTempLevel === '850') {
+        tempField = 'temperature_850hPa';
+    }
+    
+    const gfsTemp = modelData.GFS?.hourly?.[tempField] || [];
+    const iconTemp = modelData.ICON?.hourly?.[tempField] || [];
+    const ecmwfTemp = modelData.ECMWF?.hourly?.[tempField] || [];
+    const aifsTemp = modelData.AIFS?.hourly?.[tempField] || [];
+    const gemTemp = modelData.GEM?.hourly?.[tempField] || [];
+    const hrrrTemp = modelData.HRRR?.hourly?.[tempField] || [];
+    const namTemp = modelData.NAM?.hourly?.[tempField] || [];
+    const rgemTemp = modelData.RGEM?.hourly?.[tempField] || [];
 
     // Precipitation data
     const gfsPrec = modelData.GFS?.hourly?.precipitation || [];
@@ -562,7 +571,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
                             borderWidth: 2,
                             borderDash: [5, 5]
                         },
-                        ...(avgHighTemp !== null && {
+                        ...(avgHighTemp !== null && currentTempLevel === 'surface' && {
                             averageHighLine: {
                                 type: 'line',
                                 yMin: avgHighTemp,
@@ -572,7 +581,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
                                 borderDash: [5, 5]
                             }
                         }),
-                        ...(avgLowTemp !== null && {
+                        ...(avgLowTemp !== null && currentTempLevel === 'surface' && {
                             averageLowLine: {
                                 type: 'line',
                                 yMin: avgLowTemp,
@@ -604,6 +613,16 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
 }
 function onModelSelectionChange() {
     if (currentModelData) displayModelComparison(currentModelData);
+}
+
+function changeTempLevel() {
+    const select = document.getElementById('tempLevelSelect');
+    if (!select) return;
+    currentTempLevel = select.value;
+    // Update chart title and data based on selected level
+    if (currentModelData) {
+        displayModelComparison(currentModelData);
+    }
 }
 
 function cardClick(event) {
