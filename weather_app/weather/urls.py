@@ -49,6 +49,11 @@ urlpatterns = [
         ClimateNormalsAPIView.as_view(),
         name="climate-normals",
     ),
+        path(
+            "forecasts/custom/",
+            views.CustomForecastView.as_view(),
+            name="custom-forecast",
+        ),
     # Web interface
     path("", views.DashboardView.as_view(), name="dashboard"),
     path("locations/", views.LocationListView.as_view(), name="location-list"),

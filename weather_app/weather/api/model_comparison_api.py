@@ -85,7 +85,7 @@ class ModelComparisonAPIView(APIView):
             "longitude": lon,
             "hourly": "temperature_2m,temperature_925hPa,temperature_850hPa,precipitation",
             "temperature_unit": "fahrenheit",
-            "precipitation_unit": "inch",
+            "precipitation_unit": "mm",
             "timezone": "auto",
             "forecast_days": min(forecast_days, config["max_days"]),
         }

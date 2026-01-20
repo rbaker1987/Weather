@@ -2644,4 +2644,78 @@ class ForecastListView(ListView):
         return context
 
 
+class CustomForecastView(TemplateView):
+    template_name = "weather/custom_forecast.html"
+
+    def get_context_data(self, **kwargs):
+        import requests
+        from weather.models import Location
+
+        context = super().get_context_data(**kwargs)
+        request = self.request
+
+        latitude = request.GET.get("latitude")
+        longitude = request.GET.get("longitude")
+        location_id = request.GET.get("location_id")
+
+        locations = (
+            Location.objects.filter(is_active=True)
+            .order_by("-is_current_location", "display_order", "name")
+        )
+
+        nws_forecast_periods = []
+        climate_normals = {}
+
+        # If location_id provided, fetch reference data
+        if location_id:
+            try:
+                location = Location.objects.get(id=location_id)
+                latitude = location.latitude
+                longitude = location.longitude
+
+                # Fetch climate normals
+                if location.avg_high_temp and location.avg_low_temp:
+                    climate_normals = {
+                        "avg_high": location.avg_high_temp,
+                        "avg_low": location.avg_low_temp,
+                    }
+
+                # Fetch NWS forecast for reference
+                points_url = f"https://api.weather.gov/points/{latitude},{longitude}"
+                points_resp = requests.get(
+                    points_url,
+                    headers={"User-Agent": "WeatherApp/1.0"},
+                    timeout=10,
+                )
+                if points_resp.status_code == 200:
+                    points_data = points_resp.json()
+                    forecast_url = points_data.get("properties", {}).get("forecast")
+                    if forecast_url:
+                        forecast_resp = requests.get(
+                            forecast_url,
+                            headers={"User-Agent": "WeatherApp/1.0"},
+                            timeout=10,
+                        )
+                        if forecast_resp.status_code == 200:
+                            forecast_data = forecast_resp.json()
+                            nws_forecast_periods = forecast_data.get(
+                                "properties", {}
+                            ).get("periods", [])[:14]  # Get 7 days (14 periods)
+            except (Location.DoesNotExist, requests.RequestException) as e:
+                # Log error but continue
+                pass
+
+        context.update(
+            {
+                "locations": locations,
+                "latitude": latitude,
+                "longitude": longitude,
+                "location_id": location_id,
+                "nws_forecast_periods": nws_forecast_periods,
+                "climate_normals": climate_normals,
+            }
+        )
+        return context
+
+
 # Duplicate AlertListView removed to avoid F811 redefinition; earlier definition retained.
