@@ -151,7 +151,30 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Weather app specific settings
 NWS_API_BASE_URL = 'https://api.weather.gov'
 OPENWEATHERMAP_API_KEY = os.getenv('OPENWEATHERMAP_API_KEY', '')
-CACHE_TIMEOUT = 300  # 5 minutes
+CACHE_TIMEOUT = int(os.getenv('CACHE_TIMEOUT', '300'))  # default 5 minutes
+MODEL_DETAIL_CACHE_SECONDS = int(os.getenv('MODEL_DETAIL_CACHE_SECONDS', str(CACHE_TIMEOUT)))
+
+# Caching configuration: prefer Redis via REDIS_URL, fallback to local memory
+REDIS_URL = os.getenv('REDIS_URL')
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'db': int(os.getenv('REDIS_DB', '0')),
+            },
+            'TIMEOUT': CACHE_TIMEOUT,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'weather-local-cache',
+            'TIMEOUT': CACHE_TIMEOUT,
+        }
+    }
 
 # Logging configuration
 LOGGING = {

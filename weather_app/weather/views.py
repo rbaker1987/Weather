@@ -1,6 +1,7 @@
 """Django REST Framework views for weather API."""
 
 import json
+import os
 import logging
 from datetime import datetime, time, timedelta
 
@@ -30,6 +31,8 @@ from .serializers import (
 from .utils.apparent_temperature import calculate_apparent_temperature
 
 logger = logging.getLogger("weather")
+from django.core.cache import cache
+from django.conf import settings
 
 
 def fetch_current_conditions(location):
@@ -1904,6 +1907,8 @@ class ModelDetailView(TemplateView):
     )
 
     def get_context_data(self, **kwargs):
+        import time
+        fetch_start = time.time()
         context = super().get_context_data(**kwargs)
         request = self.request
         model_name = kwargs.get("model_name", "").upper()
@@ -1953,80 +1958,174 @@ class ModelDetailView(TemplateView):
         error = None
         run_time = None
         model_source = "Open-Meteo"
+        cycle = None
+        forecast_hours = None
         if lat and lon:
             import requests
             from datetime import datetime
             from .noaa_service import fetch_noaa_forecast, NOAA_MODELS
             from .noaa_nomads import fetch_gfs_nomads
 
+            # Temporary: rely solely on Open-Meteo for all models (skip NOMADS/NOAA)
+            only_open_meteo = True
+            # Try cache first to avoid repeated slow fetches
+            try:
+                lat_f = float(lat)
+                lon_f = float(lon)
+            except Exception:
+                lat_f = lat
+                lon_f = lon
+            cache_key = f"model_detail:{model_name}:{ensemble}:{lat_f}:{lon_f}:days:{forecast_days}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                data = cached
+                # Extract metadata from cached data if present
+                model_source = data.get("model_source", "Open-Meteo")
+                cycle = data.get("cycle")
+                logger.info(f"ModelDetailView cache hit for {cache_key} (source={model_source}, cycle={cycle})")
+
             # Prefer NOMADS GRIB for GFS deterministic/ensemble to get full fields
-            if model_name == "GFS":
+            # Use 45s timeout to allow fetching many forecast hours despite 404s
+            if not only_open_meteo and not data and model_name == "GFS":
                 try:
-                    nomads_data = fetch_gfs_nomads(float(lat), float(lon), ensemble)
+                    nomads_start = time.time()
+                    logger.info(f"Attempting NOMADS fetch for GFS {ensemble} at {lat},{lon}")
+                    nomads_data = fetch_gfs_nomads(float(lat), float(lon), ensemble, timeout=45)
                     if nomads_data:
                         data = nomads_data
                         model_source = nomads_data.get("model_source", "NOAA-NOMADS")
+                        cycle = nomads_data.get("cycle")
+                        forecast_hours = nomads_data.get("forecast_hours")
+                        # Ensure metadata is in the data dict for caching
+                        data["model_source"] = model_source
+                        data["cycle"] = cycle
+                        nomads_elapsed = time.time() - nomads_start
+                        logger.info(f"NOMADS successful in {nomads_elapsed:.2f}s: {len(data.get('hourly', {}).get('time', []))} time points")
                         if data.get("hourly", {}).get("time"):
                             first_time = data["hourly"]["time"][0]
                             run_time = datetime.fromisoformat(
                                 str(first_time).replace("Z", "+00:00")
                             )
+                        # Cache NOMADS result with metadata
+                        cache.set(cache_key, data, timeout=getattr(settings, "MODEL_DETAIL_CACHE_SECONDS", getattr(settings, "CACHE_TIMEOUT", 300)))
+                    else:
+                        logger.warning(f"NOMADS returned None for GFS {ensemble}")
                 except Exception as exc:  # noqa: BLE001
+                    nomads_elapsed = time.time() - nomads_start
                     logger.warning(
-                        f"NOMADS fetch failed for {model_name} ({ensemble}), falling back: {exc}"
+                        f"NOMADS fetch failed in {nomads_elapsed:.2f}s for {model_name} ({ensemble}), falling back: {exc}"
                     )
 
-            # If no data yet and model in NOAA set, try gridpoint API (surface-only)
-            if not data and model_name in NOAA_MODELS:
+            # For GFS: if NOMADS failed, prefer Open-Meteo next for richer fields
+            if not data and model_name == "GFS":
                 try:
-                    noaa_data = fetch_noaa_forecast(float(lat), float(lon), model_name)
-                    if noaa_data:
-                        data = noaa_data
-                        model_source = "NOAA"
-                        if data.get("hourly", {}).get("time"):
-                            first_time = data["hourly"]["time"][0]
-                            run_time = datetime.fromisoformat(
-                                first_time.replace("Z", "+00:00")
-                            )
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(
-                        f"NOAA fetch failed for {model_name}, falling back to Open-Meteo: {exc}"
-                    )
+                    om_start = time.time()
+                    params = {
+                        "latitude": lat,
+                        "longitude": lon,
+                        "hourly": self.EXTENDED_HOURLY,
+                        "temperature_unit": "fahrenheit",
+                        "precipitation_unit": "inch",
+                        "windspeed_unit": "mph",
+                        "timezone": "auto",
+                        "forecast_days": forecast_days,
+                    }
+                    if config["models"]:
+                        params["models"] = config["models"]
 
-            # Fallback to Open-Meteo if NOAA unavailable or failed
-            if not data:
-                params = {
-                    "latitude": lat,
-                    "longitude": lon,
-                    "hourly": self.EXTENDED_HOURLY,
-                    "temperature_unit": "fahrenheit",
-                    "precipitation_unit": "inch",
-                    "windspeed_unit": "mph",
-                    "timezone": "auto",
-                    "forecast_days": forecast_days,
-                }
-                if config["models"]:
-                    params["models"] = config["models"]
+                    headers = {
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache",
+                    }
 
-                headers = {
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Pragma": "no-cache",
-                }
-
-                try:
                     resp = requests.get(
-                        config["url"], params=params, headers=headers, timeout=30
+                        config["url"], params=params, headers=headers, timeout=int(os.getenv("OPEN_METEO_TIMEOUT", "15"))
                     )
                     resp.raise_for_status()
                     data = resp.json()
                     model_source = "Open-Meteo"
+                    cycle = None  # Open-Meteo doesn't provide cycle info
+                    # Inject metadata into data dict for caching
+                    data["model_source"] = model_source
+                    data["cycle"] = cycle
                     if data.get("hourly", {}).get("time"):
                         first_time = data["hourly"]["time"][0]
                         run_time = datetime.fromisoformat(
                             first_time.replace("Z", "+00:00")
                         )
+                    om_elapsed = time.time() - om_start
+                    logger.info(f"Open-Meteo fetched in {om_elapsed:.2f}s")
+                    cache.set(cache_key, data, timeout=getattr(settings, "MODEL_DETAIL_CACHE_SECONDS", getattr(settings, "CACHE_TIMEOUT", 300)))
                 except Exception as exc:  # noqa: BLE001
-                    error = str(exc)
+                    om_elapsed = time.time() - om_start
+                    logger.warning(f"Open-Meteo failed in {om_elapsed:.2f}s: {exc}")
+
+            # If still no data and model in NOAA set, try gridpoint API (surface-only)
+            if not only_open_meteo and not data and model_name in NOAA_MODELS:
+                try:
+                    noaa_data = fetch_noaa_forecast(float(lat), float(lon), model_name)
+                    if noaa_data:
+                        data = noaa_data
+                        model_source = "NOAA"
+                        cycle = None  # NOAA gridpoint doesn't provide cycle info
+                        # Inject metadata into data dict for caching
+                        data["model_source"] = model_source
+                        data["cycle"] = cycle
+                        if data.get("hourly", {}).get("time"):
+                            first_time = data["hourly"]["time"][0]
+                            run_time = datetime.fromisoformat(
+                                first_time.replace("Z", "+00:00")
+                            )
+                        cache.set(cache_key, data, timeout=getattr(settings, "MODEL_DETAIL_CACHE_SECONDS", getattr(settings, "CACHE_TIMEOUT", 300)))
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        f"NOAA fetch failed for {model_name} after other fallbacks: {exc}"
+                    )
+
+            # Fallback for all other models (ICON, ECMWF, AIFS, GEM, etc.) - use Open-Meteo
+            if not data and model_name != "GFS":
+                try:
+                    om_start = time.time()
+                    logger.info(f"Fetching {model_name} from Open-Meteo at {lat},{lon}")
+                    params = {
+                        "latitude": lat,
+                        "longitude": lon,
+                        "hourly": self.EXTENDED_HOURLY,
+                        "temperature_unit": "fahrenheit",
+                        "precipitation_unit": "inch",
+                        "windspeed_unit": "mph",
+                        "timezone": "auto",
+                        "forecast_days": forecast_days,
+                    }
+                    if config["models"]:
+                        params["models"] = config["models"]
+
+                    headers = {
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache",
+                    }
+
+                    resp = requests.get(
+                        config["url"], params=params, headers=headers, timeout=int(os.getenv("OPEN_METEO_TIMEOUT", "15"))
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    model_source = "Open-Meteo"
+                    cycle = None  # Open-Meteo doesn't provide cycle info
+                    # Inject metadata into data dict for caching
+                    data["model_source"] = model_source
+                    data["cycle"] = cycle
+                    if data.get("hourly", {}).get("time"):
+                        first_time = data["hourly"]["time"][0]
+                        run_time = datetime.fromisoformat(
+                            first_time.replace("Z", "+00:00")
+                        )
+                    om_elapsed = time.time() - om_start
+                    logger.info(f"Open-Meteo {model_name} fetched in {om_elapsed:.2f}s")
+                    cache.set(cache_key, data, timeout=getattr(settings, "MODEL_DETAIL_CACHE_SECONDS", getattr(settings, "CACHE_TIMEOUT", 300)))
+                except Exception as exc:  # noqa: BLE001
+                    om_elapsed = time.time() - om_start
+                    logger.warning(f"Open-Meteo {model_name} failed in {om_elapsed:.2f}s: {exc}")
         else:
             error = "Latitude/longitude not provided and no fallback location available"
 
@@ -2045,6 +2144,37 @@ class ModelDetailView(TemplateView):
                 is_active=True
             ).order_by("-is_current_location", "display_order", "name")
 
+        # Trim hourly data to requested forecast_days window to reduce JSON payload
+        if data and data.get("hourly") and data["hourly"].get("time"):
+            try:
+                from datetime import timedelta
+                times = data["hourly"]["time"]
+                if times:
+                    first_time = datetime.fromisoformat(str(times[0]).replace("Z", "+00:00"))
+                    cutoff = first_time + timedelta(days=int(forecast_days))
+                    trim_idx = 0
+                    for i, t in enumerate(times):
+                        t_dt = datetime.fromisoformat(str(t).replace("Z", "+00:00"))
+                        if t_dt > cutoff:
+                            trim_idx = i
+                            break
+                    else:
+                        trim_idx = len(times)  # use all if none exceed cutoff
+                    if trim_idx > 0 and trim_idx < len(times):
+                        # Trim all hourly arrays
+                        for key in data["hourly"]:
+                            if isinstance(data["hourly"][key], list):
+                                data["hourly"][key] = data["hourly"][key][:trim_idx]
+                        logger.info(f"Trimmed hourly data from {len(times)} to {trim_idx} points (forecast_days={forecast_days})")
+            except Exception as e:
+                logger.warning(f"Failed to trim hourly data: {e}")
+        
+        # Inject metadata into data dict so it's available in the frontend
+        if data:
+            data["model_source"] = model_source
+            data["cycle"] = cycle
+            data["elevation"] = data.get("elevation")  # preserve existing elevation if present
+        
         # Convert to list to ensure it's always a renderable object
         locations_list = list(locations_qs)
         locations_payload = [
@@ -2068,6 +2198,8 @@ class ModelDetailView(TemplateView):
                 "run_time": run_time,
                 "model_source": model_source,
                 "ensemble": ensemble,
+                "cycle": cycle,
+                "forecast_hours": forecast_hours,
                 "latitude": lat,
                 "longitude": lon,
                 "forecast_days": forecast_days,
@@ -2077,6 +2209,8 @@ class ModelDetailView(TemplateView):
                 "page_title": f"{model_name} Model Details",
             }
         )
+        fetch_elapsed = time.time() - fetch_start
+        logger.info(f"ModelDetailView completed in {fetch_elapsed:.2f}s")
         return context
 
 
