@@ -388,30 +388,56 @@ Weather{% endblock %} {% block extra_css %}
     const rh850 = hourly.relativehumidity_850hPa||[];
     const rh700 = hourly.relativehumidity_700hPa||[];
     const rh500 = hourly.relativehumidity_500hPa||[];
-    // Use server-side precip_type classification + liquid precipitation + SLRs
+    // Use server-side precip_type classification + liquid precipitation + SLRs, or NBM precip type probabilities
     const precipTypes = hourly.precip_type || [];
     const slrs = hourly.snow_liquid_ratio || [];
     const precipPeriodSampled = hourly.precipitation || [];
+    
+    // For NBM/models with native precip type probabilities, use those instead
+    const rainProb = hourly.rain_probability || [];
+    const snowfallProb = hourly.snowfall_probability || [];
+    const freezingRainProb = hourly.freezing_rain_probability || [];
+    const icePelletsProb = hourly.ice_pellets_probability || [];
+    const hasNativePrecipTypes = rainProb.length > 0 || snowfallProb.length > 0 || freezingRainProb.length > 0 || icePelletsProb.length > 0;
 
     const snowPortion = [];
     const freezingRainPortion = [];
     const sleetPortion = [];
     const rainPortion = [];
 
-    const nPrecip = Math.min(precipTypes.length || 0, precipPeriodSampled.length || 0);
+    const nPrecip = Math.min(precipTypes.length || rainProb.length || 0, precipPeriodSampled.length || 0);
     for(let i=0;i<nPrecip;i++){
       const p = Number(precipPeriodSampled[i]) || 0;
-      const pt = precipTypes[i];
       let snowL=0, frL=0, slL=0, rnL=0;
+      
       if(p === 0){
         snowPortion.push(0); freezingRainPortion.push(0); sleetPortion.push(0); rainPortion.push(0);
         continue;
       }
-      if(pt === 'snow') snowL = p;
-      else if(pt === 'sleet') slL = p;
-      else if(pt === 'freezing_rain') frL = p;
-      else if(pt === 'rain') rnL = p;
-      else rnL = p; // unknown -> treat as rain
+      
+      // Use native precip type probabilities if available (NBM), otherwise use inferred classification
+      if(hasNativePrecipTypes && i < rainProb.length) {
+        const rp = (rainProb[i] || 0) / 100;
+        const sp = (snowfallProb[i] || 0) / 100;
+        const frp = (freezingRainProb[i] || 0) / 100;
+        const ipp = (icePelletsProb[i] || 0) / 100;
+        const totalProb = rp + sp + frp + ipp;
+        if(totalProb > 0) {
+          rnL = p * (rp / totalProb);
+          snowL = p * (sp / totalProb);
+          frL = p * (frp / totalProb);
+          slL = p * (ipp / totalProb);
+        }
+      } else {
+        // Fall back to inferred classification
+        const pt = precipTypes[i];
+        if(pt === 'snow') snowL = p;
+        else if(pt === 'sleet') slL = p;
+        else if(pt === 'freezing_rain') frL = p;
+        else if(pt === 'rain') rnL = p;
+        else rnL = p; // unknown -> treat as rain
+      }
+      
       snowPortion.push(parseFloat(snowL.toFixed(3)));
       freezingRainPortion.push(parseFloat(frL.toFixed(3)));
       sleetPortion.push(parseFloat(slL.toFixed(3)));
