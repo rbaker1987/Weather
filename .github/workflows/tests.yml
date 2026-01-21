@@ -35,6 +35,11 @@ jobs:
           cd weather_app
           python manage.py check --deploy
 
+      - name: Check for missing migrations
+        run: |
+          cd weather_app
+          python manage.py makemigrations --check --dry-run
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
