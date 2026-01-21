@@ -5,6 +5,8 @@ import logging
 import os
 from datetime import datetime, time, timedelta
 
+from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Avg, Case, Count, IntegerField, Q, When
 from django.http import HttpResponse
 from django.utils import timezone
@@ -31,8 +33,6 @@ from .serializers import (
 from .utils.apparent_temperature import calculate_apparent_temperature
 
 logger = logging.getLogger("weather")
-from django.conf import settings
-from django.core.cache import cache
 
 
 def fetch_current_conditions(location):
@@ -1627,7 +1627,7 @@ class TempLocationView(TemplateView):
             current_apparent_temp=None,
             is_current_location=False,
         )
-        location.alerts = SimpleNamespace(filter=lambda **k: [])
+        location.alerts = SimpleNamespace(filter=lambda **_kwargs: [])
 
         # Fetch forecast data from NWS
         daily_forecasts = []
@@ -2018,10 +2018,10 @@ class ModelDetailView(TemplateView):
         if n == 0:
             return [], []
 
-        FREEZE = 32.0
-        SURFACE_SLUSH = 34.0  # allow snow/sleet depiction a bit above freezing
+        freeze = 32.0
+        surface_slush = 34.0  # allow snow/sleet depiction a bit above freezing
         # Treat any slight warm nose aloft as melting layer (> 32.1°F)
-        WARM = 32.1
+        warm = 32.1
 
         # Helper: Fahrenheit to Celsius for SLR/dendritic logic
         def f_to_c(v: float | None) -> float | None:
@@ -2118,8 +2118,8 @@ class ModelDetailView(TemplateView):
             dendritic_c = f_to_c(t550v) if t550v is not None else None
 
             # If both 925 and 850 are cold, treat column as snow-favoring even if 700 is warmer
-            if (t925v is not None and t925v <= FREEZE) and (
-                t850v is not None and t850v <= FREEZE
+            if (t925v is not None and t925v <= freeze) and (
+                t850v is not None and t850v <= freeze
             ):
                 warm_layer = None
 
@@ -2132,14 +2132,14 @@ class ModelDetailView(TemplateView):
             slr = 1.0
 
             # If a warm layer exists, honor it before snowfall hints to avoid false snow
-            if warm_layer is not None and warm_layer > WARM:
+            if warm_layer is not None and warm_layer > warm:
                 # Melting layer present; determine sleet vs freezing rain.
                 # Key factors:
                 # 1. Depth/intensity of warm layer (how completely snow melts)
                 # 2. Depth/intensity of cold layer below (refreeze potential)
                 # 3. Surface temperature (determines if refrozen drops stick or accumulate)
 
-                if ts <= FREEZE:
+                if ts <= freeze:
                     # Calculate cold layer depth: how many subfreezing levels below warm layer
                     cold_levels_below_warm = []
                     for temp_val in [
@@ -2152,14 +2152,14 @@ class ModelDetailView(TemplateView):
                         t850v,
                         t825v,
                     ]:
-                        if temp_val is not None and temp_val <= FREEZE:
+                        if temp_val is not None and temp_val <= freeze:
                             cold_levels_below_warm.append(temp_val)
 
                     # Calculate warm layer strength
-                    warm_layer_strength = warm_layer - FREEZE  # degrees above freezing
+                    warm_layer - freeze  # degrees above freezing
                     warm_layer_depth = 0
                     for temp_val in [t925v, t850v, t800v, t700v]:
-                        if temp_val is not None and temp_val > WARM:
+                        if temp_val is not None and temp_val > warm:
                             warm_layer_depth += 1
 
                     # Decision logic:
@@ -2228,7 +2228,7 @@ class ModelDetailView(TemplateView):
                         slr = 12.0  # default to middle of range
                 else:
                     # Surface-driven decision with marginal above-freezing allowance
-                    if ts > SURFACE_SLUSH:
+                    if ts > surface_slush:
                         ptype = "rain"
                         slr = 1.0
                     else:

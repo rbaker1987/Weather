@@ -3,17 +3,16 @@
 
 import os
 import sys
+from pathlib import Path
 
 import django
+from django.core.cache import cache
 
-# Add the weather_app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "weather_app"))
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE_DIR / "weather_app"))
 
-# Setup Django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
-
-from django.core.cache import cache
 
 print("Clearing Django cache...")
 cache.clear()

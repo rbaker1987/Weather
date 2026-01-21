@@ -3,6 +3,7 @@
 import logging
 
 from django.core.management.base import BaseCommand, CommandError
+from django.db import models
 from django.utils import timezone
 
 from weather.models import Location
@@ -120,8 +121,4 @@ class Command(BaseCommand):
 
         except Exception as e:
             logger.exception("Command failed")
-            raise CommandError(f"Command failed: {e}")
-
-
-# Import Django ORM for queries
-from django.db import models
+            raise CommandError(f"Command failed: {e}") from e

@@ -18,7 +18,9 @@ def parse_nws_datetime(date_string: str) -> datetime:
     try:
         return datetime.fromisoformat(date_string)
     except ValueError as e:
-        raise ValueError(f"Cannot parse NWS datetime string '{date_string}': {e}")
+        raise ValueError(
+            f"Cannot parse NWS datetime string '{date_string}': {e}"
+        ) from e
 
 
 def format_time_12hour(dt: datetime) -> str:
@@ -101,6 +103,7 @@ def round_temperature_description(temp: int) -> str:
         return f"around {str(int(temp_str[:-1]) + 1)}0"
     if last_digit in [3, 4, 5, 6, 7]:
         return f"the mid {temp_str[:-1]}0s"
+    return None
 
 
 def describe_temperature_range(am_temp: int, pm_temp: int) -> str:

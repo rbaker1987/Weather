@@ -1,21 +1,22 @@
 #!/usr/bin/env python
+import logging
 import os
 import sys
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-sys.path.insert(0, "c:\\Users\\rbaker\\VSCodeProjects\\Weather\\weather_app")
+from pathlib import Path
 
 import django
 
-django.setup()
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE_DIR / "weather_app"))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
-import logging
+django.setup()
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(name)s - %(levelname)s - %(message)s"
 )
 
-from weather.noaa_nomads import fetch_gfs_nomads
+from weather.noaa_nomads import fetch_gfs_nomads  # noqa: E402
 
 print("=" * 60)
 print("Testing NOMADS fetch for NYC (40.7128, -74.0060)...")

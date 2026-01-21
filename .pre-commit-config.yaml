@@ -36,7 +36,7 @@ repos:
     rev: 1.15.0
     hooks:
       - id: django-upgrade
-        args: [--target-version, "4.2"]
+        args: [--target-version, '4.2']
 
   # JavaScript/JSON formatting
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -48,7 +48,7 @@ repos:
 
   # Secret detection
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']

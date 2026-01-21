@@ -23,9 +23,35 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev]
           pip install .[django]
-          pip install pytest-django
+          pip install pytest-django pytest-cov
 
-      - name: Run pytest
+      - name: Run pytest with coverage
         run: |
           cd weather_app
-          pytest -v ../tests/
+          pytest -v --cov=weather --cov-report=xml --cov-report=html --cov-report=term ../tests/
+
+      - name: Django system checks
+        run: |
+          cd weather_app
+          python manage.py check --deploy
+
+      - name: Check for missing migrations
+        run: |
+          cd weather_app
+          python manage.py makemigrations --check --dry-run
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./weather_app/coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINIMUM_GREEN: 80
+          MINIMUM_ORANGE: 50

@@ -1,7 +1,7 @@
 """Geocoding utilities using modern async approach."""
 
 import asyncio
-from typing import Optional, Tuple
+from typing import Optional
 
 from geopy.exc import GeocoderServiceError, GeocoderTimedOut
 from geopy.geocoders import Nominatim
@@ -29,7 +29,7 @@ class AsyncGeocoder:
 
     async def geocode_with_retry(
         self, location_string: str
-    ) -> Optional[Tuple[float, float]]:
+    ) -> Optional[tuple[float, float]]:
         """Geocode a location string with exponential backoff retry."""
         for attempt in range(self.max_retries):
             try:
@@ -56,10 +56,12 @@ class AsyncGeocoder:
                     logger.error(
                         f"Geocoding failed after {self.max_retries} attempts: {e}"
                     )
-                    raise GeocodingError(f"Failed to geocode {location_string}: {e}")
+                    raise GeocodingError(
+                        f"Failed to geocode {location_string}: {e}"
+                    ) from e
             except Exception as e:
                 logger.error(f"Unexpected geocoding error for {location_string}: {e}")
-                raise GeocodingError(f"Unexpected geocoding error: {e}")
+                raise GeocodingError(f"Unexpected geocoding error: {e}") from e
 
         return None
 

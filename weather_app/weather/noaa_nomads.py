@@ -36,7 +36,7 @@ def _ensure_cfgrib():
         ) from exc
 
 
-def _latest_cycle(now: datetime) -> int:
+def _latest_cycle(_now: datetime) -> int:
     """Return a reliable GFS cycle hour.
 
     For maximum reliability, always return 12Z, which:

@@ -5,9 +5,16 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.core.cache import cache
+from django.db.models import Q
 from django.utils import timezone
 
-from .models import ForecastRequest, Location
+from .models import (
+    DailyForecast,
+    ForecastRequest,
+    HourlyForecast,
+    Location,
+    WeatherAlert,
+)
 from .services import SyncWeatherService
 
 logger = logging.getLogger("weather")
@@ -49,7 +56,7 @@ def update_location_forecast(self, location_id: str):
         return {"error": "Location not found"}
     except Exception as exc:
         logger.error(f"Error updating forecast for location {location_id}: {exc}")
-        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries))
+        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries)) from exc
 
 
 @shared_task
@@ -228,9 +235,3 @@ def generate_forecast_report(location_ids=None, report_type="daily"):
     except Exception as exc:
         logger.error(f"Error generating report: {exc}")
         raise exc
-
-
-# Import Django ORM models for tasks
-from django.db.models import Q
-
-from .models import DailyForecast, HourlyForecast, WeatherAlert
