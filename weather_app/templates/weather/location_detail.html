@@ -1802,10 +1802,10 @@ async function loadLocationModelData() {
     `;
     
     try {
-        // Fetch 3-day forecast from GFS, ICON, ECMWF, and Canadian GEM
+        // Fetch 3-day forecast from GFS, NAM, ECMWF, and Canadian GEM
         const modelConfigs = [
             { name: 'GFS', url: `https://api.open-meteo.com/v1/gfs?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
-            { name: 'ICON', url: `https://api.open-meteo.com/v1/dwd-icon?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
+            { name: 'NAM', url: `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3&models=ncep_nam_conus` },
             { name: 'ECMWF', url: `https://api.open-meteo.com/v1/ecmwf?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
             { name: 'GEM', url: `https://api.open-meteo.com/v1/gem?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` }
         ];
@@ -1843,7 +1843,7 @@ async function loadLocationModelData() {
 
 function displayModelComparison(modelData, container) {
     const gfsData = modelData.GFS;
-    const iconData = modelData.ICON;
+    const namData = modelData.NAM;
     const ecmwfData = modelData.ECMWF;
     const gemData = modelData.GEM;
     
@@ -1861,9 +1861,9 @@ function displayModelComparison(modelData, container) {
     const gfsMinTemp = gfsData.daily.temperature_2m_min;
     const gfsPrecip = gfsData.daily.precipitation_sum;
     
-    const iconMaxTemp = iconData?.daily?.temperature_2m_max || [];
-    const iconMinTemp = iconData?.daily?.temperature_2m_min || [];
-    const iconPrecip = iconData?.daily?.precipitation_sum || [];
+    const namMaxTemp = namData?.daily?.temperature_2m_max || [];
+    const namMinTemp = namData?.daily?.temperature_2m_min || [];
+    const namPrecip = namData?.daily?.precipitation_sum || [];
     
     const ecmwfMaxTemp = ecmwfData?.daily?.temperature_2m_max || [];
     const ecmwfMinTemp = ecmwfData?.daily?.temperature_2m_min || [];
@@ -1880,7 +1880,7 @@ function displayModelComparison(modelData, container) {
                     <tr>
                         <th rowspan="2">Date</th>
                         <th colspan="2" class="text-center bg-primary text-white">GFS</th>
-                        <th colspan="2" class="text-center bg-warning">ICON</th>
+                        <th colspan="2" class="text-center bg-info text-dark">NAM</th>
                         <th colspan="2" class="text-center bg-success text-white">ECMWF</th>
                         <th colspan="2" class="text-center bg-danger text-white">GEM</th>
                     </tr>
@@ -1913,9 +1913,9 @@ function displayModelComparison(modelData, container) {
                 </td>
                 <td class="text-center">${gfsPrecip[i]?.toFixed(2) || '0.00'}"</td>
                 <td class="text-center">
-                    ${iconMaxTemp[i] ? `<span class="text-danger fw-bold">${iconMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${iconMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
+                    ${namMaxTemp[i] ? `<span class="text-danger fw-bold">${namMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${namMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
                 </td>
-                <td class="text-center">${iconPrecip[i]?.toFixed(2) || 'N/A'}</td>
+                <td class="text-center">${namPrecip[i]?.toFixed(2) || 'N/A'}</td>
                 <td class="text-center">
                     ${ecmwfMaxTemp[i] ? `<span class="text-danger fw-bold">${ecmwfMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${ecmwfMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
                 </td>
@@ -1934,7 +1934,7 @@ function displayModelComparison(modelData, container) {
         </div>
         <p class="text-muted small mb-0">
             <i class="fas fa-info-circle"></i> 
-            Data from Open-Meteo API. GFS (NOAA), ICON (German DWD), ECMWF (European Centre), GEM (Canadian).
+            Data from Open-Meteo API. GFS (NOAA), NAM (NOAA), ECMWF (European Centre), GEM (Canadian).
         </p>
     `;
     
