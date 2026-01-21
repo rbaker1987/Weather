@@ -49,7 +49,6 @@ jobs:
                 labels.add(`dir:${top}`);
               }
             });
-            }
 
             // Branch/PR title/body based labels
             const branchName = pr.head.ref.toLowerCase();
