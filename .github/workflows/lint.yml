@@ -45,7 +45,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff
+          pip install ruff mypy django-stubs
 
       - name: Determine changed Python files (PR)
         id: changed_py
@@ -54,6 +54,19 @@ jobs:
           git fetch origin ${{ github.base_ref }} --depth=1
           CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '**/*.py' | tr '\n' ' ')
           echo "files=$CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Type check with mypy (push)
+        if: github.event_name != 'pull_request'
+        run: mypy weather_app/weather --ignore-missing-imports --no-error-summary 2>&1 | head -50 || true
+
+      - name: Type check with mypy (PR changed files)
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -n "${{ steps.changed_py.outputs.files }}" ]; then
+            mypy ${{ steps.changed_py.outputs.files }} --ignore-missing-imports --no-error-summary 2>&1 | head -50 || true
+          else
+            echo "No Python changes; skipping mypy check."
+          fi
 
       - name: Lint with Ruff (push)
         if: github.event_name != 'pull_request'
