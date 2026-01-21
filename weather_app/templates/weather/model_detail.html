@@ -36,6 +36,7 @@ Weather{% endblock %} {% block extra_css %}
     position: relative;
     height: 400px;
     width: 100%;
+    overflow: visible;
   }
   .chart-container canvas {
     max-width: 100%;
@@ -114,20 +115,20 @@ Weather{% endblock %} {% block extra_css %}
 {% if data %}
 <div class="chart-container">
   <h5 class="mb-3"><i class="fas fa-temperature-high"></i> Temperatures</h5>
-  <div class="placeholder-glow mb-2" id="tempPlaceholder"><span class="placeholder col-12" style="height: 80px; display: block;"></span></div>
-  <canvas id="tempDetailChart" height="80"></canvas>
+  <div class="placeholder-glow mb-2" id="tempPlaceholder"><span class="placeholder col-12" style="height: 240px; display: block;"></span></div>
+  <canvas id="tempDetailChart" height="240"></canvas>
 </div>
 <div class="chart-container">
   <h5 class="mb-3">
     <i class="fas fa-cloud-rain"></i> Precipitation Types & Cloud Cover
   </h5>
-  <div class="placeholder-glow mb-2" id="precipPlaceholder"><span class="placeholder col-12" style="height: 80px; display: block;"></span></div>
-  <canvas id="precipTypesChart" height="80"></canvas>
+  <div class="placeholder-glow mb-2" id="precipPlaceholder"><span class="placeholder col-12" style="height: 240px; display: block;"></span></div>
+  <canvas id="precipTypesChart" height="240"></canvas>
 </div>
 <div class="chart-container">
   <h5 class="mb-3"><i class="fas fa-wind"></i> Wind</h5>
-  <div class="placeholder-glow mb-2" id="windPlaceholder"><span class="placeholder col-12" style="height: 80px; display: block;"></span></div>
-  <canvas id="windDetailChart" height="80"></canvas>
+  <div class="placeholder-glow mb-2" id="windPlaceholder"><span class="placeholder col-12" style="height: 240px; display: block;"></span></div>
+  <canvas id="windDetailChart" height="240"></canvas>
 </div>
 <div class="row">
   <div class="col-md-3">
@@ -200,12 +201,25 @@ Weather{% endblock %} {% block extra_css %}
     // Temperature datasets - use all hourly data, not sampled
     const elevation = data.elevation || 0; // meters above sea level
     const t2m = hourly.temperature_2m||[];
+    const t975 = hourly.temperature_975hPa||[];
+    const t950 = hourly.temperature_950hPa||[];
     const t925 = hourly.temperature_925hPa||[];
+    const t900 = hourly.temperature_900hPa||[];
+    const t875 = hourly.temperature_875hPa||[];
     const t850 = hourly.temperature_850hPa||[];
+    const t825 = hourly.temperature_825hPa||[];
     const t800 = hourly.temperature_800hPa||[];
+    const t775 = hourly.temperature_775hPa||[];
+    const t750 = hourly.temperature_750hPa||[];
+    const t725 = hourly.temperature_725hPa||[];
     const t700 = hourly.temperature_700hPa||[];
+    const t675 = hourly.temperature_675hPa||[];
+    const t650 = hourly.temperature_650hPa||[];
+    const t625 = hourly.temperature_625hPa||[];
     const t600 = hourly.temperature_600hPa||[];
+    const t575 = hourly.temperature_575hPa||[];
     const t550 = hourly.temperature_550hPa||[];
+    const t525 = hourly.temperature_525hPa||[];
     const t500 = hourly.temperature_500hPa||[];
     const tempLabels = (hourly.time||[]).map(t=>{const d=new Date(t);return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit'})});
 
@@ -217,7 +231,7 @@ Weather{% endblock %} {% block extra_css %}
     document.getElementById('lowTemp').textContent = lowTemp;
 
     // Temperature chart - filter out pressure levels below ground
-    // Show only 2m, 925 hPa, 850 hPa, 800 hPa for clarity; all levels used in classification logic
+    // Show only 2m, 925 hPa, 850 hPa for clarity; all levels still available in tooltips and classification logic
     const apparent = hourly.apparent_temperature||[];
     const tempDatasetsBase = [
       {label:'2m',data:t2m,borderColor:'#0d6efd',backgroundColor:'rgba(13,110,253,.1)',tension:.3}
@@ -227,9 +241,6 @@ Weather{% endblock %} {% block extra_css %}
     }
     if(elevation < 1460) {
       tempDatasetsBase.push({label:'850 hPa',data:t850,borderColor:'#6610f2',backgroundColor:'rgba(102,16,242,.1)',tension:.3});
-    }
-    if(elevation < 2625) {
-      tempDatasetsBase.push({label:'800 hPa',data:t800,borderColor:'#fd7e14',backgroundColor:'rgba(253,126,20,.1)',tension:.3});
     }
     tempDatasetsBase.push({label:'Apparent',data:apparent,borderColor:'#ff6b6b',backgroundColor:'rgba(255,107,107,.12)',tension:.3,borderDash:[4,4]});
 
@@ -294,9 +305,45 @@ Weather{% endblock %} {% block extra_css %}
           responsive:true,
           maintainAspectRatio:false,
           interaction:{mode:'index',intersect:false},
+          layout:{padding:{bottom:36}},
           plugins:{
             legend:{position:'top'},
-            tooltip:{},
+            tooltip:{
+              displayColors:false,
+              callbacks:{
+                // Hide default per-dataset label
+                label: () => '',
+                afterBody:(tooltipItems)=>{
+                  if(!tooltipItems.length) return '';
+                  const idx = tooltipItems[0].dataIndex;
+                  const lines = [];
+                  // Show all available temperature levels at this time
+                  if(t2m[idx] !== undefined && t2m[idx] !== null) lines.push(`2m: ${t2m[idx].toFixed(1)}°F`);
+                  if(t975[idx] !== undefined && t975[idx] !== null) lines.push(`975 hPa: ${t975[idx].toFixed(1)}°F`);
+                  if(t950[idx] !== undefined && t950[idx] !== null) lines.push(`950 hPa: ${t950[idx].toFixed(1)}°F`);
+                  if(t925[idx] !== undefined && t925[idx] !== null) lines.push(`925 hPa: ${t925[idx].toFixed(1)}°F`);
+                  if(t900[idx] !== undefined && t900[idx] !== null) lines.push(`900 hPa: ${t900[idx].toFixed(1)}°F`);
+                  if(t875[idx] !== undefined && t875[idx] !== null) lines.push(`875 hPa: ${t875[idx].toFixed(1)}°F`);
+                  if(t850[idx] !== undefined && t850[idx] !== null) lines.push(`850 hPa: ${t850[idx].toFixed(1)}°F`);
+                  if(t825[idx] !== undefined && t825[idx] !== null) lines.push(`825 hPa: ${t825[idx].toFixed(1)}°F`);
+                  if(t800[idx] !== undefined && t800[idx] !== null) lines.push(`800 hPa: ${t800[idx].toFixed(1)}°F`);
+                  if(t775[idx] !== undefined && t775[idx] !== null) lines.push(`775 hPa: ${t775[idx].toFixed(1)}°F`);
+                  if(t750[idx] !== undefined && t750[idx] !== null) lines.push(`750 hPa: ${t750[idx].toFixed(1)}°F`);
+                  if(t725[idx] !== undefined && t725[idx] !== null) lines.push(`725 hPa: ${t725[idx].toFixed(1)}°F`);
+                  if(t700[idx] !== undefined && t700[idx] !== null) lines.push(`700 hPa: ${t700[idx].toFixed(1)}°F`);
+                  if(t675[idx] !== undefined && t675[idx] !== null) lines.push(`675 hPa: ${t675[idx].toFixed(1)}°F`);
+                  if(t650[idx] !== undefined && t650[idx] !== null) lines.push(`650 hPa: ${t650[idx].toFixed(1)}°F`);
+                  if(t625[idx] !== undefined && t625[idx] !== null) lines.push(`625 hPa: ${t625[idx].toFixed(1)}°F`);
+                  if(t600[idx] !== undefined && t600[idx] !== null) lines.push(`600 hPa: ${t600[idx].toFixed(1)}°F`);
+                  if(t575[idx] !== undefined && t575[idx] !== null) lines.push(`575 hPa: ${t575[idx].toFixed(1)}°F`);
+                  if(t550[idx] !== undefined && t550[idx] !== null) lines.push(`550 hPa: ${t550[idx].toFixed(1)}°F`);
+                  if(t525[idx] !== undefined && t525[idx] !== null) lines.push(`525 hPa: ${t525[idx].toFixed(1)}°F`);
+                  if(t500[idx] !== undefined && t500[idx] !== null) lines.push(`500 hPa: ${t500[idx].toFixed(1)}°F`);
+                  if(apparent[idx] !== undefined && apparent[idx] !== null) lines.push(`Apparent: ${apparent[idx].toFixed(1)}°F`);
+                  return lines.length ? lines.join('\n') : '';
+                }
+              }
+            },
             annotation:{annotations:annotations}
           },
           scales:{y:{title:{display:true,text:'Temperature (°F)'}}}
@@ -445,7 +492,7 @@ Weather{% endblock %} {% block extra_css %}
         {label:'Sleet (liq in)',data:filteredSleet,backgroundColor:'#aa66ff',stack:'precip'},
         {label:'Rain (liq in)',data:filteredRain,backgroundColor:'#28a745',stack:'precip'},
         {label:'Cumulative Frozen Depth (in)',data:filteredCumulativeFrozen,type:'line',yAxisID:'accum',borderColor:'#004d61',backgroundColor:'rgba(0,77,97,.18)',tension:.25,borderWidth:2}
-      ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top'},tooltip:{callbacks:{
+      ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},layout:{padding:{bottom:36}},plugins:{legend:{position:'top'},tooltip:{callbacks:{
         label:(ctx)=>{
           const idx = ctx.dataIndex; const dsLabel = ctx.dataset.label;
           if(dsLabel.startsWith('Snow')){ return `Snow: liq ${filteredSnow[idx].toFixed(2)} in → depth ${filteredSnowDepths[idx].toFixed(2)} in`; }
@@ -477,7 +524,7 @@ Weather{% endblock %} {% block extra_css %}
       new Chart(windCtx,{type:'line',data:{labels:tempLabels,datasets:[
         {label:'Wind Speed 10m (mph)',data:wspd,borderColor:'#dc3545',backgroundColor:'rgba(220,53,69,.1)',tension:.3},
         {label:'Wind Gusts 10m (mph)',data:wgust,borderColor:'#fd7e14',backgroundColor:'rgba(253,126,20,.1)',tension:.3}
-      ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top'},tooltip:{}},scales:{y:{title:{display:true,text:'Wind Speed (mph)'}}}}});
+      ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},layout:{padding:{bottom:36}},plugins:{legend:{position:'top'},tooltip:{}},scales:{y:{title:{display:true,text:'Wind Speed (mph)'}}}}});
     }
     // Lazy-init: use IntersectionObserver to create charts when in view
     function setupLazyCharts(){
