@@ -729,7 +729,10 @@ async function loadNext24Hours() {
             resp.hours.forEach(hour => {
                 const tempClass = `temp-bg-${hour.temp}`;
                 const startDate = hour.start ? new Date(hour.start) : null;
-                let isDay = false;
+                // Prefer API-provided isDay flag first
+                let isDay = typeof hour.isDay === 'boolean' ? hour.isDay : false;
+
+                // Use per-date sunrise/sunset if available
                 if (startDate && window.locationSunEvents) {
                     const key = startDate.toISOString().split('T')[0];
                     const ev = window.locationSunEvents[key];
@@ -737,15 +740,12 @@ async function loadNext24Hours() {
                         const sr = new Date(ev.sunrise);
                         const ss = new Date(ev.sunset);
                         isDay = startDate >= sr && startDate < ss;
-                    } else if (window.locationSunrise && window.locationSunset) {
-                        // Fallback to today’s sun times if this date key is missing
-                        isDay = startDate >= window.locationSunrise && startDate < window.locationSunset;
                     }
-                } else if (startDate && window.locationSunrise && window.locationSunset) {
-                    // Fallback when sun events map is missing
+                }
+
+                // Fallback to stored globals when no per-date sun events
+                if (startDate && !window.locationSunEvents && window.locationSunrise && window.locationSunset) {
                     isDay = startDate >= window.locationSunrise && startDate < window.locationSunset;
-                } else if (typeof hour.isDay === 'boolean') {
-                    isDay = hour.isDay;
                 }
                 const iconName = getWeatherIcon(hour.condition || '', isDay, hour.pop);
                 const popIcon = getPrecipIcon(hour.pop, hour.condition, isDay);
