@@ -10,7 +10,7 @@ from .utils.apparent_temperature import (
 
 
 @receiver(pre_save, sender=Location)
-def validate_location_coordinates(sender, instance, **kwargs):
+def validate_location_coordinates(_sender, instance, **_kwargs):
     """Validate location coordinates before saving."""
     if instance.latitude is not None and instance.longitude is not None:
         # Ensure coordinates are within valid ranges
@@ -21,7 +21,7 @@ def validate_location_coordinates(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Location)
-def location_post_save(sender, instance, created, **kwargs):
+def location_post_save(_sender, instance, created, **_kwargs):
     """Handle location post-save operations."""
     if created:
         # Log new location creation
@@ -34,7 +34,7 @@ def location_post_save(sender, instance, created, **kwargs):
 @receiver(pre_save, sender=ForecastPeriod)
 @receiver(pre_save, sender=DailyForecast)
 @receiver(pre_save, sender=HourlyForecast)
-def calculate_apparent_temperature(sender, instance, **kwargs):
+def calculate_apparent_temperature(_sender, instance, **_kwargs):
     """Calculate apparent temperature if not provided by NWS.
 
     Uses proper heat index formula for hot conditions (≥80°F) and

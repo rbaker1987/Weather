@@ -45,7 +45,7 @@ class Location(BaseModel):
     )
 
     @validator("name")
-    def validate_name(cls, v):
+    def validate_name(cls, v):  # noqa: N805
         if not v or v.isspace():
             raise ValueError("Location name cannot be empty")
         return v.title()
