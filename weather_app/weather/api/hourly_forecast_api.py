@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from datetime import datetime
 from datetime import timezone as dt_timezone
@@ -277,10 +278,8 @@ class HourlyForecastForLocationAPIView(APIView):
                             if wind_speed_str:
                                 parts = wind_speed_str.split()
                                 if parts:
-                                    try:
+                                    with contextlib.suppress(ValueError, IndexError):
                                         wind_speed = int(parts[0])
-                                    except (ValueError, IndexError):
-                                        pass
 
                             # Calculate if we have the required data
                             if (

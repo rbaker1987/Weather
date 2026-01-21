@@ -2156,7 +2156,7 @@ class ModelDetailView(TemplateView):
                             cold_levels_below_warm.append(temp_val)
 
                     # Calculate warm layer strength
-                    warm_layer_strength = warm_layer - FREEZE  # degrees above freezing
+                    warm_layer - FREEZE  # degrees above freezing
                     warm_layer_depth = 0
                     for temp_val in [t925v, t850v, t800v, t700v]:
                         if temp_val is not None and temp_val > WARM:

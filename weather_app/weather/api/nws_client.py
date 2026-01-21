@@ -3,7 +3,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import httpx
 from loguru import logger
@@ -73,8 +73,8 @@ class NWSClient:
         self._last_request_time = asyncio.get_event_loop().time()
 
     async def _make_request(
-        self, url: str, params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, url: str, params: Optional[dict[str, Any]] = None
+    ) -> dict[str, Any]:
         """Make a rate-limited HTTP request to the NWS API."""
         await self._rate_limit()
 
@@ -107,24 +107,24 @@ class NWSClient:
         except httpx.RequestError as e:
             raise NWSAPIError(f"Request failed: {str(e)}")
 
-    async def get_grid_point(self, lat: float, lon: float) -> Dict[str, Any]:
+    async def get_grid_point(self, lat: float, lon: float) -> dict[str, Any]:
         """Get NWS grid point information for coordinates."""
         url = f"{self.base_url}/points/{lat},{lon}"
         return await self._make_request(url)
 
-    async def get_forecast_grid_data(self, wfo: str, x: int, y: int) -> Dict[str, Any]:
+    async def get_forecast_grid_data(self, wfo: str, x: int, y: int) -> dict[str, Any]:
         """Get detailed forecast grid data."""
         url = f"{self.base_url}/gridpoints/{wfo}/{x},{y}"
         return await self._make_request(url)
 
-    async def get_hourly_forecast(self, wfo: str, x: int, y: int) -> Dict[str, Any]:
+    async def get_hourly_forecast(self, wfo: str, x: int, y: int) -> dict[str, Any]:
         """Get hourly forecast data."""
         url = f"{self.base_url}/gridpoints/{wfo}/{x},{y}/forecast/hourly"
         return await self._make_request(url)
 
     async def get_alerts_for_point(
         self, lat: float, lon: float
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get active weather alerts for a point."""
         url = f"{self.base_url}/alerts/active"
         params = {"point": f"{lat},{lon}"}
@@ -138,7 +138,7 @@ class NWSClient:
 
     async def get_forecast_for_location(
         self, location: Location
-    ) -> List[HourlyForecast]:
+    ) -> list[HourlyForecast]:
         """Get complete forecast data for a location."""
         if location.latitude is None or location.longitude is None:
             raise ValueError(f"Location {location.name} must have coordinates")
@@ -177,7 +177,7 @@ class NWSClient:
             )
 
     def _parse_hourly_period(
-        self, period: Dict[str, Any], location: Location, alerts: List[WeatherAlert]
+        self, period: dict[str, Any], location: Location, alerts: list[WeatherAlert]
     ) -> HourlyForecast:
         """Parse a single hourly forecast period."""
         start_time = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00"))
@@ -249,7 +249,7 @@ class NWSClient:
             precipitation_probability=precip_prob,
         )
 
-    def _parse_alert(self, alert_data: Dict[str, Any]) -> WeatherAlert:
+    def _parse_alert(self, alert_data: dict[str, Any]) -> WeatherAlert:
         """Parse NWS alert data into our model."""
         properties = alert_data["properties"]
 
@@ -283,8 +283,8 @@ class WeatherService:
         self.nws_client = NWSClient()
 
     async def get_forecasts_for_locations(
-        self, locations: List[Location]
-    ) -> Dict[str, List[HourlyForecast]]:
+        self, locations: list[Location]
+    ) -> dict[str, list[HourlyForecast]]:
         """Get forecasts for multiple locations."""
         results = {}
         failed_locations = []
@@ -307,8 +307,8 @@ class WeatherService:
         return results
 
     def group_hourly_into_daily(
-        self, hourly_forecasts: List[HourlyForecast]
-    ) -> List[DailyForecast]:
+        self, hourly_forecasts: list[HourlyForecast]
+    ) -> list[DailyForecast]:
         """Group hourly forecasts into daily forecasts."""
         if not hourly_forecasts:
             return []

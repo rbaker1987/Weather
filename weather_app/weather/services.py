@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from asgiref.sync import async_to_sync, sync_to_async
 from django.db import transaction
@@ -27,7 +27,7 @@ except ImportError as e:
     WEATHER_BACKEND_AVAILABLE = False
     import warnings
 
-    warnings.warn(f"Weather backend components not available: {e}")
+    warnings.warn(f"Weather backend components not available: {e}", stacklevel=2)
 
 from .models import DailyForecast, HourlyForecast, Location
 
@@ -52,7 +52,7 @@ class WeatherIntegrationService:
             await self.weather_service.close()
 
     @sync_to_async
-    def get_location_by_id(self, location_id: str) -> Optional[Location]:
+    def get_location_by_id(self, location_id: str) -> Location | None:
         """Get Django location by ID."""
         try:
             return Location.objects.get(id=location_id, is_active=True)
@@ -60,13 +60,13 @@ class WeatherIntegrationService:
             return None
 
     @sync_to_async
-    def get_all_active_locations(self) -> List[Location]:
+    def get_all_active_locations(self) -> list[Location]:
         """Get all active Django locations."""
         return list(Location.objects.filter(is_active=True))
 
     async def create_location_from_input(
         self, location_input: str
-    ) -> Optional[Location]:
+    ) -> Location | None:
         """Create a Django location from string input using existing geocoding logic."""
         if not WEATHER_BACKEND_AVAILABLE:
             logger.error("Weather backend components not available")
@@ -80,8 +80,7 @@ class WeatherIntegrationService:
                 return None
 
             # Create Django location from Pydantic model
-            django_location = await self.pydantic_to_django_location(pydantic_location)
-            return django_location
+            return await self.pydantic_to_django_location(pydantic_location)
 
         except Exception as e:
             logger.error(f"Error creating location from input '{location_input}': {e}")
@@ -117,7 +116,7 @@ class WeatherIntegrationService:
         logger.info(f"Created new Django location: {django_location.name}")
         return django_location
 
-    async def update_forecasts_for_location(self, location: Location) -> Dict[str, Any]:
+    async def update_forecasts_for_location(self, location: Location) -> dict[str, Any]:
         """Update forecasts for a specific location using existing weather service."""
         if not WEATHER_BACKEND_AVAILABLE or not self.weather_service:
             return {"error": "Weather service not available"}
@@ -170,7 +169,7 @@ class WeatherIntegrationService:
 
     @sync_to_async
     def save_daily_forecasts(
-        self, location: Location, pydantic_forecasts: List[PydanticDaily]
+        self, location: Location, pydantic_forecasts: list[PydanticDaily]
     ) -> int:
         """Save daily forecasts to Django models."""
         count = 0
@@ -215,7 +214,7 @@ class WeatherIntegrationService:
 
     @sync_to_async
     def save_hourly_forecasts(
-        self, location: Location, pydantic_forecasts: List[PydanticHourly]
+        self, location: Location, pydantic_forecasts: list[PydanticHourly]
     ) -> int:
         """Save hourly forecasts to Django models."""
         count = 0
@@ -254,8 +253,8 @@ class WeatherIntegrationService:
         return count
 
     async def bulk_update_forecasts(
-        self, location_ids: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+        self, location_ids: list[str] | None = None
+    ) -> dict[str, Any]:
         """Update forecasts for multiple locations."""
         if location_ids:
             locations = []
@@ -284,7 +283,7 @@ class WeatherIntegrationService:
             "updated_at": timezone.now(),
         }
 
-    async def cleanup_old_forecasts(self, days_to_keep: int = 30) -> Dict[str, int]:
+    async def cleanup_old_forecasts(self, days_to_keep: int = 30) -> dict[str, int]:
         """Clean up old forecast data."""
         cutoff_date = timezone.now() - timedelta(days=days_to_keep)
 
@@ -316,7 +315,7 @@ class SyncWeatherService:
     @staticmethod
     def create_location_from_input(
         location_input: str, user=None
-    ) -> Optional[Location]:
+    ) -> Location | None:
         """Sync version of create_location_from_input."""
 
         async def _async_create():
@@ -326,7 +325,7 @@ class SyncWeatherService:
         return async_to_sync(_async_create)()
 
     @staticmethod
-    def update_forecasts_for_location(location: Location) -> Dict[str, Any]:
+    def update_forecasts_for_location(location: Location) -> dict[str, Any]:
         """Sync version of update_forecasts_for_location."""
 
         async def _async_update():
@@ -337,8 +336,8 @@ class SyncWeatherService:
 
     @staticmethod
     def bulk_update_forecasts(
-        location_ids: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        location_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Sync version of bulk_update_forecasts."""
 
         async def _async_bulk_update():

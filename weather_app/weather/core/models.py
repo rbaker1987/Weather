@@ -3,7 +3,7 @@
 from datetime import date as date_type
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, validator
 
@@ -45,7 +45,7 @@ class Location(BaseModel):
     )
 
     @validator("name")
-    def validate_name(cls, v):
+    def validate_name(self, v):
         if not v or v.isspace():
             raise ValueError("Location name cannot be empty")
         return v.title()
@@ -116,7 +116,7 @@ class HourlyForecast(BaseModel):
     temperature: Temperature
     wind: WindCondition
     weather: WeatherCondition
-    alerts: List[WeatherAlert] = Field(default_factory=list)
+    alerts: list[WeatherAlert] = Field(default_factory=list)
     precipitation_probability: Optional[int] = Field(
         None, ge=0, le=100, description="Chance of precipitation (%)"
     )
@@ -173,7 +173,7 @@ class DailyForecast(BaseModel):
 
     date: date_type = Field(..., description="Forecast date")
     location: Location
-    hourly_forecasts: List[HourlyForecast] = Field(default_factory=list)
+    hourly_forecasts: list[HourlyForecast] = Field(default_factory=list)
 
     @property
     def high_temperature(self) -> Optional[int]:
@@ -206,12 +206,12 @@ class DailyForecast(BaseModel):
 class WeatherReport(BaseModel):
     """Complete weather report for one or more locations."""
 
-    locations: List[Location]
-    daily_forecasts: List[DailyForecast] = Field(default_factory=list)
-    alerts: List[WeatherAlert] = Field(default_factory=list)
+    locations: list[Location]
+    daily_forecasts: list[DailyForecast] = Field(default_factory=list)
+    alerts: list[WeatherAlert] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=datetime.now)
 
-    def get_forecasts_for_location(self, location_name: str) -> List[DailyForecast]:
+    def get_forecasts_for_location(self, location_name: str) -> list[DailyForecast]:
         """Get all daily forecasts for a specific location."""
         return [
             df
@@ -219,7 +219,7 @@ class WeatherReport(BaseModel):
             if df.location.name.lower() == location_name.lower()
         ]
 
-    def get_alerts_for_location(self, location_name: str) -> List[WeatherAlert]:
+    def get_alerts_for_location(self, location_name: str) -> list[WeatherAlert]:
         """Get all alerts for a specific location."""
         # This would need to be implemented based on how alerts are associated with locations
         return self.alerts

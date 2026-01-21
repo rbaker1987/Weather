@@ -1,7 +1,7 @@
 """Application configuration management using Pydantic Settings."""
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -60,7 +60,7 @@ class UIConfig(BaseSettings):
     window_size: tuple[int, int] = Field(
         default=(1024, 768), description="Default window size"
     )
-    default_locations: List[str] = Field(
+    default_locations: list[str] = Field(
         default=["Austin, TX", "Dallas, TX", "Houston, TX", "Tyler, TX"],
         description="Default locations for forecasts",
     )

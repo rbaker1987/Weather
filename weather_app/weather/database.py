@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -43,7 +43,7 @@ class LocationDB(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    forecasts: Mapped[List["ForecastDB"]] = relationship(
+    forecasts: Mapped[list["ForecastDB"]] = relationship(
         "ForecastDB", back_populates="location"
     )
 
@@ -98,7 +98,7 @@ class ForecastDB(Base):
     location: Mapped[LocationDB] = relationship(
         "LocationDB", back_populates="forecasts"
     )
-    alerts: Mapped[List["AlertDB"]] = relationship("AlertDB", back_populates="forecast")
+    alerts: Mapped[list["AlertDB"]] = relationship("AlertDB", back_populates="forecast")
 
 
 class AlertDB(Base):
@@ -201,7 +201,7 @@ class ForecastRepository:
             await session.refresh(location_db)
             return location_db
 
-    async def save_forecasts(self, forecasts: List[HourlyForecast]) -> List[ForecastDB]:
+    async def save_forecasts(self, forecasts: list[HourlyForecast]) -> list[ForecastDB]:
         """Save multiple forecasts."""
         if not forecasts:
             return []
@@ -250,7 +250,7 @@ class ForecastRepository:
         location_name: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-    ) -> List[ForecastDB]:
+    ) -> list[ForecastDB]:
         """Get forecasts for a location within a date range."""
         async with self.db_manager.get_session() as session:
             stmt = (
@@ -281,7 +281,7 @@ class ForecastRepository:
             await session.commit()
             return result.rowcount
 
-    async def get_locations(self) -> List[LocationDB]:
+    async def get_locations(self) -> list[LocationDB]:
         """Get all locations."""
         async with self.db_manager.get_session() as session:
             stmt = select(LocationDB).order_by(LocationDB.name)

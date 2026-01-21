@@ -82,7 +82,7 @@ class TestLocation:
 
     def test_location_ordering(self):
         """Test default ordering by current location flag."""
-        loc1 = Location.objects.create(
+        Location.objects.create(
             name="A", is_current_location=False, display_order=0
         )
         loc2 = Location.objects.create(

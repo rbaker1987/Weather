@@ -43,10 +43,7 @@ def calculate_apparent_temperature(
         # If no direct humidity but we have dewpoint, calculate RH
         if rh is None and (dew_point_c is not None or dew_point_f is not None):
             # Convert dewpoint to Fahrenheit if given in Celsius
-            if dew_point_f is not None:
-                dew_f = dew_point_f
-            else:
-                dew_f = (dew_point_c * 9 / 5) + 32
+            dew_f = dew_point_f if dew_point_f is not None else dew_point_c * 9 / 5 + 32
 
             # Calculate RH using Magnus-Tetens formula
             temp_c = (temp_f - 32) * 5 / 9

@@ -101,6 +101,7 @@ def round_temperature_description(temp: int) -> str:
         return f"around {str(int(temp_str[:-1]) + 1)}0"
     if last_digit in [3, 4, 5, 6, 7]:
         return f"the mid {temp_str[:-1]}0s"
+    return None
 
 
 def describe_temperature_range(am_temp: int, pm_temp: int) -> str:

@@ -16,5 +16,4 @@ class SessionLocationMiddleware:
         if "location_ids" not in request.session:
             request.session["location_ids"] = []
 
-        response = self.get_response(request)
-        return response
+        return self.get_response(request)
