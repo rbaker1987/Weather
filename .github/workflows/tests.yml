@@ -30,6 +30,11 @@ jobs:
           cd weather_app
           pytest -v --cov=weather --cov-report=xml --cov-report=html --cov-report=term ../tests/
 
+      - name: Django system checks
+        run: |
+          cd weather_app
+          python manage.py check --deploy
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
