@@ -5,7 +5,7 @@ Context processors for making settings available in templates.
 from django.conf import settings
 
 
-def settings_context(request):
+def settings_context(_request):
     """
     Add selected settings to template context.
     """

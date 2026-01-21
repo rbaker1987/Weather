@@ -1,19 +1,20 @@
 #!/usr/bin/env python
 """Quick test to check if NOMADS fetch works and logs show the attempt."""
 
+import logging
 import os
 import sys
+from pathlib import Path
 
 import django
 
 # Setup Django
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "weather_app"))
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE_DIR / "weather_app"))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-import logging
-
-from weather.noaa_nomads import fetch_gfs_nomads
+from weather.noaa_nomads import fetch_gfs_nomads  # noqa: E402
 
 # Enable debug logging
 logging.basicConfig(

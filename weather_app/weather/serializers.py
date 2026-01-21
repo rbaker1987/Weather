@@ -1,6 +1,7 @@
 """Django REST Framework serializers for weather data."""
 
 from django.contrib.auth.models import User
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
 
@@ -281,7 +282,3 @@ class BulkForecastRequestSerializer(serializers.Serializer):
                 "Maximum 20 locations allowed per request"
             )
         return value
-
-
-# Import timezone for serializers
-from django.utils import timezone

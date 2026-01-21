@@ -163,6 +163,8 @@ def pop_icon(forecast_or_pop, condition_text=None):
     Usage:
         {{ period|pop_icon }}
     """
+    _ = forecast_or_pop  # noqa: ARG001
+    _ = condition_text  # noqa: ARG001
     return "tint"
 
 

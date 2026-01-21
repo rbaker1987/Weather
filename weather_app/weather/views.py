@@ -5,6 +5,8 @@ import logging
 import os
 from datetime import datetime, time, timedelta
 
+from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Avg, Case, Count, IntegerField, Q, When
 from django.http import HttpResponse
 from django.utils import timezone
@@ -31,8 +33,6 @@ from .serializers import (
 from .utils.apparent_temperature import calculate_apparent_temperature
 
 logger = logging.getLogger("weather")
-from django.conf import settings
-from django.core.cache import cache
 
 
 def fetch_current_conditions(location):
@@ -1627,7 +1627,7 @@ class TempLocationView(TemplateView):
             current_apparent_temp=None,
             is_current_location=False,
         )
-        location.alerts = SimpleNamespace(filter=lambda **k: [])
+        location.alerts = SimpleNamespace(filter=lambda **_kwargs: [])
 
         # Fetch forecast data from NWS
         daily_forecasts = []

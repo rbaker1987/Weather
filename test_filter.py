@@ -1,16 +1,20 @@
 import os
 import sys
+from pathlib import Path
 
 import django
 
-# Add the weather_app directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "weather_app"))
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE_DIR / "weather_app"))
 
 # Setup Django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from weather.templatetags.ui_tags import is_snow_precip, needs_chance_layout
+from weather.templatetags.ui_tags import (  # noqa: E402
+    is_snow_precip,
+    needs_chance_layout,
+)
 
 
 class MockPeriod:

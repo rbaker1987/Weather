@@ -100,12 +100,14 @@ class NWSClient:
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                raise LocationNotFoundError(f"Endpoint not found: {url}")
+                raise LocationNotFoundError(f"Endpoint not found: {url}") from e
             if e.response.status_code == 429:
-                raise RateLimitError("API rate limit exceeded")
-            raise NWSAPIError(f"HTTP {e.response.status_code}: {e.response.text}")
+                raise RateLimitError("API rate limit exceeded") from e
+            raise NWSAPIError(
+                f"HTTP {e.response.status_code}: {e.response.text}"
+            ) from e
         except httpx.RequestError as e:
-            raise NWSAPIError(f"Request failed: {str(e)}")
+            raise NWSAPIError(f"Request failed: {str(e)}") from e
 
     async def get_grid_point(self, lat: float, lon: float) -> dict[str, Any]:
         """Get NWS grid point information for coordinates."""
@@ -174,7 +176,7 @@ class NWSClient:
             logger.error(f"Failed to get forecast for {location.name}: {e}")
             raise ForecastNotAvailableError(
                 f"Forecast not available for {location.name}: {str(e)}"
-            )
+            ) from e
 
     def _parse_hourly_period(
         self, period: dict[str, Any], location: Location, alerts: list[WeatherAlert]

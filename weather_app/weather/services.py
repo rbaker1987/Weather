@@ -313,7 +313,7 @@ class SyncWeatherService:
 
     @staticmethod
     def create_location_from_input(
-        location_input: str, user=None
+        location_input: str, _user=None
     ) -> Location | None:
         """Sync version of create_location_from_input."""
 

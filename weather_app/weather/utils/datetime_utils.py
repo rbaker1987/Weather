@@ -18,7 +18,9 @@ def parse_nws_datetime(date_string: str) -> datetime:
     try:
         return datetime.fromisoformat(date_string)
     except ValueError as e:
-        raise ValueError(f"Cannot parse NWS datetime string '{date_string}': {e}")
+        raise ValueError(
+            f"Cannot parse NWS datetime string '{date_string}': {e}"
+        ) from e
 
 
 def format_time_12hour(dt: datetime) -> str:
