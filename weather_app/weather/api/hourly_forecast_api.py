@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from datetime import timezone as dt_timezone
 
+import pytz
 import requests
 from astral import LocationInfo
 from astral.sun import sun
@@ -123,10 +124,13 @@ class HourlyForecastForLocationAPIView(APIView):
             # Build per-date sunrise/sunset map for all dates present in periods
             sun_events = {}
             unique_dates = set()
+            tz = pytz.timezone(tz_name) if tz_name else pytz.UTC
             for p in periods:
                 try:
                     dt = datetime.fromisoformat(p["startTime"].replace("Z", "+00:00"))
-                    unique_dates.add(dt.date())
+                    # Convert to local timezone to get correct date key
+                    dt_local = dt.astimezone(tz)
+                    unique_dates.add(dt_local.date())
                 except Exception:
                     continue
             for day in sorted(unique_dates):
@@ -186,7 +190,9 @@ class HourlyForecastForLocationAPIView(APIView):
                 if custom_forecast:
                     # Use custom forecast data
                     # Determine is_daytime for icon selection
-                    day_key = start_time.date().isoformat()
+                    # Use local timezone date to match sun_events keys
+                    start_time_local = start_time.astimezone(tz)
+                    day_key = start_time_local.date().isoformat()
                     sr_raw = sun_events.get(day_key, {}).get("sunrise")
                     ss_raw = sun_events.get(day_key, {}).get("sunset")
                     if sr_raw and ss_raw:
@@ -248,24 +254,24 @@ class HourlyForecastForLocationAPIView(APIView):
                                 # Convert from Celsius to Fahrenheit if needed
                                 unit = app_temp.get("unitCode", "")
                                 if "wmoUnit:degC" in unit:
-                                    apparent_temp = int((value * 9/5) + 32)
+                                    apparent_temp = int((value * 9 / 5) + 32)
                                 else:
                                     apparent_temp = int(value)
                             except (ValueError, TypeError):
                                 apparent_temp = None
-                    
+
                     # Calculate apparent temperature if NWS didn't provide it
                     if apparent_temp is None:
                         try:
                             temp = period.get("temperature")
                             humidity_data = period.get("relativeHumidity")
                             wind_speed_str = period.get("windSpeed", "")
-                            
+
                             # Extract humidity percentage
                             humidity = None
                             if isinstance(humidity_data, dict):
                                 humidity = humidity_data.get("value")
-                            
+
                             # Extract wind speed (format: "10 mph" or "5 to 10 mph")
                             wind_speed = None
                             if wind_speed_str:
@@ -275,19 +281,27 @@ class HourlyForecastForLocationAPIView(APIView):
                                         wind_speed = int(parts[0])
                                     except (ValueError, IndexError):
                                         pass
-                            
+
                             # Calculate if we have the required data
-                            if temp is not None and humidity is not None and wind_speed is not None:
+                            if (
+                                temp is not None
+                                and humidity is not None
+                                and wind_speed is not None
+                            ):
                                 apparent_temp = calculate_apparent_temperature(
                                     temperature_f=temp,
                                     humidity=humidity,
-                                    wind_speed_mph=wind_speed
+                                    wind_speed_mph=wind_speed,
                                 )
                         except Exception as e:
-                            logger.debug(f"Could not calculate apparent temperature: {e}")
+                            logger.debug(
+                                f"Could not calculate apparent temperature: {e}"
+                            )
 
                     # Determine is_daytime using that hour's date-specific sunrise/sunset
-                    day_key = start_time.date().isoformat()
+                    # Use local timezone date to match sun_events keys
+                    start_time_local = start_time.astimezone(tz)
+                    day_key = start_time_local.date().isoformat()
                     sr_raw = sun_events.get(day_key, {}).get("sunrise")
                     ss_raw = sun_events.get(day_key, {}).get("sunset")
                     if sr_raw and ss_raw:
@@ -338,7 +352,7 @@ class HourlyForecastForLocationAPIView(APIView):
         if "storm" in c or "thunder" in c or "t-storm" in c:
             return "bolt"
         if "ice" in c or "icy" in c or "freezing" in c or "sleet" in c:
-            return "icicles"
+            return "cloud-meatball"  # Frozen falling precip (sleet/freezing rain)
         if "snow" in c or "flurries" in c or "blizzard" in c:
             return "snowflake"
         if "fog" in c or "mist" in c or "haze" in c:

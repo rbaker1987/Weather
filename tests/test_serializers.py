@@ -1,4 +1,5 @@
 """Serializer tests for Location, BulkForecastRequest, and WeatherAlert."""
+
 from datetime import timedelta
 
 import pytest
@@ -15,7 +16,12 @@ from weather.serializers import (
 @pytest.mark.django_db
 class TestSerializers:
     def test_location_serializer_valid(self):
-        data = {"name": "SerializerTest", "latitude": "40.7128", "longitude": "-74.0060", "zip_code": "10001"}
+        data = {
+            "name": "SerializerTest",
+            "latitude": "40.7128",
+            "longitude": "-74.0060",
+            "zip_code": "10001",
+        }
         serializer = LocationSerializer(data=data)
         assert serializer.is_valid()
         location = serializer.save()
@@ -28,12 +34,22 @@ class TestSerializers:
         assert "name" in serializer.errors
 
     def test_bulk_forecast_serializer_valid(self):
-        data = {"locations": ["Austin", "Dallas"], "forecast_type": "daily", "days": 5, "include_alerts": True}
+        data = {
+            "locations": ["Austin", "Dallas"],
+            "forecast_type": "daily",
+            "days": 5,
+            "include_alerts": True,
+        }
         serializer = BulkForecastRequestSerializer(data=data)
         assert serializer.is_valid()
 
     def test_bulk_forecast_serializer_invalid_type(self):
-        data = {"locations": ["Austin"], "forecast_type": "invalid", "days": 3, "include_alerts": False}
+        data = {
+            "locations": ["Austin"],
+            "forecast_type": "invalid",
+            "days": 3,
+            "include_alerts": False,
+        }
         serializer = BulkForecastRequestSerializer(data=data)
         assert not serializer.is_valid()
 

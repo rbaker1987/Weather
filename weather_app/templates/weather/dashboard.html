@@ -371,10 +371,10 @@
       const timeEl = document.getElementById(mapId + '_time');
       if (timeEl && radarFrames[frameIndex]) {
         const time = radarFrames[frameIndex];
-        timeEl.textContent = time.toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
-          hour12: true 
+        timeEl.textContent = time.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
         });
       }
     }
@@ -384,12 +384,12 @@
       currentFrame = frameIndex;
       const frameTime = radarFrames[frameIndex];
       const timestamp = frameTime.toISOString();
-      
+
       // Update WMS layer with TIME parameter
       radarLayer.setParams({
         time: timestamp
       });
-      
+
       updateRadarTime(frameIndex);
       document.getElementById(mapId + '_slider').value = frameIndex;
     }
@@ -439,27 +439,27 @@
       if (!iso) return;
       const d = new Date(iso);
       if (isNaN(d.getTime())) return;
-      
+
       // Show actual time with relative indicator
       const now = new Date();
       const diffMs = now - d;
       const diffMins = Math.floor(diffMs / 60000);
       const diffHours = Math.floor(diffMs / 3600000);
-      
+
       const timeStr = d.toLocaleString(undefined, {
         month: "short",
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
       });
-      
+
       let relativeStr = "";
       if (diffMins < 60) {
         relativeStr = " (" + diffMins + " min ago)";
       } else if (diffHours < 24) {
         relativeStr = " (" + diffHours + " hr ago)";
       }
-      
+
       el.textContent = timeStr + relativeStr;
     });
 
@@ -502,7 +502,7 @@
 
     // Auto-load browser location on page load
     loadBrowserLocation();
-    
+
     // Set up auto-refresh every 10 minutes
     setInterval(function() {
       console.log("Auto-refreshing dashboard data...");
@@ -583,7 +583,7 @@
           const radarContainer = document.getElementById('dashboardRadarContainer');
           const radarComponent = document.getElementById('dashboardRadarComponent');
           radarContainer.style.display = 'block';
-          
+
           // Create radar map element and controls
           const radarTimestampHTML = document.getElementById('radarTimestampTemplate')?.innerHTML || '';
           radarComponent.innerHTML = `
@@ -612,7 +612,7 @@
               </div>
             </div>
           `;
-          
+
           // Initialize the radar map
           initDashboardRadar(lat, lon, locationName);
 

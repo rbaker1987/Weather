@@ -84,7 +84,7 @@
             </div>
         </div>
 
-        
+
     </div>
 </div>
 
@@ -332,14 +332,9 @@
                     {% include "weather/components/section_header.html" with icon="clock" title="NWS Hourly" %}
                     {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
                 </div>
-                <div class="btn-group">
-                    <button onclick="editHourlyForecasts()" class="btn btn-sm text-white" title="Edit Hourly Forecasts" style="background: transparent; border: none;">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button onclick="exportSectionAsImage('next24HoursBody')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
-                        <i class="fas fa-download"></i>
-                    </button>
-                </div>
+                <button onclick="exportSectionAsImage('next24HoursBody')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                    <i class="fas fa-download"></i>
+                </button>
             </div>
             <div class="card-body" id="next24HoursBody">
                 <div class="text-center py-4">
@@ -371,14 +366,9 @@
                     </h5>
                     {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
                 </div>
-                <div class="btn-group">
-                    <button onclick="editDailyForecasts()" class="btn btn-sm text-white" title="Edit Daily Forecasts" style="background: transparent; border: none;">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button onclick="exportForecastAsImage()" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
-                        <i class="fas fa-download"></i>
-                    </button>
-                </div>
+                <button onclick="exportForecastAsImage()" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                    <i class="fas fa-download"></i>
+                </button>
             </div>
             <div class="card-body" id="forecastExportSection">
                 <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
@@ -424,14 +414,9 @@
                     </h5>
                     {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
                 </div>
-                <div class="btn-group">
-                    <button onclick="editHourlyForecasts()" class="btn btn-sm text-white" title="Edit Hourly Forecasts" style="background: transparent; border: none;">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button onclick="exportSectionAsImage('hourlyForecastTable')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
-                        <i class="fas fa-download"></i>
-                    </button>
-                </div>
+                <button onclick="exportSectionAsImage('hourlyForecastTable')" class="btn btn-sm text-white" title="Export as JPG" style="background: transparent; border: none;">
+                    <i class="fas fa-download"></i>
+                </button>
             </div>
             <div class="card-body" id="hourlyForecastTable">
                 <div class="table-responsive">
@@ -457,7 +442,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                                
+
                             {% for forecast in hourly_forecasts|slice:":12" %}
                             <tr>
                                 <td>{{ forecast.forecast_time|date:"g:i A" }}</td>
@@ -506,7 +491,7 @@
                         <i class="fas fa-expand"></i> View Full Comparison
                     </a>
                 </p>
-                
+
                 <div id="modelComparisonContainer">
                     <div class="text-center py-4">
                         <div class="spinner-border text-primary" role="status">
@@ -549,57 +534,7 @@
 </div>
 
 
-<!-- Edit Daily Forecasts Modal -->
-<div class="modal fade" id="editDailyForecastModal" tabindex="-1" aria-labelledby="editDailyForecastModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editDailyForecastModalLabel">Edit Daily Forecast - 8 Days</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="dailyForecastForm">
-                    <!-- Forecast Cards Grid -->
-                    <div class="row g-3" id="dailyForecastsGrid">
-                        <!-- Day cards will be generated dynamically -->
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" id="saveDailyForecastBtn" class="btn btn-success" onclick="saveAllDailyForecasts()" disabled>
-                    <i class="fas fa-save"></i> Save All Forecasts
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Edit Hourly Forecasts Modal -->
-<div class="modal fade" id="editHourlyForecastModal" tabindex="-1" aria-labelledby="editHourlyForecastModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editHourlyForecastModalLabel">Edit Hourly Forecast - 24 Hours</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="hourlyForecastForm">
-                    <!-- Hourly Cards Grid -->
-                    <div class="row g-3" id="hourlyForecastsGrid">
-                        <!-- Hour cards will be generated dynamically -->
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" id="saveHourlyForecastBtn" class="btn btn-success" onclick="saveAllHourlyForecasts()" disabled>
-                    <i class="fas fa-save"></i> Save All Forecasts
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Weather Radar -->
 {% if location.latitude and location.longitude %}
@@ -683,6 +618,8 @@ async function loadNext24Hours() {
         const timeZone = resp?.timezone || 'UTC';
         const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
         const getDateKey = (d) => {
+            // Return ISO date string (YYYY-MM-DD) that matches API's sun_events keys
+            // We need to format the date in the local timezone, not UTC
             const parts = dateFormatter.formatToParts(d);
             const y = parts.find(p => p.type === 'year')?.value;
             const m = parts.find(p => p.type === 'month')?.value;
@@ -747,7 +684,7 @@ async function loadNext24Hours() {
 
         if (resp && resp.hours && resp.hours.length > 0) {
             let html = '<div class="row g-2">';
-            resp.hours.forEach(hour => {
+            resp.hours.forEach((hour, idx) => {
                 const tempClass = `temp-bg-${hour.temp}`;
                 const startDate = hour.start ? new Date(hour.start) : null;
                 // Prefer API-provided isDay flag first
@@ -787,6 +724,15 @@ async function loadNext24Hours() {
                 } else {
                     displayIconName = iconName || 'cloud';
                 }
+                // Nighttime icon mapping: use moon variants for night
+                const nightIconMap = {
+                    'sun': 'moon',
+                    'cloud-sun': 'cloud-moon',
+                    'cloud-sun-rain': 'cloud-moon-rain'
+                };
+                const finalIconName = !isDay && nightIconMap[displayIconName] ? nightIconMap[displayIconName] : displayIconName;
+                const iconClassList = `fas fa-${finalIconName} mb-2 forecast-icon`;
+
                 // Calculate apparent temperature if not provided
                 let apparentTemp = hour.apparentTemp;
                 if (apparentTemp === null || apparentTemp === undefined) {
@@ -810,7 +756,7 @@ async function loadNext24Hours() {
                             <div class="card-body p-2 text-center ${tempClass} d-flex flex-column justify-content-between">
                                 <div>
                                     <div class="fw-bold mb-1">${hour.time}</div>
-                                    <i class=\"fas fa-${displayIconName} mb-2 forecast-icon\"></i>
+                                    <i class=\"${iconClassList}\"></i>
                                     <div class="h5 mb-1">${hour.temp}&deg;F</div>
                                     ${apparentTemp !== null && apparentTemp !== undefined && Math.abs(apparentTemp - hour.temp) >= 5 ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-temperature-high"></i> Feels like ${apparentTemp}&deg;F</small>` : ''}
                                     ${hour.wind ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
@@ -1037,655 +983,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Open daily forecast editor
-function editDailyForecasts() {
-    const modal = new bootstrap.Modal(document.getElementById('editDailyForecastModal'));
-    modal.show();
-}
 
-// Open hourly forecast editor
-function editHourlyForecasts() {
-    const modal = new bootstrap.Modal(document.getElementById('editHourlyForecastModal'));
-    modal.show();
-}
 
-async function generateDailyForecastGrid() {
-    const grid = document.getElementById('dailyForecastsGrid');
-    grid.innerHTML = '';
 
-    const today = new Date();
-
-    for (let i = 0; i < 8; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + i);
-        const dateStr = date.toISOString().split('T')[0];
-        const displayDate = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-        const dayCardId = `forecast-${i}-day`;
-        const nightCardId = `forecast-${i}-night`;
-
-        // Get NWS forecast data for this day
-        const nwsForecast = nwsForecasts[i] || {};
-        const dayTemp = nwsForecast.day?.temperature || '';
-        const dayForecastRaw = nwsForecast.day?.short_forecast || '';
-        const dayForecast = await summarizeText(dayForecastRaw, 120);
-        const dayWind = nwsForecast.day?.wind_speed || '';
-        const dayGust = nwsForecast.day?.wind_gust || '';
-        const dayPop = nwsForecast.day?.precipitation_probability || '';
-        const nightTemp = nwsForecast.night?.temperature || '';
-        const nightForecastRaw = nwsForecast.night?.short_forecast || '';
-        const nightForecast = await summarizeText(nightForecastRaw, 120);
-        const nightWind = nwsForecast.night?.wind_speed || '';
-        const nightGust = nwsForecast.night?.wind_gust || '';
-        const nightPop = nwsForecast.night?.precipitation_probability || '';
-
-        // Determine background classes
-        const dayBgClass = dayTemp ? `temp-bg-${dayTemp}` : 'temp-bg-70';
-        const nightBgClass = nightTemp ? `night-temp-bg-${nightTemp}` : 'night-temp-bg-50';
-
-        const cardHtml = `
-            <div class="col-lg-3 col-md-4 col-sm-6">
-                <div class="card border-0 h-100">
-                    <div class="card-header text-center py-2">
-                        <strong>${displayDate}</strong>
-                    </div>
-                    <div class="card-body p-0 d-flex flex-column">
-                        <!-- Day Period -->
-                        <div class="p-3 text-center border-bottom flex-fill ${dayBgClass}" id="${dayCardId}-card" style="min-height: 180px;">
-                            <div>
-                                <div class="mb-2">
-                                    <span class="badge bg-warning text-dark">
-                                        <i class="fas fa-sun"></i> Day
-                                    </span>
-                                </div>
-                                <i class="fas fa-cloud mb-2" id="${dayCardId}-icon" style="font-size: 2rem;"></i>
-                                <div class="mb-2">
-                                    <input type="number" class="form-control form-control-sm text-center mx-auto"
-                                           id="${dayCardId}-temp"
-                                           data-card="${dayCardId}"
-                                           placeholder="°F"
-                                           value="${dayTemp}"
-                                           style="width: 70px; font-size: 1.1rem;">
-                                </div>
-                            </div>
-                            <textarea class="form-control form-control-sm text-center mb-2"
-                                   id="${dayCardId}-short"
-                                   data-card="${dayCardId}"
-                                   placeholder="Forecast"
-                                   rows="3"
-                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.95rem; resize: none;">${dayForecast}</textarea>
-                            <div class="row g-1 mb-2">
-                                <div class="col-6">
-                                    <input type="number" class="form-control form-control-sm text-center"
-                                           id="${dayCardId}-wind"
-                                           placeholder="Wind (mph)"
-                                           value="${dayWind}"
-                                           min="0" max="200"
-                                           style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
-                                </div>
-                                <div class="col-6">
-                                    <input type="number" class="form-control form-control-sm text-center"
-                                           id="${dayCardId}-gust"
-                                           placeholder="Gust (mph)"
-                                           value="${dayGust}"
-                                           min="0" max="200"
-                                           style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
-                                </div>
-                            </div>
-                            <input type="number" class="form-control form-control-sm text-center"
-                                   id="${dayCardId}-pop"
-                                   placeholder="PoP (%)"
-                                   value="${dayPop}"
-                                   min="0" max="100"
-                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
-                            <input type="hidden" id="${dayCardId}-date" value="${dateStr}">
-                            <input type="hidden" id="${dayCardId}-period" value="day">
-                        </div>
-
-                        <!-- Night Period -->
-                        <div class="p-3 text-center flex-fill ${nightBgClass}" id="${nightCardId}-card" style="min-height: 180px;">
-                            <div>
-                                <div class="mb-2">
-                                    <span class="badge bg-secondary">
-                                        <i class="fas fa-moon"></i> Night
-                                    </span>
-                                </div>
-                                <i class="fas fa-cloud mb-2" id="${nightCardId}-icon" style="font-size: 2rem;"></i>
-                                <div class="mb-2">
-                                    <input type="number" class="form-control form-control-sm text-center mx-auto"
-                                           id="${nightCardId}-temp"
-                                           data-card="${nightCardId}"
-                                           placeholder="°F"
-                                           value="${nightTemp}"
-                                           style="width: 70px; font-size: 1.1rem;">
-                                </div>
-                            </div>
-                            <textarea class="form-control form-control-sm text-center mb-2"
-                                   id="${nightCardId}-short"
-                                   data-card="${nightCardId}"
-                                   placeholder="Forecast"
-                                   rows="3"
-                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.95rem; resize: none;">${nightForecast}</textarea>
-                            <div class="row g-1 mb-2">
-                                <div class="col-6">
-                                    <input type="number" class="form-control form-control-sm text-center"
-                                           id="${nightCardId}-wind"
-                                           placeholder="Wind (mph)"
-                                           value="${nightWind}"
-                                           min="0" max="200"
-                                           style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
-                                </div>
-                                <div class="col-6">
-                                    <input type="number" class="form-control form-control-sm text-center"
-                                           id="${nightCardId}-gust"
-                                           placeholder="Gust (mph)"
-                                           value="${nightGust}"
-                                           min="0" max="200"
-                                           style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
-                                </div>
-                            </div>
-                            <input type="number" class="form-control form-control-sm text-center"
-                                   id="${nightCardId}-pop"
-                                   placeholder="PoP (%)"
-                                   value="${nightPop}"
-                                   min="0" max="100"
-                                   style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem;">
-                            <input type="hidden" id="${nightCardId}-date" value="${dateStr}">
-                            <input type="hidden" id="${nightCardId}-period" value="night">
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        grid.insertAdjacentHTML('beforeend', cardHtml);
-    }
-
-    // Add event listeners for live preview and update initial icons
-    setTimeout(() => {
-        document.querySelectorAll('[data-card]').forEach(input => {
-            input.addEventListener('input', function() {
-                updateForecastCard(this.dataset.card);
-                validateAllForecasts();
-            });
-        });
-
-        // Update icons for pre-filled forecasts
-        for (let i = 0; i < 8; i++) {
-            updateForecastCard(`forecast-${i}-day`);
-            updateForecastCard(`forecast-${i}-night`);
-        }
-
-        // Auto-fill any missing fields from previous day
-        autoFillMissingForecasts();
-        validateAllDailyForecasts();
-    }, 100);
-}
-
-// Dynamically update hourly card icon and background based on conditions/PoP
-function updateHourlyCard(cardId) {
-    const tempEl = document.getElementById(`${cardId}-temp`);
-    const shortEl = document.getElementById(`${cardId}-short`);
-    const popEl = document.getElementById(`${cardId}-pop`);
-    const iconEl = document.getElementById(`${cardId}-icon`);
-    const cardEl = document.getElementById(`${cardId}-card`);
-
-    if (!shortEl || !iconEl || !tempEl) return;
-
-    const shortVal = shortEl.value || '';
-    const popRaw = popEl ? popEl.value : '';
-    const popVal = popRaw === '' ? null : parseInt(popRaw, 10);
-    const tempVal = tempEl.value || '';
-
-    // Update icon
-    const iconName = getWeatherIcon(shortVal, true, popVal);
-    iconEl.className = `fas fa-${iconName} mb-2`;
-    iconEl.style.fontSize = '1.8rem';
-
-    // Update background color based on temperature
-    if (tempVal && cardEl) {
-        const temp = parseInt(tempVal);
-        // Remove existing temp-bg classes
-        cardEl.className = cardEl.className.replace(/temp-bg-\d+/g, '').trim();
-        // Re-add base classes and new temp class
-        if (!cardEl.classList.contains('card-body')) {
-            cardEl.classList.add('card-body', 'p-2', 'text-center');
-        }
-        cardEl.classList.add(`temp-bg-${temp}`);
-    }
-}
-
-async function generateHourlyForecastGrid() {
-    const grid = document.getElementById('hourlyForecastsGrid');
-    grid.innerHTML = '';
-
-    const now = new Date();
-
-    // Always fetch from API to ensure we have 24 hours of merged custom+NWS data
-    let hourlyData = [];
-    try {
-        const response = await fetch(`/api/hourly_forecast/?lat={{ location.latitude }}&lon={{ location.longitude }}&hours=24`);
-        if (response.ok) {
-            const apiData = await response.json();
-            // Extract hours array and map to expected format
-            if (apiData.hours && Array.isArray(apiData.hours)) {
-                hourlyData = apiData.hours.map(h => ({
-                    temperature: h.temp,
-                    short_forecast: h.condition,
-                    wind_speed: h.wind ? parseInt(h.wind) : null,
-                    wind_gust: h.windGust,
-                    precipitation_probability: h.pop,
-                    period_start: h.start  // Use API's start time
-                }));
-            }
-        }
-    } catch (err) {
-        console.error('Failed to fetch hourly data:', err);
-        // Fallback to template data if API fails
-        hourlyData = {{ hourly_forecasts_json|safe|default:"[]" }};
-    }
-
-    for (let i = 0; i < 24; i++) {
-        const existing = hourlyData[i] || {};
-
-        // Use stored period_start if available, otherwise calculate from current time
-        let hour;
-        let timeStr;
-        if (existing.period_start) {
-            hour = new Date(existing.period_start);
-            timeStr = existing.period_start;
-        } else {
-            hour = new Date(now);
-            hour.setHours(now.getHours() + i);
-            timeStr = hour.toISOString();
-        }
-
-        const hourStr = hour.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
-        const temp = existing.temperature || '';
-        const short = existing.short_forecast || '';
-        const wind = existing.wind_speed || '';
-        const gust = existing.wind_gust || '';
-        const pop = existing.precipitation_probability || '';
-
-        // Determine background class
-        const bgClass = temp ? `temp-bg-${temp}` : 'temp-bg-70';
-
-        const cardId = `hourly-${i}`;
-
-        const cardHtml = `
-            <div class="col-lg-2 col-md-3 col-sm-4 col-6">
-                <div class="card border-0 h-100">
-                    <div class="card-body p-2 text-center ${bgClass}" id="${cardId}-card" style="min-height: 200px;">
-                        <div>
-                            <div class="fw-bold mb-2" style="font-size: 0.9rem;">${hourStr}</div>
-                            <i class="fas fa-cloud mb-2" id="${cardId}-icon" style="font-size: 1.8rem;"></i>
-                            <div class="mb-2">
-                                <input type="number" class="form-control form-control-sm text-center mx-auto"
-                                       id="${cardId}-temp"
-                                       data-card="${cardId}"
-                                       placeholder="°F"
-                                       value="${temp}"
-                                       style="width: 60px; font-size: 1rem;">
-                            </div>
-                        </div>
-                        <textarea class="form-control form-control-sm text-center mb-2"
-                               id="${cardId}-short"
-                               data-card="${cardId}"
-                               placeholder="Conditions"
-                               rows="2"
-                               style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.75rem; resize: none;">${short}</textarea>
-                        <div class="row g-1 mb-1">
-                            <div class="col-6">
-                                <input type="number" class="form-control form-control-sm text-center"
-                                       id="${cardId}-wind"
-                                       placeholder="Wind"
-                                       value="${wind}"
-                                       min="0" max="200"
-                                       style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.65rem;">
-                            </div>
-                            <div class="col-6">
-                                <input type="number" class="form-control form-control-sm text-center"
-                                       id="${cardId}-gust"
-                                       placeholder="Gust"
-                                       value="${gust}"
-                                       min="0" max="200"
-                                       style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.65rem;">
-                            </div>
-                        </div>
-                        <input type="number" class="form-control form-control-sm text-center"
-                               id="${cardId}-pop"
-                               placeholder="PoP %"
-                               value="${pop}"
-                               min="0" max="100"
-                               style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); font-size: 0.65rem;">
-                        <input type="hidden" id="${cardId}-time" value="${timeStr}">
-                    </div>
-                </div>
-            </div>
-        `;
-
-        grid.insertAdjacentHTML('beforeend', cardHtml);
-    }
-
-    // Add event listeners
-    setTimeout(() => {
-        document.querySelectorAll('[data-card]').forEach(input => {
-            input.addEventListener('input', function() {
-                updateHourlyCard(this.dataset.card);
-                validateAllHourlyForecasts();
-            });
-        });
-
-        // Update icons for pre-filled forecasts
-        for (let i = 0; i < 24; i++) {
-            updateHourlyCard(`hourly-${i}`);
-        }
-
-        validateAllHourlyForecasts();
-    }, 100);
-}
-
-function saveAllHourlyForecasts() {
-    const locationId = '{{ location.id }}';
-    const forecasts = [];
-    const missingFields = [];
-
-    // Collect all hourly forecast data - save ALL hours to create complete custom forecast set
-    for (let i = 0; i < 24; i++) {
-        const temp = document.getElementById(`hourly-${i}-temp`).value;
-        const shortForecast = document.getElementById(`hourly-${i}-short`).value.trim();
-        const time = document.getElementById(`hourly-${i}-time`).value;
-        const wind = document.getElementById(`hourly-${i}-wind`).value;
-        const gust = document.getElementById(`hourly-${i}-gust`).value;
-        const pop = document.getElementById(`hourly-${i}-pop`).value;
-
-        // Check if required fields are present
-        if (!temp || !shortForecast) {
-            missingFields.push({ hour: i, missing: !temp ? 'temperature' : 'conditions' });
-            const tempEl = document.getElementById(`hourly-${i}-temp`);
-            const shortEl = document.getElementById(`hourly-${i}-short`);
-            if (!temp && tempEl) tempEl.classList.add('is-invalid');
-            if (!shortForecast && shortEl) shortEl.classList.add('is-invalid');
-        } else {
-            // Save ALL hours with data to create complete custom forecast set
-            const forecastData = {
-                location: locationId,
-                forecast_time: time,
-                temperature: parseInt(temp),
-                temperature_unit: 'F',
-                short_forecast: shortForecast
-            };
-
-            if (wind) forecastData.wind_speed = parseInt(wind);
-            if (gust) forecastData.wind_gust = parseInt(gust);
-            if (pop) forecastData.precipitation_probability = parseInt(pop);
-
-            forecasts.push(forecastData);
-        }
-    }
-
-    // Enforce completion: all 24 hours must be valid
-    if (missingFields.length > 0) {
-        alert('Please fill temperature and conditions for all hours before saving.');
-        return;
-    }
-
-    // Save all hourly forecasts - mark first one to clear existing forecasts
-    const savePromises = forecasts.map((forecastData, index) => {
-        // Mark first forecast to trigger database clear
-        if (index === 0) {
-            forecastData._batch_start = true;
-        }
-        return fetch(`/api/locations/${locationId}/hourly-forecasts/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(forecastData)
-        })
-    });
-
-    Promise.all(savePromises).then(() => {
-        const modal = bootstrap.Modal.getInstance(document.getElementById('editHourlyForecastModal'));
-        modal.hide();
-        window.location.reload();
-    }).catch(error => {
-        console.error('Failed to save hourly forecasts:', error);
-        alert('Failed to save some hourly forecasts. Please try again.');
-    });
-}
-
-// Copy previous day's same period values forward if empty
-function autoFillMissingForecasts() {
-    for (let i = 1; i < 8; i++) { // start at second day
-        ['day','night'].forEach(period => {
-            const prevId = `forecast-${i-1}-${period}`;
-            const currId = `forecast-${i}-${period}`;
-            const prevTempEl = document.getElementById(`${prevId}-temp`);
-            const prevShortEl = document.getElementById(`${prevId}-short`);
-            const currTempEl = document.getElementById(`${currId}-temp`);
-            const currShortEl = document.getElementById(`${currId}-short`);
-            if (prevTempEl && currTempEl && !currTempEl.value) {
-                currTempEl.value = prevTempEl.value;
-            }
-            if (prevShortEl && currShortEl && !currShortEl.value) {
-                currShortEl.value = prevShortEl.value;
-            }
-            // Wind / Gust / PoP
-            ['wind','gust','pop'].forEach(field => {
-                const prevFieldEl = document.getElementById(`${prevId}-${field}`);
-                const currFieldEl = document.getElementById(`${currId}-${field}`);
-                if (prevFieldEl && currFieldEl && !currFieldEl.value && prevFieldEl.value) {
-                    currFieldEl.value = prevFieldEl.value;
-                }
-            });
-            updateForecastCard(currId);
-        });
-    }
-}
-
-// Validate all daily periods; enable save button only if complete
-function validateAllDailyForecasts() {
-    let allValid = true;
-    for (let i = 0; i < 8; i++) {
-        ['day','night'].forEach(period => {
-            const base = `forecast-${i}-${period}`;
-            const tempEl = document.getElementById(`${base}-temp`);
-            const shortEl = document.getElementById(`${base}-short`);
-            if (!tempEl || !shortEl) return; // skip if missing
-            const tempValid = tempEl.value !== '';
-            const shortValid = shortEl.value.trim() !== '';
-            if (!tempValid) tempEl.classList.add('is-invalid'); else tempEl.classList.remove('is-invalid');
-            if (!shortValid) shortEl.classList.add('is-invalid'); else shortEl.classList.remove('is-invalid');
-            if (!tempValid || !shortValid) allValid = false;
-        });
-    }
-    const saveBtn = document.getElementById('saveDailyForecastBtn');
-    if (saveBtn) {
-        saveBtn.disabled = !allValid;
-    }
-    return allValid;
-}
-
-// Validate all hourly periods; enable save button only if complete
-function validateAllHourlyForecasts() {
-    let allValid = true;
-    for (let i = 0; i < 24; i++) {
-        const tempEl = document.getElementById(`hourly-${i}-temp`);
-        const shortEl = document.getElementById(`hourly-${i}-short`);
-        if (!tempEl || !shortEl) continue;
-        const tempValid = tempEl.value !== '';
-        const shortValid = shortEl.value.trim() !== '';
-        if (!tempValid) tempEl.classList.add('is-invalid'); else tempEl.classList.remove('is-invalid');
-        if (!shortValid) shortEl.classList.add('is-invalid'); else shortEl.classList.remove('is-invalid');
-        if (!tempValid || !shortValid) allValid = false;
-    }
-    const saveBtn = document.getElementById('saveHourlyForecastBtn');
-    if (saveBtn) {
-        saveBtn.disabled = !allValid;
-    }
-    return allValid;
-}
-
-function updateForecastCard(cardId) {
-    const temp = parseInt(document.getElementById(`${cardId}-temp`).value) || 70;
-    const shortForecast = document.getElementById(`${cardId}-short`).value.toLowerCase();
-    const card = document.getElementById(`${cardId}-card`);
-    const icon = document.getElementById(`${cardId}-icon`);
-    const period = document.getElementById(`${cardId}-period`).value;
-    const isDaytime = period === 'day';
-
-    // Update background based on temperature
-    let bgClass = '';
-    if (temp >= 110) bgClass = 'temp-bg-110';
-    else if (temp >= 100) bgClass = 'temp-bg-100';
-    else if (temp >= 90) bgClass = 'temp-bg-90';
-    else if (temp >= 80) bgClass = 'temp-bg-80';
-    else if (temp >= 70) bgClass = 'temp-bg-70';
-    else if (temp >= 60) bgClass = 'temp-bg-60';
-    else if (temp >= 50) bgClass = 'temp-bg-50';
-    else if (temp >= 40) bgClass = 'temp-bg-40';
-    else if (temp >= 33) bgClass = 'temp-bg-33';
-    else if (temp >= 20) bgClass = 'temp-bg-20';
-    else if (temp >= 10) bgClass = 'temp-bg-10';
-    else if (temp >= 0) bgClass = 'temp-bg-0';
-    else bgClass = 'temp-bg--10';
-
-    card.className = `p-3 text-center ${bgClass}`;
-    card.style.minHeight = '200px';
-
-    // Update icon
-    let iconClass = isDaytime ? 'fas fa-cloud-sun' : 'fas fa-cloud-moon';
-    if (shortForecast.includes('storm') || shortForecast.includes('thunder')) iconClass = 'fas fa-bolt';
-    else if (shortForecast.includes('ice') || shortForecast.includes('freezing') || shortForecast.includes('sleet')) iconClass = 'fas fa-icicles';
-    else if (shortForecast.includes('snow') || shortForecast.includes('flurries') || shortForecast.includes('blizzard')) iconClass = 'fas fa-snowflake';
-    else if (shortForecast.includes('fog') || shortForecast.includes('mist') || shortForecast.includes('haze')) iconClass = 'fas fa-smog';
-    else if (shortForecast.includes('rain') || shortForecast.includes('shower') || shortForecast.includes('drizzle')) iconClass = 'fas fa-cloud-rain';
-    else if (shortForecast.includes('wind')) iconClass = 'fas fa-wind';
-    else if (shortForecast.includes('partly')) iconClass = isDaytime ? 'fas fa-cloud-sun' : 'fas fa-cloud-moon';
-    else if (shortForecast.includes('sunny') || shortForecast.includes('clear')) iconClass = isDaytime ? 'fas fa-sun' : 'fas fa-moon';
-    else if (shortForecast.includes('cloud')) iconClass = 'fas fa-cloud';
-
-    icon.className = `${iconClass} mb-2`;
-    icon.style.fontSize = '2rem';
-}
-
-function saveAllDailyForecasts() {
-    const locationId = '{{ location.id }}';
-    const forecasts = [];
-    const missingFields = [];
-
-    // Collect all forecast data - save ALL periods to replace NWS forecasts completely
-    for (let i = 0; i < 8; i++) {
-        ['day', 'night'].forEach(period => {
-            const cardId = `forecast-${i}-${period}`;
-            const temp = document.getElementById(`${cardId}-temp`).value;
-            const shortForecastEl = document.getElementById(`${cardId}-short`);
-            const shortForecast = shortForecastEl ? shortForecastEl.value.trim() : '';
-            const date = document.getElementById(`${cardId}-date`).value;
-            const wind = document.getElementById(`${cardId}-wind`).value;
-            const gust = document.getElementById(`${cardId}-gust`).value;
-            const pop = document.getElementById(`${cardId}-pop`).value;
-
-            console.log(`${cardId}: temp=${temp}, shortForecast="${shortForecast}"`);
-
-            // Check if required fields are present
-            if (!temp || !shortForecast) {
-                console.warn(`Missing data for ${cardId} - ${!temp ? 'temperature' : 'forecast text'}`);
-                missingFields.push({ cardId, missing: !temp ? 'temperature' : 'forecast text' });
-                // Add visual invalid state
-                const tempEl = document.getElementById(`${cardId}-temp`);
-                const shortEl = document.getElementById(`${cardId}-short`);
-                if (!temp && tempEl) tempEl.classList.add('is-invalid');
-                if (!shortForecast && shortEl) shortEl.classList.add('is-invalid');
-            } else {
-                // Save ALL periods with data to create complete custom forecast set
-                const forecastData = {
-                    location: locationId,
-                    date: date,
-                    is_daytime: period === 'day',
-                    temperature: parseInt(temp),
-                    temperature_unit: 'F',
-                    short_forecast: shortForecast,
-                    name: period === 'day' ? 'Custom Day' : 'Custom Night'
-                };
-
-                // Add wind data if provided
-                if (wind) {
-                    forecastData.wind_speed = parseInt(wind);
-                }
-                if (gust) {
-                    forecastData.wind_gust = parseInt(gust);
-                }
-                if (pop) {
-                    forecastData.precipitation_probability = parseInt(pop);
-                }
-
-                console.log('Queueing forecast for save:', forecastData);
-                forecasts.push(forecastData);
-            }
-        });
-    }
-
-    // Enforce completion: all 16 periods must be valid
-    if (missingFields.length > 0) {
-        alert('Please fill temperature and forecast text for all day and night periods before saving.');
-        return;
-    }
-
-    // Save all forecasts - mark first one to clear existing forecasts
-    let savedCount = 0;
-    let errors = [];
-
-    const savePromises = forecasts.map((forecastData, index) => {
-        // Mark first forecast to trigger database clear
-        if (index === 0) {
-            forecastData._batch_start = true;
-        }
-        return fetch(`/api/locations/${locationId}/forecasts/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(forecastData)
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => {
-                    throw new Error(JSON.stringify(err));
-                });
-            }
-            savedCount++;
-            return response.json();
-        })
-        .catch(error => {
-            errors.push(error.message);
-        });
-    });
-
-    Promise.all(savePromises).then(() => {
-        const modal = bootstrap.Modal.getInstance(document.getElementById('editDailyForecastModal'));
-        modal.hide();
-
-        if (errors.length > 0) {
-            console.error('Some forecasts failed to save:', errors);
-        }
-
-        // Reload page to show new forecasts
-        window.location.reload();
-    });
-}
-
-// Save custom name
-// Deprecated: saveCustomName removed; unified submitLocationForm handles updates.
-
-// Save custom forecast
-function saveCustomForecast() {
-    // This function is no longer used - replaced by saveAllCustomForecasts
-    saveAllCustomForecasts();
-}
 
 // Get CSRF token from cookies
 function getCookie(name) {
@@ -1822,7 +1122,7 @@ async function loadLocationModelData() {
     const lat = {{ location.latitude }};
     const lon = {{ location.longitude }};
     const container = document.getElementById('modelComparisonContainer');
-    
+
     // Show loading state
     container.innerHTML = `
         <div class="text-center py-4">
@@ -1832,7 +1132,7 @@ async function loadLocationModelData() {
             <p class="mt-3 text-muted">Loading model data...</p>
         </div>
     `;
-    
+
     try {
         // Fetch 3-day forecast from GFS, NAM, ECMWF, and Canadian GEM
         const modelConfigs = [
@@ -1843,12 +1143,12 @@ async function loadLocationModelData() {
             { name: 'GEM', url: `https://api.open-meteo.com/v1/gem?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` }
         ];
         const modelData = {};
-        
+
         for (const config of modelConfigs) {
             try {
                 const response = await fetch(config.url);
                 const data = await response.json();
-                
+
                 if (data.error) {
                     console.error(`Error from ${config.name}:`, data.reason);
                     modelData[config.name] = null;
@@ -1860,10 +1160,10 @@ async function loadLocationModelData() {
                 modelData[config.name] = null;
             }
         }
-        
+
         // Display the comparison
         displayModelComparison(modelData, container);
-        
+
     } catch (error) {
         console.error('Error loading model data:', error);
         container.innerHTML = `
@@ -1879,7 +1179,7 @@ function displayModelComparison(modelData, container) {
     const namData = modelData.NAM;
     const ecmwfData = modelData.ECMWF;
     const gemData = modelData.GEM;
-    
+
     if (!gfsData || !gfsData.daily) {
         container.innerHTML = `
             <div class="alert alert-warning">
@@ -1888,12 +1188,12 @@ function displayModelComparison(modelData, container) {
         `;
         return;
     }
-    
+
     const dates = gfsData.daily.time;
     const gfsMaxTemp = gfsData.daily.temperature_2m_max;
     const gfsMinTemp = gfsData.daily.temperature_2m_min;
     const gfsPrecip = gfsData.daily.precipitation_sum;
-    
+
     const namDailyMax = namData?.daily?.temperature_2m_max || [];
     const namDailyMin = namData?.daily?.temperature_2m_min || [];
     const namDailyPrecip = namData?.daily?.precipitation_sum || [];
@@ -1920,15 +1220,15 @@ function displayModelComparison(modelData, container) {
             if (prec !== null && prec !== undefined) namDerived[d].psum += prec;
         }
     }
-    
+
     const ecmwfMaxTemp = ecmwfData?.daily?.temperature_2m_max || [];
     const ecmwfMinTemp = ecmwfData?.daily?.temperature_2m_min || [];
     const ecmwfPrecip = ecmwfData?.daily?.precipitation_sum || [];
-    
+
     const gemMaxTemp = gemData?.daily?.temperature_2m_max || [];
     const gemMinTemp = gemData?.daily?.temperature_2m_min || [];
     const gemPrecip = gemData?.daily?.precipitation_sum || [];
-    
+
     let html = `
         <div class="table-responsive">
             <table class="table table-sm table-bordered">
@@ -1953,7 +1253,7 @@ function displayModelComparison(modelData, container) {
                 </thead>
                 <tbody>
     `;
-    
+
     for (let i = 0; i < Math.min(3, dates.length); i++) {
         // Parse date as local time to avoid timezone issues
         const [year, month, day] = dates[i].split('-').map(Number);
@@ -1964,12 +1264,12 @@ function displayModelComparison(modelData, container) {
         const namMax = namDailyMax[i] ?? namDerived[namDateKey]?.tmax;
         const namMin = namDailyMin[i] ?? namDerived[namDateKey]?.tmin;
         const namPcp = namDailyPrecip[i] ?? namDerived[namDateKey]?.psum;
-        
+
         html += `
             <tr>
                 <td><strong>${dateStr}</strong></td>
                 <td class="text-center">
-                    <span class="text-danger fw-bold">${gfsMaxTemp[i]?.toFixed(0)}°</span> / 
+                    <span class="text-danger fw-bold">${gfsMaxTemp[i]?.toFixed(0)}°</span> /
                     <span class="text-primary fw-bold">${gfsMinTemp[i]?.toFixed(0)}°</span>
                 </td>
                 <td class="text-center">${gfsPrecip[i] !== undefined && gfsPrecip[i] !== null ? gfsPrecip[i].toFixed(2) + '"' : 'N/A'}</td>
@@ -1988,17 +1288,17 @@ function displayModelComparison(modelData, container) {
             </tr>
         `;
     }
-    
+
     html += `
                 </tbody>
             </table>
         </div>
         <p class="text-muted small mb-0">
-            <i class="fas fa-info-circle"></i> 
+            <i class="fas fa-info-circle"></i>
             Data from Open-Meteo API. GFS (NOAA), NAM (NOAA), ECMWF (European Centre), GEM (Canadian).
         </p>
     `;
-    
+
     container.innerHTML = html;
 }
 

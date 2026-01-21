@@ -52,7 +52,7 @@ let selectedTempLon = null;
 function openLocationPicker() {
     const modal = new bootstrap.Modal(document.getElementById('locationPickerModal'));
     modal.show();
-    
+
     // Initialize map after modal is shown
     setTimeout(() => {
         if (!locationPickerMapInstance) {
@@ -95,14 +95,14 @@ function initLocationPickerMap() {
         defaultLon = parseFloat(urlParams.get('longitude'));
         defaultZoom = 8;
     }
-    
+
     locationPickerMapInstance = L.map('locationPickerMap').setView([defaultLat, defaultLon], defaultZoom);
-    
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 18
     }).addTo(locationPickerMapInstance);
-    
+
     // Add initial marker if we have coordinates
     if (urlParams.has('latitude') && urlParams.has('longitude')) {
         const lat = parseFloat(defaultLat.toFixed(4));
@@ -112,7 +112,7 @@ function initLocationPickerMap() {
         selectedTempLon = lon;
         document.getElementById('pickerLatitude').value = lat.toFixed(4);
         document.getElementById('pickerLongitude').value = lon.toFixed(4);
-        
+
         // Fetch initial elevation
         fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`)
             .then(res => res.json())
@@ -125,25 +125,25 @@ function initLocationPickerMap() {
             })
             .catch(() => document.getElementById('pickerElevation').value = 'N/A');
     }
-    
+
     // Click handler to place/move marker
     locationPickerMapInstance.on('click', async function(e) {
         const lat = parseFloat(e.latlng.lat.toFixed(4));
         const lon = parseFloat(e.latlng.lng.toFixed(4));
-        
+
         if (locationPickerMarker) {
             locationPickerMarker.setLatLng([lat, lon]);
         } else {
             locationPickerMarker = L.marker([lat, lon]).addTo(locationPickerMapInstance);
         }
-        
+
         selectedTempLat = lat;
         selectedTempLon = lon;
-        
+
         document.getElementById('pickerLatitude').value = lat.toFixed(4);
         document.getElementById('pickerLongitude').value = lon.toFixed(4);
         document.getElementById('pickerElevation').value = 'Loading...';
-        
+
         // Fetch elevation from Open-Meteo API
         try {
             const elevResponse = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
@@ -174,7 +174,7 @@ function applySelectedLocation() {
 
         // Check if we're on model detail page or forecast detail page
         const currentPath = window.location.pathname;
-        
+
         if (currentPath.includes('/models/')) {
             // Models list or detail
             const forecastDays = document.getElementById('forecastDays')?.value
@@ -214,11 +214,11 @@ function addCustomLocationToDropdowns(lat, lon) {
     selectors.forEach(id => {
         const select = document.getElementById(id);
         if (!select) return;
-        
+
         // Remove any existing custom option
         const existingCustom = select.querySelector('option[value="custom"]');
         if (existingCustom) existingCustom.remove();
-        
+
         // Add new custom option
         const option = document.createElement('option');
         option.value = 'custom';
@@ -227,7 +227,7 @@ function addCustomLocationToDropdowns(lat, lon) {
         option.textContent = `📍 Map Location (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
         option.selected = true;
         select.appendChild(option);
-        
+
         // Trigger change event to reload data if applicable
         select.dispatchEvent(new Event('change'));
     });

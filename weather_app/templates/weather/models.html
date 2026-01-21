@@ -418,7 +418,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const selectedModels = getSelectedModels();
     // Prepare data for charts
     const times = modelData.GFS?.hourly?.time || [];
-    
+
     // Select temperature field based on currentTempLevel
     let tempField = 'temperature_2m';  // default surface
     if (currentTempLevel === '925') {
@@ -426,7 +426,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     } else if (currentTempLevel === '850') {
         tempField = 'temperature_850hPa';
     }
-    
+
     const gfsTemp = modelData.GFS?.hourly?.[tempField] || [];
     const iconTemp = modelData.ICON?.hourly?.[tempField] || [];
     const ecmwfTemp = modelData.ECMWF?.hourly?.[tempField] || [];
@@ -733,5 +733,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
-
-

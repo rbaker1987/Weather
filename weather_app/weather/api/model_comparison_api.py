@@ -106,20 +106,29 @@ class ModelComparisonAPIView(APIView):
         }
 
         try:
-            response = requests.get(config["url"], params=params, headers=headers, timeout=10.0)
+            response = requests.get(
+                config["url"], params=params, headers=headers, timeout=10.0
+            )
             response.raise_for_status()
             data = response.json()
 
             # Check for API errors
             if "error" in data:
-                logger.warning(f"API error for {model_name}: {data.get('reason', 'Unknown')}")
+                logger.warning(
+                    f"API error for {model_name}: {data.get('reason', 'Unknown')}"
+                )
                 return {"name": model_name, "data": None, "error": data.get("reason")}
 
             return {"name": model_name, "data": data, "error": None, "skipped": None}
 
         except requests.Timeout:
             logger.error(f"Timeout fetching {model_name} data")
-            return {"name": model_name, "data": None, "error": "Timeout", "skipped": None}
+            return {
+                "name": model_name,
+                "data": None,
+                "error": "Timeout",
+                "skipped": None,
+            }
         except requests.HTTPError as e:
             logger.error(f"HTTP error fetching {model_name}: {e}")
             return {
@@ -153,7 +162,11 @@ class ModelComparisonAPIView(APIView):
         # Validate parameters
         if not lat or not lon:
             return Response(
-                {"status": "error", "error": "latitude and longitude parameters are required"}, status=400
+                {
+                    "status": "error",
+                    "error": "latitude and longitude parameters are required",
+                },
+                status=400,
             )
 
         if not models_param:
@@ -168,15 +181,25 @@ class ModelComparisonAPIView(APIView):
             models = [m.strip().upper() for m in models_param.split(",") if m.strip()]
         except (ValueError, TypeError):
             return Response(
-                {"status": "error", "error": "Invalid latitude, longitude, or forecast_days"}, status=400
+                {
+                    "status": "error",
+                    "error": "Invalid latitude, longitude, or forecast_days",
+                },
+                status=400,
             )
 
         # Validate ranges
         if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
-            return Response({"status": "error", "error": "Invalid latitude or longitude range"}, status=400)
+            return Response(
+                {"status": "error", "error": "Invalid latitude or longitude range"},
+                status=400,
+            )
 
         if not (1 <= forecast_days <= 16):
-            return Response({"status": "error", "error": "forecast_days must be between 1 and 16"}, status=400)
+            return Response(
+                {"status": "error", "error": "forecast_days must be between 1 and 16"},
+                status=400,
+            )
 
         # Fetch all model data
         try:
@@ -184,4 +207,6 @@ class ModelComparisonAPIView(APIView):
             return Response({"status": "success", "models": results})
         except Exception as e:
             logger.error(f"Error fetching model data: {e}")
-            return Response({"status": "error", "error": "Failed to fetch model data"}, status=500)
+            return Response(
+                {"status": "error", "error": "Failed to fetch model data"}, status=500
+            )

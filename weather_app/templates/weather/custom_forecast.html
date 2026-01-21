@@ -17,10 +17,10 @@
     .model-data-table .temp-cell { background: #e7f3ff; font-weight: 600; }
     .input-section { background: white; padding: 1rem; border-radius: 8px; border-left: 4px solid #198754; }
     .input-section h6 { color: #198754; margin-bottom: 0.75rem; }
-    
+
     /* Forecast display matching NWS Daily style */
     .forecast-display { margin-top: 2rem; }
-    .forecast-period-card { 
+    .forecast-period-card {
         padding: 1.5rem;
         text-align: center;
         min-height: 180px;
@@ -59,7 +59,7 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
-    
+
     /* Special chance layouts from forecast_period_card.html */
     .chance-mixed-block {
         position: relative;
@@ -157,10 +157,10 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
         const nwsElement = document.getElementById('nwsForecastData');
         const climateElement = document.getElementById('climateNormalsData');
-        
+
         nwsForecast = nwsElement ? JSON.parse(nwsElement.textContent) : [];
         climateNormals = climateElement ? JSON.parse(climateElement.textContent) : {};
-        
+
         // Auto-load 7 days if location selected
         if (currentLocation.location_id) {
             loadInitialDays();
@@ -180,7 +180,7 @@ async function loadInitialDays() {
 function loadLocation() {
     const select = document.getElementById('locationSelect');
     const locationId = select.value;
-    
+
     if (locationId) {
         // Reload page with location_id to fetch reference data
         window.location.href = `/forecasts/custom/?location_id=${locationId}`;
@@ -195,41 +195,41 @@ async function addDay() {
     today.setDate(baseDate.getDate() + dayIndex);
     const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     console.log(`Day ${dayIndex}: baseDate=${baseDate.toISOString()}, today=${today.toISOString()}, dateStr=${dateStr}`);
-    
+
     // Get NWS reference for this day (if available)
     // NWS forecast periods: day period for this date, and night period (which belongs to next calendar day)
     let nwsDay = {};
     let nwsNight = {};
     let nwsNextDayMorning = {}; // Night from this day is morning for next day
-    
+
     // Simple indexing: check if first period is day or night
     const firstIsDaytime = nwsForecast[0]?.isDaytime ?? true;
     const offset = firstIsDaytime ? 0 : 1;
     const dayPeriodIndex = dayIndex * 2 + offset;
-    
+
     nwsDay = nwsForecast[dayPeriodIndex] || {};
     nwsNight = nwsForecast[dayPeriodIndex + 1] || {};
     // The night period is actually the morning of the next day
     nwsNextDayMorning = nwsNight;
-    
+
     // Fetch model data for this date
     let modelData = await fetchModelDataForDate(dayIndex, today);
-    
+
     // Determine default values: use NWS if available, otherwise model average
     let defaultMorning = '';
     let defaultAfternoon = '';
     let defaultMorningWeather = '';
     let defaultAfternoonWeather = '';
-    
+
     // Check if this is today and past 8am
     let recordedLow = null;
     const now = new Date();
     const isToday = dayIndex === 0;
     const isPast8AM = now.getHours() >= 8;
-    
+
     // Get NWS night from previous day (which is morning for this day)
     const previousNwsNight = dayIndex > 0 ? nwsForecast[dayPeriodIndex - 1] || {} : {};
-    
+
     // Set defaults based on NWS or model data
     if (previousNwsNight.temperature) {
         // Use previous day's night as this day's morning low
@@ -238,7 +238,7 @@ async function addDay() {
     } else if (modelData.modelAverages) {
         defaultMorning = modelData.modelAverages.avgLow;
     }
-    
+
     if (nwsDay.temperature) {
         // Use this day's forecast
         defaultAfternoon = nwsDay.temperature;
@@ -246,20 +246,20 @@ async function addDay() {
     } else if (modelData.modelAverages) {
         defaultAfternoon = modelData.modelAverages.avgHigh;
     }
-    
+
     // Don't show morning if past 8am on current day
     if (isToday && isPast8AM) {
         defaultMorning = '';
     }
-    
+
     // Override morning with recorded low if available
-    // (now handled in the isToday check above)    
+    // (now handled in the isToday check above)
     const card = document.createElement('div');
     card.className = 'day-builder-card';
     card.id = `day-${dayCounter}`;
     card.innerHTML = `
         <h4>${dateStr}</h4>
-        
+
         <!-- Reference Data -->
         <div class="reference-data">
             <h6><i class="fas fa-info-circle"></i> Reference Data</h6>
@@ -283,7 +283,7 @@ async function addDay() {
                 </div>
             </div>
         </div>
-        
+
         <!-- Input Section -->
         <div class="input-section">
             <h6><i class="fas fa-edit"></i> Your Forecast</h6>
@@ -313,20 +313,20 @@ async function addDay() {
             </div>
         </div>
     `;
-    
+
     document.getElementById('dayBuilderContainer').appendChild(card);
-    
+
     // Render model data table
     if (modelData.chartData && Object.keys(modelData.chartData).length > 0) {
         createModelDataTable(dayCounter, modelData.chartData, modelData.times);
     }
-    
+
     forecastDays.push({
         id: dayCounter,
         date: today,
         dateStr: dateStr
     });
-    
+
     updateForecastDisplay();
 }
 
@@ -336,40 +336,40 @@ async function fetchRecordedLow() {
         const pointsResp = await fetch(`https://api.weather.gov/points/${currentLocation.latitude},${currentLocation.longitude}`, {
             headers: { 'User-Agent': 'WeatherApp/1.0' }
         });
-        
+
         if (!pointsResp.ok) return null;
-        
+
         const pointsData = await pointsResp.json();
         const stationsUrl = pointsData.properties?.observationStations;
-        
+
         if (!stationsUrl) return null;
-        
+
         // Get nearest station
         const stationsResp = await fetch(stationsUrl, {
             headers: { 'User-Agent': 'WeatherApp/1.0' }
         });
-        
+
         if (!stationsResp.ok) return null;
-        
+
         const stationsData = await stationsResp.json();
         const stationId = stationsData.features?.[0]?.properties?.stationIdentifier;
-        
+
         if (!stationId) return null;
-        
+
         // Get observations from midnight to now
         const now = new Date();
         const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
         const startTime = midnight.toISOString();
-        
+
         const obsResp = await fetch(`https://api.weather.gov/stations/${stationId}/observations?start=${startTime}`, {
             headers: { 'User-Agent': 'WeatherApp/1.0' }
         });
-        
+
         if (!obsResp.ok) return null;
-        
+
         const obsData = await obsResp.json();
         const observations = obsData.features || [];
-        
+
         // Find minimum temperature in Fahrenheit
         let minTemp = null;
         for (const obs of observations) {
@@ -381,7 +381,7 @@ async function fetchRecordedLow() {
                 }
             }
         }
-        
+
         return minTemp !== null ? Math.round(minTemp) : null;
     } catch (e) {
         console.error('Error fetching recorded low:', e);
@@ -393,11 +393,11 @@ async function fetchModelDataForDate(dayIndex, localDay) {
     if (!currentLocation.latitude || !currentLocation.longitude) {
         return { chartData: {}, modelAverages: null };
     }
-    
+
     try {
         const resp = await fetch(`/api/model-comparison/?latitude=${currentLocation.latitude}&longitude=${currentLocation.longitude}&models=GFS,ICON,ECMWF,AIFS,GEM,HRRR,NAM,RGEM&forecast_days=7`);
         const data = await resp.json();
-        
+
         console.log('API Response:', data);
         // Log raw precip data for first model
         if (data.models && data.models.length > 0) {
@@ -406,11 +406,11 @@ async function fetchModelDataForDate(dayIndex, localDay) {
                 console.log(`${firstModel.name} full precip array:`, firstModel.data.hourly.precipitation.slice(0, 168));
             }
         }
-        
+
         if (data.status === 'success' && data.models) {
             let chartData = {};
             let allTemps = [];
-            
+
             // Get first model's hourly data to find start time and array length
             let firstModelData = null;
             let forecastStartTime = null;
@@ -428,67 +428,67 @@ async function fetchModelDataForDate(dayIndex, localDay) {
                     break;
                 }
             }
-            
+
             if (!forecastStartTime) {
                 console.error('No forecast data found');
                 return { chartData: {}, times: [], modelAverages: null };
             }
-            
+
             // Get user's timezone offset
             const now = new Date();
             const tzOffset = now.getTimezoneOffset() / 60; // Offset in hours
             const tzOffsetMs = now.getTimezoneOffset() * 60 * 1000; // Offset in milliseconds
-            
+
             console.log('Timezone offset (hours):', tzOffset);
             console.log('Local day:', localDay);
-            
+
             // Calculate UTC time at local midnight
             const localMidnight = new Date(localDay.getFullYear(), localDay.getMonth(), localDay.getDate(), 0, 0, 0);
             const utcAtMidnight = new Date(localMidnight.getTime() + tzOffsetMs);
-            
+
             // Calculate local day start and end in UTC
             const localDayStartUTC = utcAtMidnight;
             const localDayEndUTC = new Date(utcAtMidnight.getTime() + 24 * 60 * 60 * 1000);
-            
+
             console.log('Local day UTC range:', localDayStartUTC, 'to', localDayEndUTC);
-            
+
             // Find which 0Z, 6Z, 12Z, 18Z periods fall within this local day
             const times = [];
             const utcHours = [0, 6, 12, 18];
-            
+
             for (let utcHour of utcHours) {
                 // Start with the candidate UTC date from local midnight
                 let candidateUtcTime = new Date(Date.UTC(
-                    utcAtMidnight.getUTCFullYear(), 
-                    utcAtMidnight.getUTCMonth(), 
-                    utcAtMidnight.getUTCDate(), 
+                    utcAtMidnight.getUTCFullYear(),
+                    utcAtMidnight.getUTCMonth(),
+                    utcAtMidnight.getUTCDate(),
                     utcHour
                 ));
-                
+
                 console.log(`UTC hour ${utcHour}: candidate time =`, candidateUtcTime);
-                
+
                 // If this is before local day start in UTC, try next day
                 if (candidateUtcTime < localDayStartUTC) {
                     candidateUtcTime = new Date(candidateUtcTime);
                     candidateUtcTime.setUTCDate(candidateUtcTime.getUTCDate() + 1);
                     console.log(`  -> moved to next day:`, candidateUtcTime);
                 }
-                
+
                 // Check if this period falls within the local day
                 if (candidateUtcTime >= localDayStartUTC && candidateUtcTime < localDayEndUTC) {
                     // Convert UTC hour to local hour for display
                     let localHour = (utcHour - tzOffset) % 24;
                     if (localHour < 0) localHour += 24;
-                    
+
                     const ampm = localHour >= 12 ? 'PM' : 'AM';
                     const displayHourAmpm = localHour % 12 === 0 ? 12 : localHour % 12;
-                    
+
                     const utcTimeSeconds = Math.floor(candidateUtcTime.getTime() / 1000);
                     const utcDate = new Date(candidateUtcTime.getTime());
                     const dateStr = utcDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    
+
                     console.log(`  -> INCLUDED: local hour ${localHour} (${displayHourAmpm}${ampm}), UTC seconds=${utcTimeSeconds}`);
-                    
+
                     times.push({
                         utcTimeSeconds: utcTimeSeconds,
                         label: `${displayHourAmpm}${ampm}`,
@@ -499,32 +499,32 @@ async function fetchModelDataForDate(dayIndex, localDay) {
                     console.log(`  -> excluded from local day range`);
                 }
             }
-            
+
             // Sort times by UTC timestamp to ensure chronological order
             times.sort((a, b) => a.utcTimeSeconds - b.utcTimeSeconds);
-            
+
             console.log('Final times array:', times);
-            
+
             // Extract temperatures for each model
             for (const model of data.models) {
                 if (model.data && model.data.hourly && !model.skipped) {
                     const temps = model.data.hourly.temperature_2m || [];
                     const precips = model.data.hourly.precipitation || [];
                     chartData[model.name] = {};
-                    
+
                     console.log(`${model.name}: ${temps.length} temperatures, ${precips.length} precip values`);
                     console.log(`  Precips sample:`, precips.slice(0, 5));
-                    
+
                     for (const timeObj of times) {
                         // Find index by calculating hours from forecast start
                         const hoursFromStart = (timeObj.utcTimeSeconds - forecastStartTime) / 3600;
                         const index = Math.round(hoursFromStart);
-                        
+
                         console.log(`  ${timeObj.utcLabel}: hoursFromStart=${hoursFromStart}, index=${index}`);
-                        
+
                         if (index >= 0 && index < temps.length && temps[index] !== null && temps[index] !== undefined) {
                             const temp = Math.round(temps[index]);
-                            
+
                             // Sum hourly precipitation for the 6 hours leading up to this forecast time
                             let totalPrecip = 0;
                             for (let i = Math.max(0, index - 5); i <= index; i++) {
@@ -532,7 +532,7 @@ async function fetchModelDataForDate(dayIndex, localDay) {
                                     totalPrecip += precips[i];
                                 }
                             }
-                            
+
                             chartData[model.name][timeObj.utcLabel] = {
                                 temp: temp,
                                 precip: totalPrecip
@@ -546,17 +546,17 @@ async function fetchModelDataForDate(dayIndex, localDay) {
                     }
                 }
             }
-            
+
             console.log('Final chartData:', chartData);
-            
+
             // Calculate average temps from all models' readings (excluding nulls)
             let modelAverages = null;
             if (allTemps.length > 0) {
                 const avgTemp = Math.round(allTemps.reduce((a, b) => a + b, 0) / allTemps.length);
                 modelAverages = { avgHigh: avgTemp, avgLow: avgTemp };
             }
-            
-            return { 
+
+            return {
                 chartData: chartData,
                 times: times,
                 modelAverages: modelAverages
@@ -565,7 +565,7 @@ async function fetchModelDataForDate(dayIndex, localDay) {
     } catch (e) {
         console.error('Error fetching model data:', e);
     }
-    
+
     return { chartData: {}, times: [], modelAverages: null };
 }
 
@@ -578,9 +578,9 @@ function removeDay(dayId) {
 function createModelDataTable(dayId, chartData, times) {
     const container = document.getElementById(`modelChart-${dayId}`);
     if (!container) return;
-    
+
     const models = Object.keys(chartData);
-    
+
     // Build table HTML
     let html = `<table class="model-data-table">
         <thead>
@@ -591,7 +591,7 @@ function createModelDataTable(dayId, chartData, times) {
         </thead>
         <tbody>
     `;
-    
+
     for (const model of models) {
         html += `<tr><td>${model}</td>`;
         for (const time of times) {
@@ -606,7 +606,7 @@ function createModelDataTable(dayId, chartData, times) {
         }
         html += `</tr>`;
     }
-    
+
     html += `</tbody></table>`;
     container.innerHTML = html;
 }
@@ -614,54 +614,54 @@ function createModelDataTable(dayId, chartData, times) {
 function updateForecastDisplay() {
     const container = document.getElementById('forecastCards');
     const displaySection = document.getElementById('forecastDisplay');
-    
+
     if (forecastDays.length === 0) {
         displaySection.style.display = 'none';
         return;
     }
-    
+
     displaySection.style.display = 'block';
-    
+
     // Update location name
     const locationSelect = document.getElementById('locationSelect');
     const selectedOption = locationSelect.options[locationSelect.selectedIndex];
     const locationName = selectedOption.text || 'Custom Location';
     document.getElementById('locationNameText').textContent = locationName;
-    
+
     // Update timestamp
     const now = new Date();
-    const timestampText = now.toLocaleDateString('en-US', { 
-        weekday: 'short', 
-        month: 'short', 
-        day: 'numeric', 
+    const timestampText = now.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
         year: 'numeric',
         hour: 'numeric',
         minute: '2-digit'
     });
     document.getElementById('timestampText').textContent = timestampText;
-    
+
     container.innerHTML = '';
-    
+
     forecastDays.forEach(day => {
         const morningTemp = document.getElementById(`morning-${day.id}`)?.value;
         const afternoonTemp = document.getElementById(`afternoon-${day.id}`)?.value;
         const morningWeather = document.getElementById(`morning-weather-${day.id}`)?.value;
         const afternoonWeather = document.getElementById(`afternoon-weather-${day.id}`)?.value;
-        
+
         if (!morningTemp && !afternoonTemp && !morningWeather && !afternoonWeather) return;
-        
+
         // Determine weather icon based on conditions (matching ui_tags.py logic)
         function getWeatherIcon(description) {
             if (!description) return 'fa-cloud';
             const cond = description.toLowerCase();
-            
+
             const isStorm = cond.includes('storm') || cond.includes('thunder') || cond.includes('t-storm');
             const isSnow = cond.includes('snow') || cond.includes('flurries') || cond.includes('blizzard');
             const isIce = cond.includes('ice') || cond.includes('icy') || cond.includes('freezing') || cond.includes('sleet');
             const isRain = (cond.includes('rain') || cond.includes('shower') || cond.includes('drizzle')) && !isSnow && !isIce;
-            
+
             if (isStorm) return 'fa-bolt';
-            if (isIce) return 'fa-icicles';
+            if (isIce) return 'fa-cloud-meatball';
             if (isSnow) return 'fa-snowflake';
             if (cond.includes('fog') || cond.includes('mist') || cond.includes('haze')) return 'fa-smog';
             if (isRain) return 'fa-cloud-rain';
@@ -671,31 +671,31 @@ function updateForecastDisplay() {
             if (cond.includes('cloud') || cond.includes('overcast')) return 'fa-cloud';
             return 'fa-cloud-sun';
         }
-        
+
         // Determine if special layout is needed (matching needs_chance_layout logic)
         function needsChanceLayout(description) {
             if (!description) return null;
             const cond = description.toLowerCase();
-            
+
             const isSnow = cond.includes('snow') || cond.includes('flurries') || cond.includes('blizzard');
             const isIce = cond.includes('ice') || cond.includes('icy') || cond.includes('freezing') || cond.includes('sleet');
             const isRain = (cond.includes('rain') || cond.includes('shower') || cond.includes('drizzle')) && !isSnow && !isIce;
             const isStorm = cond.includes('storm') || cond.includes('thunder') || cond.includes('t-storm');
-            
+
             // Mixed precipitation - both rain AND snow
             if (isRain && isSnow) return 'mixed';
-            
+
             // Check for "chance" or "likely" keywords indicating lower probability
             const hasChanceKeyword = cond.includes('chance') || cond.includes('likely') || cond.includes('slight');
-            
+
             if (hasChanceKeyword) {
                 if (isStorm) return 'storm';
                 if (isSnow && !isRain) return 'snow';
             }
-            
+
             return null;
         }
-        
+
         // Generate icon HTML based on layout type
         function generateIconHTML(description, layout) {
             if (layout === 'mixed') {
@@ -734,7 +734,7 @@ function updateForecastDisplay() {
                 return `<i class="fas ${icon}"></i>`;
             }
         }
-        
+
         function getTempClass(temp) {
             const t = Math.round(parseFloat(temp));
             if (t >= 110) return 'temp-bg-110';
@@ -752,14 +752,14 @@ function updateForecastDisplay() {
             if (t >= 0) return 'temp-bg-0';
             return 'temp-bg-below-0';
         }
-        
+
         const wrapper = document.createElement('div');
         wrapper.className = 'col';
-        
+
         const dayOfWeek = day.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
         const afternoonLayout = needsChanceLayout(afternoonWeather);
         const morningLayout = needsChanceLayout(morningWeather);
-        
+
         wrapper.innerHTML = `
             <div class="card border-0 h-100">
                 <div class="card-header text-center py-2">
@@ -813,7 +813,7 @@ async function exportForecast() {
     const button = event.target;
     button.disabled = true;
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
-    
+
     try {
         const canvas = await html2canvas(element, {
             backgroundColor: '#ffffff',
@@ -822,12 +822,12 @@ async function exportForecast() {
             allowTaint: true,
             logging: false
         });
-        
+
         const link = document.createElement('a');
         link.download = `custom-forecast-${new Date().toISOString().split('T')[0]}.jpg`;
         link.href = canvas.toDataURL('image/jpeg', 0.95);
         link.click();
-        
+
         button.disabled = false;
         button.innerHTML = '<i class="fas fa-download"></i> Export as JPG';
     } catch (e) {

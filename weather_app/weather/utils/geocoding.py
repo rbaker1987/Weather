@@ -27,15 +27,16 @@ class AsyncGeocoder:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, func, *args)
 
-    async def geocode_with_retry(self, location_string: str) -> Optional[Tuple[float, float]]:
+    async def geocode_with_retry(
+        self, location_string: str
+    ) -> Optional[Tuple[float, float]]:
         """Geocode a location string with exponential backoff retry."""
         for attempt in range(self.max_retries):
             try:
                 logger.debug(f"Geocoding attempt {attempt + 1} for: {location_string}")
 
                 result = await self._run_in_executor(
-                    self.geocoder.geocode,
-                    location_string
+                    self.geocoder.geocode, location_string
                 )
 
                 if result:
@@ -46,11 +47,15 @@ class AsyncGeocoder:
 
             except (GeocoderTimedOut, GeocoderServiceError) as e:
                 if attempt < self.max_retries - 1:
-                    delay = self.base_delay * (2 ** attempt)  # Exponential backoff
-                    logger.warning(f"Geocoding attempt {attempt + 1} failed: {e}. Retrying in {delay}s")
+                    delay = self.base_delay * (2**attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Geocoding attempt {attempt + 1} failed: {e}. Retrying in {delay}s"
+                    )
                     await asyncio.sleep(delay)
                 else:
-                    logger.error(f"Geocoding failed after {self.max_retries} attempts: {e}")
+                    logger.error(
+                        f"Geocoding failed after {self.max_retries} attempts: {e}"
+                    )
                     raise GeocodingError(f"Failed to geocode {location_string}: {e}")
             except Exception as e:
                 logger.error(f"Unexpected geocoding error for {location_string}: {e}")
@@ -61,10 +66,7 @@ class AsyncGeocoder:
     async def reverse_geocode(self, lat: float, lon: float) -> Optional[str]:
         """Reverse geocode coordinates to get address."""
         try:
-            result = await self._run_in_executor(
-                self.geocoder.reverse,
-                (lat, lon)
-            )
+            result = await self._run_in_executor(self.geocoder.reverse, (lat, lon))
 
             if result:
                 return result.address
@@ -106,7 +108,7 @@ async def create_location_from_string(location_string: str) -> Location:
                     return Location(
                         name=address if address else f"{lat}, {lon}",
                         latitude=lat,
-                        longitude=lon
+                        longitude=lon,
                     )
             except ValueError:
                 pass  # Not coordinates, treat as place name

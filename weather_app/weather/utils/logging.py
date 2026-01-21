@@ -14,10 +14,10 @@ def setup_logging(
     log_file: Optional[str] = None,
     log_format: Optional[str] = None,
     rotation: Optional[str] = None,
-    retention: Optional[str] = None
+    retention: Optional[str] = None,
 ) -> None:
     """Setup application logging with loguru.
-    
+
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_file: Path to log file (if None, logs to console only)
@@ -44,7 +44,7 @@ def setup_logging(
         format=format_str,
         colorize=True,
         backtrace=True,
-        diagnose=True
+        diagnose=True,
     )
 
     # Add file handler if specified
@@ -60,7 +60,7 @@ def setup_logging(
             retention=retention_setting,
             backtrace=True,
             diagnose=True,
-            enqueue=True  # Thread-safe logging
+            enqueue=True,  # Thread-safe logging
         )
 
     logger.info("Logging initialized", level=level, file=file_path)
@@ -68,10 +68,10 @@ def setup_logging(
 
 def get_logger(name: str):
     """Get a logger instance with the given name.
-    
+
     Args:
         name: Logger name (typically __name__ of the module)
-    
+
     Returns:
         Logger instance
     """
@@ -110,6 +110,7 @@ def log_error_with_context(error: Exception, context: dict):
 # Convenience decorators for logging
 def log_calls(func):
     """Decorator to log function calls."""
+
     def wrapper(*args, **kwargs):
         func_name = f"{func.__module__}.{func.__name__}"
         logger.debug(f"Entering {func_name}")
@@ -120,11 +121,13 @@ def log_calls(func):
         except Exception as e:
             logger.error(f"Error in {func_name}: {type(e).__name__}: {e}")
             raise
+
     return wrapper
 
 
 def log_async_calls(func):
     """Decorator to log async function calls."""
+
     async def wrapper(*args, **kwargs):
         func_name = f"{func.__module__}.{func.__name__}"
         logger.debug(f"Entering async {func_name}")
@@ -135,4 +138,5 @@ def log_async_calls(func):
         except Exception as e:
             logger.error(f"Error in async {func_name}: {type(e).__name__}: {e}")
             raise
+
     return wrapper

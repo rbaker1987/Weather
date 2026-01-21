@@ -1,4 +1,5 @@
 """Tests for signals: coordinate validation and apparent temperature calculations."""
+
 from datetime import datetime, time
 from decimal import Decimal
 
@@ -11,52 +12,78 @@ from weather.models import DailyForecast, HourlyForecast, Location
 @pytest.mark.django_db
 class TestLocationSignals:
     def test_coordinate_validation_valid(self):
-        loc = Location.objects.create(name="Valid", latitude=Decimal("45.5"), longitude=Decimal("-122.6"))
+        loc = Location.objects.create(
+            name="Valid", latitude=Decimal("45.5"), longitude=Decimal("-122.6")
+        )
         assert loc.latitude == Decimal("45.5")
 
     def test_coordinate_validation_invalid_latitude(self):
         with pytest.raises(ValueError, match="Invalid latitude"):
-            Location.objects.create(name="BadLat", latitude=Decimal("91.0"), longitude=Decimal("0.0"))
+            Location.objects.create(
+                name="BadLat", latitude=Decimal("91.0"), longitude=Decimal("0.0")
+            )
 
     def test_coordinate_validation_invalid_longitude(self):
         with pytest.raises(ValueError, match="Invalid longitude"):
-            Location.objects.create(name="BadLon", latitude=Decimal("0.0"), longitude=Decimal("181.0"))
+            Location.objects.create(
+                name="BadLon", latitude=Decimal("0.0"), longitude=Decimal("181.0")
+            )
 
     def test_latitude_at_minimum_boundary(self):
-        loc = Location.objects.create(name="SouthPole", latitude=Decimal("-90.0"), longitude=Decimal("0.0"))
+        loc = Location.objects.create(
+            name="SouthPole", latitude=Decimal("-90.0"), longitude=Decimal("0.0")
+        )
         assert loc.latitude == Decimal("-90.0")
 
     def test_latitude_at_maximum_boundary(self):
-        loc = Location.objects.create(name="NorthPole", latitude=Decimal("90.0"), longitude=Decimal("0.0"))
+        loc = Location.objects.create(
+            name="NorthPole", latitude=Decimal("90.0"), longitude=Decimal("0.0")
+        )
         assert loc.latitude == Decimal("90.0")
 
     def test_latitude_below_minimum(self):
         with pytest.raises(ValueError, match="Invalid latitude"):
-            Location.objects.create(name="TooSouth", latitude=Decimal("-90.1"), longitude=Decimal("0.0"))
+            Location.objects.create(
+                name="TooSouth", latitude=Decimal("-90.1"), longitude=Decimal("0.0")
+            )
 
     def test_latitude_above_maximum(self):
         with pytest.raises(ValueError, match="Invalid latitude"):
-            Location.objects.create(name="TooNorth", latitude=Decimal("90.1"), longitude=Decimal("0.0"))
+            Location.objects.create(
+                name="TooNorth", latitude=Decimal("90.1"), longitude=Decimal("0.0")
+            )
 
     def test_longitude_at_minimum_boundary(self):
-        loc = Location.objects.create(name="DatelineWest", latitude=Decimal("0.0"), longitude=Decimal("-180.0"))
+        loc = Location.objects.create(
+            name="DatelineWest", latitude=Decimal("0.0"), longitude=Decimal("-180.0")
+        )
         assert loc.longitude == Decimal("-180.0")
 
     def test_longitude_at_maximum_boundary(self):
-        loc = Location.objects.create(name="DatelineEast", latitude=Decimal("0.0"), longitude=Decimal("180.0"))
+        loc = Location.objects.create(
+            name="DatelineEast", latitude=Decimal("0.0"), longitude=Decimal("180.0")
+        )
         assert loc.longitude == Decimal("180.0")
 
     def test_longitude_below_minimum(self):
         with pytest.raises(ValueError, match="Invalid longitude"):
-            Location.objects.create(name="TooWest", latitude=Decimal("0.0"), longitude=Decimal("-180.1"))
+            Location.objects.create(
+                name="TooWest", latitude=Decimal("0.0"), longitude=Decimal("-180.1")
+            )
 
     def test_longitude_above_maximum(self):
         with pytest.raises(ValueError, match="Invalid longitude"):
-            Location.objects.create(name="TooEast", latitude=Decimal("0.0"), longitude=Decimal("180.1"))
+            Location.objects.create(
+                name="TooEast", latitude=Decimal("0.0"), longitude=Decimal("180.1")
+            )
 
     def test_coordinates_both_invalid(self):
         with pytest.raises(ValueError):
-            Location.objects.create(name="BothInvalid", latitude=Decimal("100.0"), longitude=Decimal("200.0"))
+            Location.objects.create(
+                name="BothInvalid",
+                latitude=Decimal("100.0"),
+                longitude=Decimal("200.0"),
+            )
 
 
 @pytest.mark.django_db

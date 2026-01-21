@@ -19,15 +19,15 @@ def fetch_noaa_forecast(
 ) -> Optional[dict]:
     """
     Fetch weather data from NOAA via NWS Grid Point API.
-    
+
     Uses the latest available model run automatically.
     Only works for US locations.
-    
+
     Args:
         latitude: Location latitude
         longitude: Location longitude
         model: Model name (GFS, NAM, HRRR, NDFD)
-    
+
     Returns:
         Forecast data dict or None if fetch fails
     """
@@ -57,31 +57,21 @@ def fetch_noaa_forecast(
             )
             return None
 
-        logger.debug(
-            f"Got grid point: office={office}, gridX={grid_x}, gridY={grid_y}"
-        )
+        logger.debug(f"Got grid point: office={office}, gridX={grid_x}, gridY={grid_y}")
 
         # Step 2: Map model to NOAA grid data endpoint
         if model == "GFS":
             # GFS via /gridpoints/office/gridX,gridY/forecast
-            forecast_url = (
-                f"https://api.weather.gov/gridpoints/{office}/{grid_x},{grid_y}/forecast"
-            )
+            forecast_url = f"https://api.weather.gov/gridpoints/{office}/{grid_x},{grid_y}/forecast"
         elif model == "NAM":
             # NAM via /gridpoints/office/gridX,gridY/forecast
-            forecast_url = (
-                f"https://api.weather.gov/gridpoints/{office}/{grid_x},{grid_y}/forecast"
-            )
+            forecast_url = f"https://api.weather.gov/gridpoints/{office}/{grid_x},{grid_y}/forecast"
         elif model == "HRRR":
             # HRRR via /gridpoints/office/gridX,gridY/forecast
-            forecast_url = (
-                f"https://api.weather.gov/gridpoints/{office}/{grid_x},{grid_y}/forecast"
-            )
+            forecast_url = f"https://api.weather.gov/gridpoints/{office}/{grid_x},{grid_y}/forecast"
         elif model == "NDFD":
             # NDFD via /gridpoints/office/gridX,gridY/forecast
-            forecast_url = (
-                f"https://api.weather.gov/gridpoints/{office}/{grid_x},{grid_y}/forecast"
-            )
+            forecast_url = f"https://api.weather.gov/gridpoints/{office}/{grid_x},{grid_y}/forecast"
         else:
             logger.warning(f"No forecast endpoint mapping for model {model}")
             return None
@@ -92,7 +82,7 @@ def fetch_noaa_forecast(
         forecast_data = forecast_resp.json()
 
         if "properties" not in forecast_data:
-            logger.error(f"No properties in forecast response")
+            logger.error("No properties in forecast response")
             return None
 
         # Extract hourly data from periods (NWS provides 12-hour periods, not hourly)
@@ -131,13 +121,13 @@ def fetch_noaa_forecast(
 def _convert_nws_to_hourly(periods: list) -> dict:
     """
     Convert NWS periods (12-hour) to hourly format.
-    
+
     This is a simplified conversion since NWS provides period forecasts.
     For a full solution, you'd need to use NOAA's GridData API.
-    
+
     Args:
         periods: List of forecast periods from NWS
-    
+
     Returns:
         Dict with hourly arrays
     """

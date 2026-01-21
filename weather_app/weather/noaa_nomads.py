@@ -43,7 +43,7 @@ def _latest_cycle(now: datetime) -> int:
     - Is published around 15:30-16:00 UTC every day
     - Has time to fully populate on NOMADS (file completion can take 1-2 hours)
     - Is available from every day in the past (no "latest" edge case)
-    
+
     This is conservative but ensures data is always available.
     """
     # Always return 12Z as a reliable, safe cycle
@@ -59,9 +59,11 @@ def _bbox(lat: float, lon: float, delta: float = 1.0) -> dict[str, float]:
     }
 
 
-def _gfs_filter_url(cycle: int, fhr: int, bbox: dict[str, float], ensemble: str, cycle_date: str) -> str:
+def _gfs_filter_url(
+    cycle: int, fhr: int, bbox: dict[str, float], ensemble: str, cycle_date: str
+) -> str:
     """Build NOMADS filter URL for GFS or GEFS (control/mean/member).
-    
+
     Args:
         cycle: cycle hour (0, 6, 12, 18)
         fhr: forecast hour (0, 1, 2, ...)
@@ -122,7 +124,9 @@ def _download_grib(url: str) -> str:
     return path
 
 
-def _decode_point(grib_path: str, lat: float, lon: float) -> dict[str, list[float | None]]:
+def _decode_point(
+    grib_path: str, lat: float, lon: float
+) -> dict[str, list[float | None]]:
     _ensure_cfgrib()
     import xarray as xr
 
@@ -152,15 +156,29 @@ def _decode_point(grib_path: str, lat: float, lon: float) -> dict[str, list[floa
                 if height_dim:
                     try:
                         hsel = var.sel({height_dim: height}, method="nearest")
-                        v = hsel.sel(latitude=lat, longitude=lon, method="nearest").values
-                        return v.tolist() if hasattr(v, "tolist") else [float(v)] if isinstance(v, (int, float)) else []
+                        v = hsel.sel(
+                            latitude=lat, longitude=lon, method="nearest"
+                        ).values
+                        return (
+                            v.tolist()
+                            if hasattr(v, "tolist")
+                            else [float(v)]
+                            if isinstance(v, (int, float))
+                            else []
+                        )
                     except Exception:
                         continue
         # Fallback: try direct variable names like t2m/u10/v10/gust
         for candidate in ["t2m", "u10", "v10", "r2m", "gust"]:
             if candidate in point:
                 v = point[candidate].values
-                return v.tolist() if hasattr(v, "tolist") else [float(v)] if isinstance(v, (int, float)) else []
+                return (
+                    v.tolist()
+                    if hasattr(v, "tolist")
+                    else [float(v)]
+                    if isinstance(v, (int, float))
+                    else []
+                )
         return []
 
     def _extract_at_level(shortnames: list[str], level_hpa: int) -> list[float | None]:
@@ -168,12 +186,22 @@ def _decode_point(grib_path: str, lat: float, lon: float) -> dict[str, list[floa
         for _, var in ds.data_vars.items():
             short = var.attrs.get("GRIB_shortName")
             if short and short in shortnames:
-                lvl_dim = _has_coord(var, ["isobaricInhPa", "isobaricInPa", "pressure", "level"])
+                lvl_dim = _has_coord(
+                    var, ["isobaricInhPa", "isobaricInPa", "pressure", "level"]
+                )
                 if lvl_dim:
                     try:
                         lsel = var.sel({lvl_dim: level_hpa}, method="nearest")
-                        v = lsel.sel(latitude=lat, longitude=lon, method="nearest").values
-                        return v.tolist() if hasattr(v, "tolist") else [float(v)] if isinstance(v, (int, float)) else []
+                        v = lsel.sel(
+                            latitude=lat, longitude=lon, method="nearest"
+                        ).values
+                        return (
+                            v.tolist()
+                            if hasattr(v, "tolist")
+                            else [float(v)]
+                            if isinstance(v, (int, float))
+                            else []
+                        )
                     except Exception:
                         continue
         return []
@@ -185,13 +213,25 @@ def _decode_point(grib_path: str, lat: float, lon: float) -> dict[str, list[floa
             if short and short in shortnames:
                 try:
                     v = var.sel(latitude=lat, longitude=lon, method="nearest").values
-                    return v.tolist() if hasattr(v, "tolist") else [float(v)] if isinstance(v, (int, float)) else []
+                    return (
+                        v.tolist()
+                        if hasattr(v, "tolist")
+                        else [float(v)]
+                        if isinstance(v, (int, float))
+                        else []
+                    )
                 except Exception:
                     continue
         for nm in names:
             if nm in point:
                 v = point[nm].values
-                return v.tolist() if hasattr(v, "tolist") else [float(v)] if isinstance(v, (int, float)) else []
+                return (
+                    v.tolist()
+                    if hasattr(v, "tolist")
+                    else [float(v)]
+                    if isinstance(v, (int, float))
+                    else []
+                )
         return []
 
     time_vals = point["time"].values.tolist() if "time" in point else []
@@ -262,39 +302,45 @@ def fetch_gfs_nomads(
 
     import time
     from datetime import timedelta as td
-    
+
     start_time = time.time()
     now = datetime.now(timezone.utc)
     cycle = _latest_cycle(now)
-    
+
     # Always use yesterday's cycle for maximum reliability and data availability.
     # Yesterday's 12Z cycle is published around 15:30 UTC and has 5+ hours to populate files.
     safe_hours_back = 24  # Go back 1 full day to yesterday
     cycle_time = now - td(hours=safe_hours_back)
-    cycle_date = cycle_time.strftime('%Y%m%d')
-    
+    cycle_date = cycle_time.strftime("%Y%m%d")
+
     bbox = _bbox(latitude, longitude, delta=1.0)
 
     merged = {"time": []}
     successful_hours = 0
     failed_hours = 0
-    
-    logger.info(f"Using NOMADS cycle: {cycle_date}/{cycle:02d}z (computed {safe_hours_back}h ago from now)")
+
+    logger.info(
+        f"Using NOMADS cycle: {cycle_date}/{cycle:02d}z (computed {safe_hours_back}h ago from now)"
+    )
 
     for fhr in forecast_hours:
         # Check if we've exceeded timeout
         elapsed = time.time() - start_time
         if elapsed > timeout:
-            logger.warning(f"NOMADS fetch timed out after {elapsed:.1f}s (timeout={timeout}s) at f{fhr:03d}; fetched {successful_hours} hours so far")
+            logger.warning(
+                f"NOMADS fetch timed out after {elapsed:.1f}s (timeout={timeout}s) at f{fhr:03d}; fetched {successful_hours} hours so far"
+            )
             break
-        
+
         url = _gfs_filter_url(cycle, fhr, bbox, ensemble, cycle_date)
         try:
             logger.debug(f"Fetching f{fhr:03d}...")
             grib_path = _download_grib(url)
             logger.debug(f"Downloaded GRIB to {grib_path}, decoding...")
             point = _decode_point(grib_path, latitude, longitude)
-            logger.debug(f"Decoded f{fhr:03d}: time={len(point.get('time',[]))}, t2m={len(point.get('temperature_2m',[]))}")
+            logger.debug(
+                f"Decoded f{fhr:03d}: time={len(point.get('time',[]))}, t2m={len(point.get('temperature_2m',[]))}"
+            )
             for k, v in point.items():
                 if k not in merged:
                     merged[k] = []
@@ -314,14 +360,19 @@ def fetch_gfs_nomads(
             continue
 
     if not merged.get("time"):
-        logger.error(f"No time data extracted from GRIB files (successful: {successful_hours}, failed: {failed_hours})")
+        logger.error(
+            f"No time data extracted from GRIB files (successful: {successful_hours}, failed: {failed_hours})"
+        )
         return None
 
     # Debug: log what we got
-    logger.info(f"NOMADS success for {ensemble} - fetched {successful_hours} hours ({failed_hours} 404s/errors): time={len(merged.get('time', []))} pts, temp_2m={len(merged.get('temperature_2m', []))}, precip={len(merged.get('precipitation', []))}")
+    logger.info(
+        f"NOMADS success for {ensemble} - fetched {successful_hours} hours ({failed_hours} 404s/errors): time={len(merged.get('time', []))} pts, temp_2m={len(merged.get('temperature_2m', []))}, precip={len(merged.get('precipitation', []))}"
+    )
 
     # Compute wind speed magnitude from u/v components if available
     import math
+
     u10 = merged.get("u10", [])
     v10 = merged.get("v10", [])
     if u10 and v10 and len(u10) == len(v10):

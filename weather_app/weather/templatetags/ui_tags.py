@@ -56,7 +56,7 @@ def condition_icon(forecast_or_text, period_type="day"):
                 if is_snow:
                     return "snowflake"
                 if is_ice:
-                    return "icicles"
+                    return "cloud-meatball"
                 if is_rain:
                     return "tint"  # Just raindrop for high chance rain
                 # Fall through to default for non-precipitation conditions
@@ -89,7 +89,7 @@ def condition_icon(forecast_or_text, period_type="day"):
     if is_storm:
         return "bolt"
     if is_ice:
-        return "icicles"
+        return "cloud-meatball"
     if is_snow:
         return "snowflake"
     if any(k in cond for k in ("fog", "mist", "haze")):

@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings
 
 class DatabaseConfig(BaseSettings):
     """Database configuration."""
+
     url: str = Field(default="sqlite:///weather_data.db", description="Database URL")
     echo: bool = Field(default=False, description="Echo SQL queries")
 
@@ -18,10 +19,17 @@ class DatabaseConfig(BaseSettings):
 
 class APIConfig(BaseSettings):
     """External API configuration."""
-    nws_base_url: str = Field(default="https://api.weather.gov", description="NWS API base URL")
+
+    nws_base_url: str = Field(
+        default="https://api.weather.gov", description="NWS API base URL"
+    )
     request_timeout: int = Field(default=30, description="Request timeout in seconds")
-    rate_limit_delay: float = Field(default=1.0, description="Delay between requests in seconds")
-    user_agent: str = Field(default="weather-app/0.2.0", description="User agent for API requests")
+    rate_limit_delay: float = Field(
+        default=1.0, description="Delay between requests in seconds"
+    )
+    user_agent: str = Field(
+        default="weather-app/0.2.0", description="User agent for API requests"
+    )
 
     class Config:
         env_prefix = "API_"
@@ -29,12 +37,15 @@ class APIConfig(BaseSettings):
 
 class LoggingConfig(BaseSettings):
     """Logging configuration."""
+
     level: str = Field(default="INFO", description="Logging level")
     format: str = Field(
         default="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-        description="Log format string"
+        description="Log format string",
     )
-    file: Optional[str] = Field(default=None, description="Log file path (stdout if None)")
+    file: Optional[str] = Field(
+        default=None, description="Log file path (stdout if None)"
+    )
     rotation: str = Field(default="10 MB", description="Log file rotation size")
     retention: str = Field(default="30 days", description="Log file retention period")
 
@@ -44,16 +55,14 @@ class LoggingConfig(BaseSettings):
 
 class UIConfig(BaseSettings):
     """User interface configuration."""
+
     theme: str = Field(default="Default", description="UI theme name")
-    window_size: tuple[int, int] = Field(default=(1024, 768), description="Default window size")
+    window_size: tuple[int, int] = Field(
+        default=(1024, 768), description="Default window size"
+    )
     default_locations: List[str] = Field(
-        default=[
-            "Austin, TX",
-            "Dallas, TX",
-            "Houston, TX",
-            "Tyler, TX"
-        ],
-        description="Default locations for forecasts"
+        default=["Austin, TX", "Dallas, TX", "Houston, TX", "Tyler, TX"],
+        description="Default locations for forecasts",
     )
 
     class Config:
@@ -62,6 +71,7 @@ class UIConfig(BaseSettings):
 
 class AppConfig(BaseSettings):
     """Main application configuration."""
+
     debug: bool = Field(default=False, description="Enable debug mode")
     data_dir: Path = Field(default=Path("./data"), description="Data directory path")
     cache_dir: Path = Field(default=Path("./cache"), description="Cache directory path")
