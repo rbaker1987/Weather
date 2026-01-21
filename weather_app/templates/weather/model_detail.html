@@ -94,7 +94,7 @@ Weather{% endblock %} {% block extra_css %}
     <label for="detailModelSelect" class="form-label">Model</label>
     <select id="detailModelSelect" class="form-select">
       {% for m in available_models %}
-      <option value="{{ m }}" {% if m="" ="model_name" %}selected{% endif %}>
+      <option value="{{ m }}" {% if m == model_name %}selected{% endif %}>
         {{ m }}
       </option>
       {% endfor %}
