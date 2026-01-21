@@ -438,9 +438,20 @@
                     <table class="table table-hover" style="font-size: 1.1rem;">
                         <thead>
                             <tr>
-                                <th>Time</th>
-                                <th>Temperature</th>
+                                const lat = {{ location.latitude }};
+                                const lon = {{ location.longitude }};
                                 <th>Conditions</th>
+                                const timeZone = resp?.timezone || 'UTC';
+                                const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+                                const getDateKey = (d) => {
+                                    const parts = dateFormatter.formatToParts(d);
+                                    const y = parts.find(p => p.type === 'year').value;
+                                    const m = parts.find(p => p.type === 'month').value;
+                                    const day = parts.find(p => p.type === 'day').value;
+                                    return `${y}-${m}-${day}`;
+                                };
+
+                                if (resp && resp.hours && resp.hours.length > 0) {
                                 <th>Wind</th>
                                 <th>Humidity</th>
                             </tr>
@@ -669,6 +680,16 @@ async function loadNext24Hours() {
             resp = await response.json();
         }
 
+        const timeZone = resp?.timezone || 'UTC';
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+        const getDateKey = (d) => {
+            const parts = dateFormatter.formatToParts(d);
+            const y = parts.find(p => p.type === 'year')?.value;
+            const m = parts.find(p => p.type === 'month')?.value;
+            const day = parts.find(p => p.type === 'day')?.value;
+            return `${y}-${m}-${day}`;
+        };
+
         // Debug: Log first few hours to see apparent temp data
         if (resp && resp.hours && resp.hours.length > 0) {
             console.log('Hourly forecast sample (first 3 hours):', resp.hours.slice(0, 3).map(h => ({
@@ -734,7 +755,7 @@ async function loadNext24Hours() {
 
                 // Use per-date sunrise/sunset if available
                 if (startDate && window.locationSunEvents) {
-                    const key = startDate.toISOString().split('T')[0];
+                    const key = getDateKey(startDate);
                     const ev = window.locationSunEvents[key];
                     if (ev) {
                         const sr = new Date(ev.sunrise);
