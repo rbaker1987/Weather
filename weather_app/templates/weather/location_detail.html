@@ -1805,8 +1805,8 @@ async function loadLocationModelData() {
         // Fetch 3-day forecast from GFS, NAM, ECMWF, and Canadian GEM
         const modelConfigs = [
             { name: 'GFS', url: `https://api.open-meteo.com/v1/gfs?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
-            // Request 4 days from NAM to guarantee three daily rows (NAM sometimes returns only 2–3 days at shorter horizons)
-            { name: 'NAM', url: `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=4&models=ncep_nam_conus` },
+            // Request 4 days from NAM and include hourly to backfill missing daily rows
+            { name: 'NAM', url: `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&hourly=temperature_2m,precipitation&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=4&models=ncep_nam_conus` },
             { name: 'ECMWF', url: `https://api.open-meteo.com/v1/ecmwf?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
             { name: 'GEM', url: `https://api.open-meteo.com/v1/gem?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` }
         ];
@@ -1862,9 +1862,32 @@ function displayModelComparison(modelData, container) {
     const gfsMinTemp = gfsData.daily.temperature_2m_min;
     const gfsPrecip = gfsData.daily.precipitation_sum;
     
-    const namMaxTemp = namData?.daily?.temperature_2m_max || [];
-    const namMinTemp = namData?.daily?.temperature_2m_min || [];
-    const namPrecip = namData?.daily?.precipitation_sum || [];
+    const namDailyMax = namData?.daily?.temperature_2m_max || [];
+    const namDailyMin = namData?.daily?.temperature_2m_min || [];
+    const namDailyPrecip = namData?.daily?.precipitation_sum || [];
+
+    // Derive missing NAM daily values from hourly if available (NAM often returns <3 daily rows)
+    const namHourly = namData?.hourly;
+    const namHourTimes = namHourly?.time || [];
+    const namHourTemps = namHourly?.temperature_2m || [];
+    const namHourPrecip = namHourly?.precipitation || [];
+    const namDerived = {};
+    if (namHourTimes.length) {
+        for (let i = 0; i < namHourTimes.length; i++) {
+            const tIso = namHourTimes[i];
+            const d = tIso.split('T')[0];
+            const temp = namHourTemps[i];
+            const prec = namHourPrecip?.[i] ?? 0;
+            if (!namDerived[d]) {
+                namDerived[d] = { tmax: -Infinity, tmin: Infinity, psum: 0 };
+            }
+            if (temp !== null && temp !== undefined) {
+                if (temp > namDerived[d].tmax) namDerived[d].tmax = temp;
+                if (temp < namDerived[d].tmin) namDerived[d].tmin = temp;
+            }
+            if (prec !== null && prec !== undefined) namDerived[d].psum += prec;
+        }
+    }
     
     const ecmwfMaxTemp = ecmwfData?.daily?.temperature_2m_max || [];
     const ecmwfMinTemp = ecmwfData?.daily?.temperature_2m_min || [];
@@ -1904,6 +1927,11 @@ function displayModelComparison(modelData, container) {
         const [year, month, day] = dates[i].split('-').map(Number);
         const date = new Date(year, month - 1, day);
         const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+        const namDateKey = dates[i];
+        const namMax = namDailyMax[i] ?? namDerived[namDateKey]?.tmax;
+        const namMin = namDailyMin[i] ?? namDerived[namDateKey]?.tmin;
+        const namPcp = namDailyPrecip[i] ?? namDerived[namDateKey]?.psum;
         
         html += `
             <tr>
@@ -1914,9 +1942,9 @@ function displayModelComparison(modelData, container) {
                 </td>
                 <td class="text-center">${gfsPrecip[i]?.toFixed(2) || '0.00'}"</td>
                 <td class="text-center">
-                    ${namMaxTemp[i] ? `<span class="text-danger fw-bold">${namMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${namMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
+                    ${(namMax !== undefined && namMax !== null) ? `<span class="text-danger fw-bold">${namMax.toFixed(0)}°</span> / <span class="text-primary fw-bold">${namMin?.toFixed(0)}°</span>` : 'N/A'}
                 </td>
-                <td class="text-center">${namPrecip[i]?.toFixed(2) || 'N/A'}</td>
+                <td class="text-center">${(namPcp !== undefined && namPcp !== null) ? namPcp.toFixed(2) : 'N/A'}</td>
                 <td class="text-center">
                     ${ecmwfMaxTemp[i] ? `<span class="text-danger fw-bold">${ecmwfMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${ecmwfMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
                 </td>
