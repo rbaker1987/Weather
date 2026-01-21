@@ -1896,8 +1896,12 @@ class ModelDetailView(TemplateView):
     }
 
     EXTENDED_HOURLY = (
-        # Temperatures (2m, surface pressure levels 925/850/800/700, upper levels 600/550/500/400)
-        "temperature_2m,temperature_925hPa,temperature_850hPa,temperature_800hPa,temperature_700hPa,temperature_600hPa,temperature_550hPa,temperature_500hPa,temperature_400hPa,apparent_temperature,"
+        # Temperatures (2m + dense sampling 975–500 hPa every 25 mb, keeping existing levels)
+        "temperature_2m,"
+        "temperature_975hPa,temperature_950hPa,temperature_925hPa,temperature_900hPa,temperature_875hPa,temperature_850hPa,temperature_825hPa,"
+        "temperature_800hPa,temperature_775hPa,temperature_750hPa,temperature_725hPa,temperature_700hPa,temperature_675hPa,"
+        "temperature_650hPa,temperature_625hPa,temperature_600hPa,temperature_575hPa,temperature_550hPa,temperature_525hPa,"
+        "temperature_500hPa,temperature_400hPa,apparent_temperature,"
         # Humidity
         "relativehumidity_2m,relativehumidity_925hPa,relativehumidity_850hPa,relativehumidity_700hPa,relativehumidity_500hPa,"
         # Other surface / diagnostic fields
@@ -1928,24 +1932,50 @@ class ModelDetailView(TemplateView):
             return None
 
         temps = hourly.get("temperature_2m") or []
+        t975 = hourly.get("temperature_975hPa") or []
+        t950 = hourly.get("temperature_950hPa") or []
         t925 = hourly.get("temperature_925hPa") or []
+        t900 = hourly.get("temperature_900hPa") or []
+        t875 = hourly.get("temperature_875hPa") or []
         t850 = hourly.get("temperature_850hPa") or []
+        t825 = hourly.get("temperature_825hPa") or []
         t800 = hourly.get("temperature_800hPa") or []
+        t775 = hourly.get("temperature_775hPa") or []
+        t750 = hourly.get("temperature_750hPa") or []
+        t725 = hourly.get("temperature_725hPa") or []
         t700 = hourly.get("temperature_700hPa") or []
+        t675 = hourly.get("temperature_675hPa") or []
+        t650 = hourly.get("temperature_650hPa") or []
+        t625 = hourly.get("temperature_625hPa") or []
         t600 = hourly.get("temperature_600hPa") or []
+        t575 = hourly.get("temperature_575hPa") or []
         t550 = hourly.get("temperature_550hPa") or []
+        t525 = hourly.get("temperature_525hPa") or []
         t500 = hourly.get("temperature_500hPa") or []
         snowfall = hourly.get("snowfall") or []
         precip = hourly.get("precipitation") or []
 
         n = max(
             len(temps),
+            len(t975),
+            len(t950),
             len(t925),
+            len(t900),
+            len(t875),
             len(t850),
+            len(t825),
             len(t800),
+            len(t775),
+            len(t750),
+            len(t725),
             len(t700),
+            len(t675),
+            len(t650),
+            len(t625),
             len(t600),
+            len(t575),
             len(t550),
+            len(t525),
             len(t500),
             len(snowfall),
             len(precip),
@@ -1969,24 +1999,82 @@ class ModelDetailView(TemplateView):
         for i in range(n):
             sf = val(snowfall, i)
             ts = val(temps, i)
+            t975v = val(t975, i)
+            t950v = val(t950, i)
             t925v = val(t925, i)
+            t900v = val(t900, i)
+            t875v = val(t875, i)
             t850v = val(t850, i)
+            t825v = val(t825, i)
             t800v = val(t800, i)
+            t775v = val(t775, i)
+            t750v = val(t750, i)
+            t725v = val(t725, i)
             t700v = val(t700, i)
+            t675v = val(t675, i)
+            t650v = val(t650, i)
+            t625v = val(t625, i)
             t600v = val(t600, i)
+            t575v = val(t575, i)
             t550v = val(t550, i)
+            t525v = val(t525, i)
             t500v = val(t500, i)
 
             # Warmest temperature in column (similar to Kuchera method) in °C
             warmest_f = max(
-                [v for v in (ts, t925v, t850v, t800v, t700v, t600v, t550v, t500v) if v is not None],
+                [
+                    v
+                    for v in (
+                        ts,
+                        t975v,
+                        t950v,
+                        t925v,
+                        t900v,
+                        t875v,
+                        t850v,
+                        t825v,
+                        t800v,
+                        t775v,
+                        t750v,
+                        t725v,
+                        t700v,
+                        t675v,
+                        t650v,
+                        t625v,
+                        t600v,
+                        t575v,
+                        t550v,
+                        t525v,
+                        t500v,
+                    )
+                    if v is not None
+                ],
                 default=None,
             )
             warmest_c = f_to_c(warmest_f) if warmest_f is not None else None
 
             # Warm layer: check key melting zone levels (925, 850, 800, 700)
             warm_layer = max(
-                [v for v in (t925v, t850v, t800v, t700v) if v is not None],
+                [
+                    v
+                    for v in (
+                        t975v,
+                        t950v,
+                        t925v,
+                        t900v,
+                        t875v,
+                        t850v,
+                        t825v,
+                        t800v,
+                        t775v,
+                        t750v,
+                        t725v,
+                        t700v,
+                        t675v,
+                        t650v,
+                    )
+                    if v is not None
+                ],
                 default=None,
             )
             
@@ -2007,16 +2095,52 @@ class ModelDetailView(TemplateView):
 
             # If a warm layer exists, honor it before snowfall hints to avoid false snow
             if warm_layer is not None and warm_layer > WARM:
-                # Melting layer present; determine sleet vs freezing rain using low-level cold strength.
-                # Heuristic: strong cold layer (<= ~28°F at 925 mb) favors sleet; otherwise freezing rain if surface <= 32°F.
+                # Melting layer present; determine sleet vs freezing rain.
+                # Key factors:
+                # 1. Depth/intensity of warm layer (how completely snow melts)
+                # 2. Depth/intensity of cold layer below (refreeze potential)
+                # 3. Surface temperature (determines if refrozen drops stick or accumulate)
+                
                 if ts <= FREEZE:
-                    if t925v is not None and t925v <= 28.0:
-                        ptype = "sleet"
-                        slr = 3.0
+                    # Calculate cold layer depth: how many subfreezing levels below warm layer
+                    cold_levels_below_warm = []
+                    for temp_val in [ts, t975v, t950v, t925v, t900v, t875v, t850v, t825v]:
+                        if temp_val is not None and temp_val <= FREEZE:
+                            cold_levels_below_warm.append(temp_val)
+                    
+                    # Calculate warm layer strength
+                    warm_layer_strength = warm_layer - FREEZE  # degrees above freezing
+                    warm_layer_depth = 0
+                    for temp_val in [t925v, t850v, t800v, t700v]:
+                        if temp_val is not None and temp_val > WARM:
+                            warm_layer_depth += 1
+                    
+                    # Decision logic:
+                    # Sleet requires: sufficient cold depth below + strong enough cold layer to refreeze
+                    # Classic sleet profile: warm nose at 850/800, strong cold at surface/925
+                    
+                    if len(cold_levels_below_warm) >= 2:
+                        # At least 2 subfreezing levels below warm layer
+                        avg_cold = sum(cold_levels_below_warm) / len(cold_levels_below_warm)
+                        
+                        # Strong cold layer (< 28°F average) with deep warm nose = classic sleet
+                        if avg_cold <= 28.0 and warm_layer_depth >= 2:
+                            ptype = "sleet"
+                            slr = 3.0
+                        # Moderate cold with shallow warm = possible sleet if very cold
+                        elif avg_cold <= 26.0:
+                            ptype = "sleet"
+                            slr = 3.0
+                        # Otherwise: warm layer exists but not enough refreezing = freezing rain
+                        else:
+                            ptype = "freezing_rain"
+                            slr = 0.75
                     else:
+                        # Shallow/weak cold layer below warm = freezing rain (drops don't fully refreeze)
                         ptype = "freezing_rain"
-                        slr = 0.75  # <1:1 ice accretion ratio
+                        slr = 0.75
                 else:
+                    # Surface above freezing = rain
                     ptype = "rain"
                     slr = 1.0
             else:
