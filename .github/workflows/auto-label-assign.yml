@@ -24,14 +24,31 @@ jobs:
             });
 
             const changedFiles = files.data.map(f => f.filename);
-            const labels = [];
+            const labels = new Set();
 
             // Auto-detect labels based on file changes
             if (changedFiles.some(f => f.includes('test_') || f.includes('tests/'))) {
-              labels.push('tests');
+              labels.add('tests');
             }
             if (changedFiles.some(f => f.includes('README') || f.includes('.md') || f.includes('docs/'))) {
-              labels.push('documentation');
+              labels.add('documentation');
+            }
+
+            // Frontend vs backend detection
+            if (changedFiles.some(f => f.startsWith('weather_app/static') || f.includes('templates/'))) {
+              labels.add('frontend');
+            }
+            if (changedFiles.some(f => f.startsWith('weather_app/weather') || f.startsWith('weather_app/config') || f.includes('api/') || f.includes('services/') || f.includes('views'))) {
+              labels.add('backend');
+            }
+
+            // Subdir-based labels (top-level directory names)
+            changedFiles.forEach(f => {
+              const top = f.split('/')[0];
+              if (top && top !== '.' && top !== '') {
+                labels.add(`dir:${top}`);
+              }
+            });
             }
 
             // Branch/PR title/body based labels
@@ -41,22 +58,23 @@ jobs:
             const prText = `${branchName} ${prTitle} ${prBody}`;
 
             if (branchName.startsWith('feature/') || prText.includes('feature') || prText.includes('feat:')) {
-              labels.push('feature');
+              labels.add('feature');
             }
             if (branchName.startsWith('fix/') || prText.includes('fix') || prText.includes('bug')) {
-              labels.push('bug');
+              labels.add('bug');
             }
             if (branchName.includes('update') || prText.includes('update') || prText.includes('upgrade')) {
-              labels.push('update');
+              labels.add('update');
             }
 
             // Add labels if any were detected
-            if (labels.length > 0) {
+            const labelsArray = Array.from(labels);
+            if (labelsArray.length > 0) {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: pr.number,
-                labels: labels
+                labels: labelsArray
               });
             }
 
