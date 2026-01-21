@@ -323,13 +323,13 @@
 {% endif %}
 
 
-<!-- Next 24 Hours -->
+<!-- NWS Hourly -->
 <div class="row mb-4">
     <div class="col-12">
         <div class="card weather-card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
-                    {% include "weather/components/section_header.html" with icon="clock" title="Next 24 Hours" %}
+                    {% include "weather/components/section_header.html" with icon="clock" title="NWS Hourly" %}
                     {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
                 </div>
                 <div class="btn-group">
