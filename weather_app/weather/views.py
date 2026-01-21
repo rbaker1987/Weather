@@ -1,8 +1,8 @@
 """Django REST Framework views for weather API."""
 
 import json
-import os
 import logging
+import os
 from datetime import datetime, time, timedelta
 
 from django.db.models import Avg, Case, Count, IntegerField, Q, When
@@ -31,8 +31,8 @@ from .serializers import (
 from .utils.apparent_temperature import calculate_apparent_temperature
 
 logger = logging.getLogger("weather")
-from django.core.cache import cache
 from django.conf import settings
+from django.core.cache import cache
 
 
 def fetch_current_conditions(location):
@@ -685,9 +685,23 @@ class LocationViewSet(viewsets.ModelViewSet):
                     period["endTime"].replace("Z", "+00:00")
                 )
                 local_end = raw_end.astimezone(timezone.get_current_timezone())
+
+                # For night periods, associate with the same day (not the next day)
+                # E.g., "Friday Night" should be associated with Friday, not Saturday
+                is_daytime = period.get("isDaytime", True)
+                if is_daytime:
+                    forecast_date = local_start.date()
+                else:
+                    # Night period: if it starts late in the day (e.g., 6 PM), use that date
+                    # Otherwise if it starts after midnight, subtract one day
+                    if local_start.hour >= 18:  # Starts at or after 6 PM
+                        forecast_date = local_start.date()
+                    else:
+                        forecast_date = (local_start - timedelta(days=1)).date()
+
                 DailyForecast.objects.create(
                     location=location,
-                    forecast_date=local_start.date(),
+                    forecast_date=forecast_date,
                     period_start=local_start,
                     period_end=local_end,
                     is_daytime=period.get("isDaytime", True),
@@ -1732,9 +1746,23 @@ class TempLocationView(TemplateView):
                         period["endTime"].replace("Z", "+00:00")
                     )
                     local_end = raw_end.astimezone(timezone.get_current_timezone())
+
+                    # For night periods, associate with the same day (not the next day)
+                    # E.g., "Friday Night" should be associated with Friday, not Saturday
+                    is_daytime = period.get("isDaytime", True)
+                    if is_daytime:
+                        forecast_date = local_start.date()
+                    else:
+                        # Night period: if it starts late in the day (e.g., 6 PM), use that date
+                        # Otherwise if it starts after midnight, subtract one day
+                        if local_start.hour >= 18:  # Starts at or after 6 PM
+                            forecast_date = local_start.date()
+                        else:
+                            forecast_date = (local_start - timedelta(days=1)).date()
+
                     daily_forecasts.append(
                         SimpleNamespace(
-                            forecast_date=local_start.date(),
+                            forecast_date=forecast_date,
                             period_start=local_start,
                             period_end=local_end,
                             is_daytime=period.get("isDaytime", True),
@@ -1893,6 +1921,11 @@ class ModelDetailView(TemplateView):
             "models": "cmc_gem_rdps",
             "max_days": 2,
         },
+        "NBM": {
+            "url": "https://api.open-meteo.com/v1/gfs",
+            "models": "ncep_nbm_conus",
+            "max_days": 11,
+        },
     }
 
     EXTENDED_HOURLY = (
@@ -1907,14 +1940,16 @@ class ModelDetailView(TemplateView):
         # Other surface / diagnostic fields
         "dewpoint_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
         # Precipitation & cloud
-        "precipitation,snowfall,cloudcover,pressure_msl"
+        "precipitation,snowfall,cloudcover,pressure_msl,"
+        # Precip type probabilities (available for GFS/HRRR/NBM; inferred for others via _classify_precip_types)
+        "rain_probability,snowfall_probability,freezing_rain_probability,ice_pellets_probability"
     )
 
     @staticmethod
     def _classify_precip_types(hourly: dict) -> tuple[list[str], list[float]]:
         """
         Infer precip phase and snow-to-liquid ratio per hour using surface and low/mid-level temps.
-        
+
         Returns:
             (types, slrs) where:
             - types: list of precip phases ("snow", "sleet", "freezing_rain", "rain", "unknown")
@@ -1987,6 +2022,7 @@ class ModelDetailView(TemplateView):
         SURFACE_SLUSH = 34.0  # allow snow/sleet depiction a bit above freezing
         # Treat any slight warm nose aloft as melting layer (> 32.1°F)
         WARM = 32.1
+
         # Helper: Fahrenheit to Celsius for SLR/dendritic logic
         def f_to_c(v: float | None) -> float | None:
             if v is None:
@@ -2077,12 +2113,14 @@ class ModelDetailView(TemplateView):
                 ],
                 default=None,
             )
-            
+
             # Peak dendritic growth zone temp (around 550 hPa, evaluate in °C)
             dendritic_c = f_to_c(t550v) if t550v is not None else None
 
             # If both 925 and 850 are cold, treat column as snow-favoring even if 700 is warmer
-            if (t925v is not None and t925v <= FREEZE) and (t850v is not None and t850v <= FREEZE):
+            if (t925v is not None and t925v <= FREEZE) and (
+                t850v is not None and t850v <= FREEZE
+            ):
                 warm_layer = None
 
             if ts is None:
@@ -2100,35 +2138,46 @@ class ModelDetailView(TemplateView):
                 # 1. Depth/intensity of warm layer (how completely snow melts)
                 # 2. Depth/intensity of cold layer below (refreeze potential)
                 # 3. Surface temperature (determines if refrozen drops stick or accumulate)
-                
+
                 if ts <= FREEZE:
                     # Calculate cold layer depth: how many subfreezing levels below warm layer
                     cold_levels_below_warm = []
-                    for temp_val in [ts, t975v, t950v, t925v, t900v, t875v, t850v, t825v]:
+                    for temp_val in [
+                        ts,
+                        t975v,
+                        t950v,
+                        t925v,
+                        t900v,
+                        t875v,
+                        t850v,
+                        t825v,
+                    ]:
                         if temp_val is not None and temp_val <= FREEZE:
                             cold_levels_below_warm.append(temp_val)
-                    
+
                     # Calculate warm layer strength
                     warm_layer_strength = warm_layer - FREEZE  # degrees above freezing
                     warm_layer_depth = 0
                     for temp_val in [t925v, t850v, t800v, t700v]:
                         if temp_val is not None and temp_val > WARM:
                             warm_layer_depth += 1
-                    
+
                     # Decision logic:
                     # Sleet requires: sufficient cold depth below + strong enough cold layer to refreeze
                     # Classic sleet profile: warm nose at 850/800, strong cold at surface/925
-                    
+
                     if len(cold_levels_below_warm) >= 2:
                         # At least 2 subfreezing levels below warm layer
-                        avg_cold = sum(cold_levels_below_warm) / len(cold_levels_below_warm)
-                        
+                        avg_cold = sum(cold_levels_below_warm) / len(
+                            cold_levels_below_warm
+                        )
+
                         # Strong cold layer (< 28°F average) with deep warm nose = classic sleet
-                        if avg_cold <= 28.0 and warm_layer_depth >= 2:
-                            ptype = "sleet"
-                            slr = 3.0
-                        # Moderate cold with shallow warm = possible sleet if very cold
-                        elif avg_cold <= 26.0:
+                        if (
+                            avg_cold <= 28.0
+                            and warm_layer_depth >= 2
+                            or avg_cold <= 26.0
+                        ):
                             ptype = "sleet"
                             slr = 3.0
                         # Otherwise: warm layer exists but not enough refreezing = freezing rain
@@ -2162,13 +2211,19 @@ class ModelDetailView(TemplateView):
 
                         # Kuchera-inspired logic with dendritic boost (all thresholds in °C)
                         if warmest_c < -18:
-                            slr = 26.0 + (2.0 * dendritic_strength)  # very cold, very light
+                            slr = 26.0 + (
+                                2.0 * dendritic_strength
+                            )  # very cold, very light
                         elif warmest_c < -12:
-                            slr = 18.0 + (4.0 * dendritic_strength)  # cold, dendritic growth zone
+                            slr = 18.0 + (
+                                4.0 * dendritic_strength
+                            )  # cold, dendritic growth zone
                         elif warmest_c < -5:
                             slr = 10.0 + (2.0 * dendritic_strength)  # moderately cold
                         else:
-                            slr = 6.0 + (2.0 * dendritic_strength)  # borderline, denser snow
+                            slr = 6.0 + (
+                                2.0 * dendritic_strength
+                            )  # borderline, denser snow
                     else:
                         slr = 12.0  # default to middle of range
                 else:
@@ -2188,6 +2243,7 @@ class ModelDetailView(TemplateView):
 
     def get_context_data(self, **kwargs):
         import time
+
         fetch_start = time.time()
         context = super().get_context_data(**kwargs)
         request = self.request
@@ -2241,10 +2297,12 @@ class ModelDetailView(TemplateView):
         cycle = None
         forecast_hours = None
         if lat and lon:
-            import requests
             from datetime import datetime
-            from .noaa_service import fetch_noaa_forecast, NOAA_MODELS
+
+            import requests
+
             from .noaa_nomads import fetch_gfs_nomads
+            from .noaa_service import NOAA_MODELS, fetch_noaa_forecast
 
             # Temporary: rely solely on Open-Meteo for all models (skip NOMADS/NOAA)
             only_open_meteo = True
@@ -2262,15 +2320,21 @@ class ModelDetailView(TemplateView):
                 # Extract metadata from cached data if present
                 model_source = data.get("model_source", "Open-Meteo")
                 cycle = data.get("cycle")
-                logger.info(f"ModelDetailView cache hit for {cache_key} (source={model_source}, cycle={cycle})")
+                logger.info(
+                    f"ModelDetailView cache hit for {cache_key} (source={model_source}, cycle={cycle})"
+                )
 
             # Prefer NOMADS GRIB for GFS deterministic/ensemble to get full fields
             # Use 45s timeout to allow fetching many forecast hours despite 404s
             if not only_open_meteo and not data and model_name == "GFS":
                 try:
                     nomads_start = time.time()
-                    logger.info(f"Attempting NOMADS fetch for GFS {ensemble} at {lat},{lon}")
-                    nomads_data = fetch_gfs_nomads(float(lat), float(lon), ensemble, timeout=45)
+                    logger.info(
+                        f"Attempting NOMADS fetch for GFS {ensemble} at {lat},{lon}"
+                    )
+                    nomads_data = fetch_gfs_nomads(
+                        float(lat), float(lon), ensemble, timeout=45
+                    )
                     if nomads_data:
                         data = nomads_data
                         model_source = nomads_data.get("model_source", "NOAA-NOMADS")
@@ -2280,14 +2344,24 @@ class ModelDetailView(TemplateView):
                         data["model_source"] = model_source
                         data["cycle"] = cycle
                         nomads_elapsed = time.time() - nomads_start
-                        logger.info(f"NOMADS successful in {nomads_elapsed:.2f}s: {len(data.get('hourly', {}).get('time', []))} time points")
+                        logger.info(
+                            f"NOMADS successful in {nomads_elapsed:.2f}s: {len(data.get('hourly', {}).get('time', []))} time points"
+                        )
                         if data.get("hourly", {}).get("time"):
                             first_time = data["hourly"]["time"][0]
                             run_time = datetime.fromisoformat(
                                 str(first_time).replace("Z", "+00:00")
                             )
                         # Cache NOMADS result with metadata
-                        cache.set(cache_key, data, timeout=getattr(settings, "MODEL_DETAIL_CACHE_SECONDS", getattr(settings, "CACHE_TIMEOUT", 300)))
+                        cache.set(
+                            cache_key,
+                            data,
+                            timeout=getattr(
+                                settings,
+                                "MODEL_DETAIL_CACHE_SECONDS",
+                                getattr(settings, "CACHE_TIMEOUT", 300),
+                            ),
+                        )
                     else:
                         logger.warning(f"NOMADS returned None for GFS {ensemble}")
                 except Exception as exc:  # noqa: BLE001
@@ -2319,7 +2393,10 @@ class ModelDetailView(TemplateView):
                     }
 
                     resp = requests.get(
-                        config["url"], params=params, headers=headers, timeout=int(os.getenv("OPEN_METEO_TIMEOUT", "15"))
+                        config["url"],
+                        params=params,
+                        headers=headers,
+                        timeout=int(os.getenv("OPEN_METEO_TIMEOUT", "15")),
                     )
                     resp.raise_for_status()
                     data = resp.json()
@@ -2335,7 +2412,15 @@ class ModelDetailView(TemplateView):
                         )
                     om_elapsed = time.time() - om_start
                     logger.info(f"Open-Meteo fetched in {om_elapsed:.2f}s")
-                    cache.set(cache_key, data, timeout=getattr(settings, "MODEL_DETAIL_CACHE_SECONDS", getattr(settings, "CACHE_TIMEOUT", 300)))
+                    cache.set(
+                        cache_key,
+                        data,
+                        timeout=getattr(
+                            settings,
+                            "MODEL_DETAIL_CACHE_SECONDS",
+                            getattr(settings, "CACHE_TIMEOUT", 300),
+                        ),
+                    )
                 except Exception as exc:  # noqa: BLE001
                     om_elapsed = time.time() - om_start
                     logger.warning(f"Open-Meteo failed in {om_elapsed:.2f}s: {exc}")
@@ -2356,7 +2441,15 @@ class ModelDetailView(TemplateView):
                             run_time = datetime.fromisoformat(
                                 first_time.replace("Z", "+00:00")
                             )
-                        cache.set(cache_key, data, timeout=getattr(settings, "MODEL_DETAIL_CACHE_SECONDS", getattr(settings, "CACHE_TIMEOUT", 300)))
+                        cache.set(
+                            cache_key,
+                            data,
+                            timeout=getattr(
+                                settings,
+                                "MODEL_DETAIL_CACHE_SECONDS",
+                                getattr(settings, "CACHE_TIMEOUT", 300),
+                            ),
+                        )
                 except Exception as exc:  # noqa: BLE001
                     logger.warning(
                         f"NOAA fetch failed for {model_name} after other fallbacks: {exc}"
@@ -2386,7 +2479,10 @@ class ModelDetailView(TemplateView):
                     }
 
                     resp = requests.get(
-                        config["url"], params=params, headers=headers, timeout=int(os.getenv("OPEN_METEO_TIMEOUT", "15"))
+                        config["url"],
+                        params=params,
+                        headers=headers,
+                        timeout=int(os.getenv("OPEN_METEO_TIMEOUT", "15")),
                     )
                     resp.raise_for_status()
                     data = resp.json()
@@ -2402,10 +2498,20 @@ class ModelDetailView(TemplateView):
                         )
                     om_elapsed = time.time() - om_start
                     logger.info(f"Open-Meteo {model_name} fetched in {om_elapsed:.2f}s")
-                    cache.set(cache_key, data, timeout=getattr(settings, "MODEL_DETAIL_CACHE_SECONDS", getattr(settings, "CACHE_TIMEOUT", 300)))
+                    cache.set(
+                        cache_key,
+                        data,
+                        timeout=getattr(
+                            settings,
+                            "MODEL_DETAIL_CACHE_SECONDS",
+                            getattr(settings, "CACHE_TIMEOUT", 300),
+                        ),
+                    )
                 except Exception as exc:  # noqa: BLE001
                     om_elapsed = time.time() - om_start
-                    logger.warning(f"Open-Meteo {model_name} failed in {om_elapsed:.2f}s: {exc}")
+                    logger.warning(
+                        f"Open-Meteo {model_name} failed in {om_elapsed:.2f}s: {exc}"
+                    )
         else:
             error = "Latitude/longitude not provided and no fallback location available"
 
@@ -2420,17 +2526,20 @@ class ModelDetailView(TemplateView):
             ).order_by("-is_current_location", "display_order", "name")
         else:
             # Fallback: show all active locations if session is empty
-            locations_qs = Location.objects.filter(
-                is_active=True
-            ).order_by("-is_current_location", "display_order", "name")
+            locations_qs = Location.objects.filter(is_active=True).order_by(
+                "-is_current_location", "display_order", "name"
+            )
 
         # Trim hourly data to requested forecast_days window to reduce JSON payload
         if data and data.get("hourly") and data["hourly"].get("time"):
             try:
                 from datetime import timedelta
+
                 times = data["hourly"]["time"]
                 if times:
-                    first_time = datetime.fromisoformat(str(times[0]).replace("Z", "+00:00"))
+                    first_time = datetime.fromisoformat(
+                        str(times[0]).replace("Z", "+00:00")
+                    )
                     cutoff = first_time + timedelta(days=int(forecast_days))
                     trim_idx = 0
                     for i, t in enumerate(times):
@@ -2445,7 +2554,9 @@ class ModelDetailView(TemplateView):
                         for key in data["hourly"]:
                             if isinstance(data["hourly"][key], list):
                                 data["hourly"][key] = data["hourly"][key][:trim_idx]
-                        logger.info(f"Trimmed hourly data from {len(times)} to {trim_idx} points (forecast_days={forecast_days})")
+                        logger.info(
+                            f"Trimmed hourly data from {len(times)} to {trim_idx} points (forecast_days={forecast_days})"
+                        )
             except Exception as e:
                 logger.warning(f"Failed to trim hourly data: {e}")
 
@@ -2455,16 +2566,20 @@ class ModelDetailView(TemplateView):
                 precip_types, slrs = self._classify_precip_types(data["hourly"])
                 data["hourly"]["precip_type"] = precip_types
                 data["hourly"]["snow_liquid_ratio"] = slrs
-                logger.info(f"Derived precip_type and SLRs for {len(precip_types)} hours")
+                logger.info(
+                    f"Derived precip_type and SLRs for {len(precip_types)} hours"
+                )
             except Exception as e:
                 logger.warning(f"Failed to classify precip types: {e}")
-        
+
         # Inject metadata into data dict so it's available in the frontend
         if data:
             data["model_source"] = model_source
             data["cycle"] = cycle
-            data["elevation"] = data.get("elevation")  # preserve existing elevation if present
-        
+            data["elevation"] = data.get(
+                "elevation"
+            )  # preserve existing elevation if present
+
         # Convert to list to ensure it's always a renderable object
         locations_list = list(locations_qs)
         locations_payload = [
@@ -2472,7 +2587,9 @@ class ModelDetailView(TemplateView):
                 "id": str(loc.id),
                 "display_name": loc.display_name,
                 "latitude": float(loc.latitude) if loc.latitude is not None else None,
-                "longitude": float(loc.longitude) if loc.longitude is not None else None,
+                "longitude": float(loc.longitude)
+                if loc.longitude is not None
+                else None,
                 "is_current_location": loc.is_current_location,
             }
             for loc in locations_list
@@ -3143,6 +3260,7 @@ class CustomForecastView(TemplateView):
 
     def get_context_data(self, **kwargs):
         import requests
+
         from weather.models import Location
 
         context = super().get_context_data(**kwargs)
@@ -3152,9 +3270,8 @@ class CustomForecastView(TemplateView):
         longitude = request.GET.get("longitude")
         location_id = request.GET.get("location_id")
 
-        locations = (
-            Location.objects.filter(is_active=True)
-            .order_by("-is_current_location", "display_order", "name")
+        locations = Location.objects.filter(is_active=True).order_by(
+            "-is_current_location", "display_order", "name"
         )
 
         nws_forecast_periods = []
@@ -3195,7 +3312,7 @@ class CustomForecastView(TemplateView):
                             nws_forecast_periods = forecast_data.get(
                                 "properties", {}
                             ).get("periods", [])[:14]  # Get 7 days (14 periods)
-            except (Location.DoesNotExist, requests.RequestException) as e:
+            except (Location.DoesNotExist, requests.RequestException):
                 # Log error but continue
                 pass
 

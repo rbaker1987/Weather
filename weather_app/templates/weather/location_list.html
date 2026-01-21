@@ -1082,7 +1082,7 @@ function getWindDirection(degrees) {
 function getWeatherIcon(conditions, isDaytime = true) {
     const c = (conditions || '').toLowerCase();
     if (c.includes('storm') || c.includes('thunder') || c.includes('t-storm')) return 'bolt';
-    if (c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet')) return 'icicles';
+    if (c.includes('ice') || c.includes('icy') || c.includes('freezing') || c.includes('sleet')) return 'cloud-meatball';
     if (c.includes('snow') || c.includes('flurries') || c.includes('blizzard')) return 'snowflake';
     if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
     // Showers without snow/ice = rain showers

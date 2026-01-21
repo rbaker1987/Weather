@@ -303,4 +303,3 @@ pytest tests/
 ruff check .
 npm run lint:js
 ```
-

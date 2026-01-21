@@ -18,7 +18,11 @@
   "rules": {
     "indent": ["error", 4],
     "linebreak-style": ["error", "unix"],
-    "quotes": ["error", "single", { "avoidEscape": true, "allowTemplateLiterals": true }],
+    "quotes": [
+      "error",
+      "single",
+      { "avoidEscape": true, "allowTemplateLiterals": true }
+    ],
     "semi": ["error", "always"],
     "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
     "no-console": ["warn", { "allow": ["warn", "error", "debug"] }],
@@ -31,9 +35,5 @@
     "arrow-spacing": "error",
     "no-multiple-empty-lines": ["error", { "max": 2 }]
   },
-  "ignorePatterns": [
-    "node_modules/",
-    "staticfiles/",
-    "*.min.js"
-  ]
+  "ignorePatterns": ["node_modules/", "staticfiles/", "*.min.js"]
 }

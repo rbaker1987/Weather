@@ -137,41 +137,41 @@
 document.addEventListener('DOMContentLoaded', function() {
     const lat = parseFloat('{{ latitude }}');
     const lon = parseFloat('{{ longitude }}');
-    
+
     // Initialize map
     const map = L.map('locationMap').setView([lat, lon], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 18
     }).addTo(map);
-    
+
     // Add marker for the location
     const marker = L.marker([lat, lon]).addTo(map);
     marker.bindPopup(`<b>Selected Location</b><br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}`).openPopup();
-    
+
     // Fetch NWS data
     fetchNWSForecast(lat, lon);
 });
 
 async function fetchNWSForecast(lat, lon) {
     const container = document.getElementById('nwsForecastContent');
-    
+
     try {
         // First get grid point info
         const gridResponse = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
-        
+
         if (!gridResponse.ok) {
             throw new Error('Location may be outside NWS coverage area');
         }
-        
+
         const gridData = await gridResponse.json();
         const forecastUrl = gridData.properties.forecast;
-        
+
         // Get forecast data
         const forecastResponse = await fetch(forecastUrl);
         const forecastData = await forecastResponse.json();
         const periods = forecastData.properties.periods;
-        
+
         // Display forecast periods
         let html = '<div class="row">';
         periods.slice(0, 6).forEach((period, index) => {
@@ -188,7 +188,7 @@ async function fetchNWSForecast(lat, lon) {
                                 </div>
                             </div>
                             <p class="small mb-1"><i class="fas fa-wind"></i> ${period.windSpeed} ${period.windDirection}</p>
-                            ${period.probabilityOfPrecipitation?.value ? 
+                            ${period.probabilityOfPrecipitation?.value ?
                                 `<p class="small mb-0"><i class="fas fa-tint"></i> Precip: ${period.probabilityOfPrecipitation.value}%</p>` : ''}
                         </div>
                     </div>
@@ -196,13 +196,13 @@ async function fetchNWSForecast(lat, lon) {
             `;
         });
         html += '</div>';
-        
+
         container.innerHTML = html;
-        
+
     } catch (error) {
         container.innerHTML = `
             <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle"></i> 
+                <i class="fas fa-exclamation-triangle"></i>
                 <strong>Unable to load NWS forecast</strong><br>
                 ${error.message}<br>
                 <small class="text-muted">This location may be outside the National Weather Service coverage area (US only). Try using the model forecasts above.</small>

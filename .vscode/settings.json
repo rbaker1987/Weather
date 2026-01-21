@@ -33,9 +33,7 @@
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "eslint.validate": [
-    "javascript"
-  ],
+  "eslint.validate": ["javascript"],
   "ruff.enable": true,
   "ruff.organizeImports": true,
   "files.trimTrailingWhitespace": true,
@@ -47,9 +45,7 @@
     "**/.ruff_cache": true,
     "**/node_modules": true
   },
-  "python.testing.pytestArgs": [
-    "tests"
-  ],
+  "python.testing.pytestArgs": ["tests"],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true
 }

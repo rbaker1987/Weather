@@ -50,10 +50,13 @@ Weather{% endblock %} {% block extra_css %}
     </h3>
     {% if run_time %}
     <small class="text-muted">
-      <i class="fas fa-clock"></i> Model Run: {{ run_time|date:'Y-m-d H:i' }} UTC
-      {% if model_source %}<span class="ms-2 badge bg-info">{{ model_source }}</span>{% endif %}
-      {% if ensemble and ensemble != 'det' %}<span class="ms-2 badge bg-secondary">Ens: {{ ensemble }}</span>{% endif %}
-      {% if cycle %}<span class="ms-2 badge bg-dark">Cycle {{ cycle }}</span>{% endif %}
+      <i class="fas fa-clock"></i> Model Run: {{ run_time|date:'Y-m-d H:i' }} UTC {% if
+      model_source %}<span class="ms-2 badge bg-info">{{ model_source }}</span>{% endif
+      %} {% if ensemble and ensemble != 'det' %}<span class="ms-2 badge bg-secondary"
+        >Ens: {{ ensemble }}</span
+      >{% endif %} {% if cycle %}<span class="ms-2 badge bg-dark"
+        >Cycle {{ cycle }}</span
+      >{% endif %}
     </small>
     {% endif %}
   </div>
@@ -72,17 +75,19 @@ Weather{% endblock %} {% block extra_css %}
 </div>
 <!-- Toggles replicated from main models page -->
 <div class="row g-3 align-items-end mb-4">
-  {% include "weather/components/location_selector.html" with locations=locations latitude=latitude longitude=longitude location_col_class='col-md-4' map_btn_col_class='col-md-1' %}
+  {% include "weather/components/location_selector.html" with locations=locations
+  latitude=latitude longitude=longitude location_col_class='col-md-4'
+  map_btn_col_class='col-md-1' %}
   <div class="col-md-2">
     <label for="detailForecastDays" class="form-label">Forecast Days</label>
     <select id="detailForecastDays" class="form-select">
-      <option value="2" {% if forecast_days == '2' %}selected{% endif %}>2</option>
-      <option value="3" {% if forecast_days == '3' %}selected{% endif %}>3</option>
-      <option value="5" {% if forecast_days == '5' %}selected{% endif %}>5</option>
-      <option value="7" {% if forecast_days == '7' %}selected{% endif %}>7</option>
-      <option value="10" {% if forecast_days == '10' %}selected{% endif %}>10</option>
-      <option value="14" {% if forecast_days == '14' %}selected{% endif %}>14</option>
-      <option value="16" {% if forecast_days == '16' %}selected{% endif %}>16</option>
+      <option value="2" {% if forecast_days == "2" %}selected{% endif %}>2</option>
+      <option value="3" {% if forecast_days == "3" %}selected{% endif %}>3</option>
+      <option value="5" {% if forecast_days == "5" %}selected{% endif %}>5</option>
+      <option value="7" {% if forecast_days == "7" %}selected{% endif %}>7</option>
+      <option value="10" {% if forecast_days == "10" %}selected{% endif %}>10</option>
+      <option value="14" {% if forecast_days == "14" %}selected{% endif %}>14</option>
+      <option value="16" {% if forecast_days == "16" %}selected{% endif %}>16</option>
     </select>
   </div>
   <div class="col-md-5">
@@ -100,14 +105,15 @@ Weather{% endblock %} {% block extra_css %}
 <div class="alert alert-danger">Error fetching model data: {{ error }}</div>
 {% endif %}
 <div class="mb-3 text-muted">
-  {% if latitude and longitude %}<i class="fas fa-map-marker-alt"></i> Lat {{ latitude|floatformat:4 }}, Lon {{ longitude|floatformat:4 }}{% endif %}
+  {% if latitude and longitude %}<i class="fas fa-map-marker-alt"></i> Lat {{
+  latitude|floatformat:4 }}, Lon {{ longitude|floatformat:4 }}{% endif %}
   <span class="ms-3"
     ><i class="fas fa-calendar-day"></i> Days: {{ forecast_days }}</span
   >
   {% if forecast_hours %}<span class="ms-3"
-    ><i class="fas fa-hourglass-half"></i> Hours: {{ forecast_hours.0 }}–{{ forecast_hours|last }} ({{ forecast_hours|length }} pts)</span
-  >{% endif %}
-  {% if data.elevation %}<span class="ms-3"
+    ><i class="fas fa-hourglass-half"></i> Hours: {{ forecast_hours.0 }}–{{
+    forecast_hours|last }} ({{ forecast_hours|length }} pts)</span
+  >{% endif %} {% if data.elevation %}<span class="ms-3"
     ><i class="fas fa-mountain"></i> Elev {% widthratio data.elevation 1 3.28084 %} ft
     ({{ data.elevation|floatformat:0 }} m)</span
   >{% endif %}
@@ -115,19 +121,25 @@ Weather{% endblock %} {% block extra_css %}
 {% if data %}
 <div class="chart-container">
   <h5 class="mb-3"><i class="fas fa-temperature-high"></i> Temperatures</h5>
-  <div class="placeholder-glow mb-2" id="tempPlaceholder"><span class="placeholder col-12" style="height: 240px; display: block;"></span></div>
+  <div class="placeholder-glow mb-2" id="tempPlaceholder">
+    <span class="placeholder col-12" style="height: 240px; display: block"></span>
+  </div>
   <canvas id="tempDetailChart" height="240"></canvas>
 </div>
 <div class="chart-container">
   <h5 class="mb-3">
     <i class="fas fa-cloud-rain"></i> Precipitation Types & Cloud Cover
   </h5>
-  <div class="placeholder-glow mb-2" id="precipPlaceholder"><span class="placeholder col-12" style="height: 240px; display: block;"></span></div>
+  <div class="placeholder-glow mb-2" id="precipPlaceholder">
+    <span class="placeholder col-12" style="height: 240px; display: block"></span>
+  </div>
   <canvas id="precipTypesChart" height="240"></canvas>
 </div>
 <div class="chart-container">
   <h5 class="mb-3"><i class="fas fa-wind"></i> Wind</h5>
-  <div class="placeholder-glow mb-2" id="windPlaceholder"><span class="placeholder col-12" style="height: 240px; display: block;"></span></div>
+  <div class="placeholder-glow mb-2" id="windPlaceholder">
+    <span class="placeholder col-12" style="height: 240px; display: block"></span>
+  </div>
   <canvas id="windDetailChart" height="240"></canvas>
 </div>
 <div class="row">
@@ -168,7 +180,7 @@ Weather{% endblock %} {% block extra_css %}
   // Make location data available globally to setupModelDetailListeners
   const detailLocations = {{ locations_json|safe }};
   const detailLocationList = Array.isArray(detailLocations) ? detailLocations : [];
-  
+
   (function() {
     const data = {{ data_json|safe }};
     if(!data) return;
@@ -177,7 +189,7 @@ Weather{% endblock %} {% block extra_css %}
     if(rawEl) rawEl.textContent = JSON.stringify(data, null, 2);
     const hourly = data.hourly || {};
     const times = hourly.time ? hourly.time.map(t => new Date(t)) : [];
-    
+
     // Log data structure for debugging
     console.log('Model Detail - Data loaded:', {
       model_source: data.model_source,
@@ -197,7 +209,7 @@ Weather{% endblock %} {% block extra_css %}
       first_precip: hourly.precipitation?.[0],
       first_gust: hourly.wind_gusts_10m?.[0]
     });
-    
+
     // Temperature datasets - use all hourly data, not sampled
     const elevation = data.elevation || 0; // meters above sea level
     const t2m = hourly.temperature_2m||[];
@@ -388,30 +400,56 @@ Weather{% endblock %} {% block extra_css %}
     const rh850 = hourly.relativehumidity_850hPa||[];
     const rh700 = hourly.relativehumidity_700hPa||[];
     const rh500 = hourly.relativehumidity_500hPa||[];
-    // Use server-side precip_type classification + liquid precipitation + SLRs
+    // Use server-side precip_type classification + liquid precipitation + SLRs, or NBM precip type probabilities
     const precipTypes = hourly.precip_type || [];
     const slrs = hourly.snow_liquid_ratio || [];
     const precipPeriodSampled = hourly.precipitation || [];
+
+    // For NBM/models with native precip type probabilities, use those instead
+    const rainProb = hourly.rain_probability || [];
+    const snowfallProb = hourly.snowfall_probability || [];
+    const freezingRainProb = hourly.freezing_rain_probability || [];
+    const icePelletsProb = hourly.ice_pellets_probability || [];
+    const hasNativePrecipTypes = rainProb.length > 0 || snowfallProb.length > 0 || freezingRainProb.length > 0 || icePelletsProb.length > 0;
 
     const snowPortion = [];
     const freezingRainPortion = [];
     const sleetPortion = [];
     const rainPortion = [];
 
-    const nPrecip = Math.min(precipTypes.length || 0, precipPeriodSampled.length || 0);
+    const nPrecip = Math.min(precipTypes.length || rainProb.length || 0, precipPeriodSampled.length || 0);
     for(let i=0;i<nPrecip;i++){
       const p = Number(precipPeriodSampled[i]) || 0;
-      const pt = precipTypes[i];
       let snowL=0, frL=0, slL=0, rnL=0;
+
       if(p === 0){
         snowPortion.push(0); freezingRainPortion.push(0); sleetPortion.push(0); rainPortion.push(0);
         continue;
       }
-      if(pt === 'snow') snowL = p;
-      else if(pt === 'sleet') slL = p;
-      else if(pt === 'freezing_rain') frL = p;
-      else if(pt === 'rain') rnL = p;
-      else rnL = p; // unknown -> treat as rain
+
+      // Use native precip type probabilities if available (NBM), otherwise use inferred classification
+      if(hasNativePrecipTypes && i < rainProb.length) {
+        const rp = (rainProb[i] || 0) / 100;
+        const sp = (snowfallProb[i] || 0) / 100;
+        const frp = (freezingRainProb[i] || 0) / 100;
+        const ipp = (icePelletsProb[i] || 0) / 100;
+        const totalProb = rp + sp + frp + ipp;
+        if(totalProb > 0) {
+          rnL = p * (rp / totalProb);
+          snowL = p * (sp / totalProb);
+          frL = p * (frp / totalProb);
+          slL = p * (ipp / totalProb);
+        }
+      } else {
+        // Fall back to inferred classification
+        const pt = precipTypes[i];
+        if(pt === 'snow') snowL = p;
+        else if(pt === 'sleet') slL = p;
+        else if(pt === 'freezing_rain') frL = p;
+        else if(pt === 'rain') rnL = p;
+        else rnL = p; // unknown -> treat as rain
+      }
+
       snowPortion.push(parseFloat(snowL.toFixed(3)));
       freezingRainPortion.push(parseFloat(frL.toFixed(3)));
       sleetPortion.push(parseFloat(slL.toFixed(3)));
@@ -424,7 +462,7 @@ Weather{% endblock %} {% block extra_css %}
 
     // Calculate total liquid and total frozen depth using dynamic SLRs
     const totalLiquid = (snowPortion.reduce((a,b)=>a+b,0) + freezingRainPortion.reduce((a,b)=>a+b,0) + sleetPortion.reduce((a,b)=>a+b,0) + rainPortion.reduce((a,b)=>a+b,0)).toFixed(2);
-    
+
     // Calculate frozen depth using dynamic SLRs from server
     let totalFrozenDepthVal = 0;
     const nSnow = snowPortion.length;
@@ -485,7 +523,7 @@ Weather{% endblock %} {% block extra_css %}
       }
       // Update Total Frozen metric to match the chart line's final value
       document.getElementById('frozenTotal').textContent = (filteredCumulativeFrozen.length ? filteredCumulativeFrozen[filteredCumulativeFrozen.length-1] : 0).toFixed(2);
-      
+
       new Chart(precipTypesCtx,{type:'bar',data:{labels:filteredLabels,datasets:[
         {label:'Snow (liq in)',data:filteredSnow,backgroundColor:'#6ec5ff',stack:'precip'},
         {label:'Freezing Rain (liq in)',data:filteredFreezingRain,backgroundColor:'#ff66b3',stack:'precip'},
@@ -611,7 +649,7 @@ Weather{% endblock %} {% block extra_css %}
       select.appendChild(opt);
     }
   }
-  
+
   function setupModelDetailListeners(){
     let locSel = document.getElementById('detailLocationSelect');
     const daysSel = document.getElementById('detailForecastDays');
@@ -622,9 +660,9 @@ Weather{% endblock %} {% block extra_css %}
     } else if(locSel && locSel.options.length === 0 && detailLocationList.length){
       populateLocationSelect(locSel);
     }
-    
+
     console.log('setupModelDetailListeners called (attempt', setupRetries + 1 + '): locSel=', !!locSel, 'daysSel=', !!daysSel, 'modelSel=', !!modelSel);
-    
+
     if(!locSel || !daysSel || !modelSel) {
       if(setupRetries < MAX_RETRIES) {
         setupRetries++;
@@ -643,8 +681,8 @@ Weather{% endblock %} {% block extra_css %}
         return;
       }
     }
-    
-    const modelMaxDaysMap = {GFS:16,ICON:7,ECMWF:10,AIFS:10,GEM:10,HRRR:2,NAM:3,RGEM:2};
+
+    const modelMaxDaysMap = {GFS:16,ICON:7,ECMWF:10,AIFS:10,GEM:10,HRRR:2,NAM:3,RGEM:2,NBM:11};
     const baseDayOptions = [2,3,5,7,10,14,16];
 
     function ensureDaysWithinModel(selectedModel){
@@ -718,7 +756,7 @@ Weather{% endblock %} {% block extra_css %}
       // Get selected model FIRST before any DOM manipulation
       const selectedModel = modelSel ? modelSel.value : '{{ model_name }}';
       console.log('reloadWithCurrentCoords: selectedModel=', selectedModel, 'forceExpand=', forceExpand);
-      
+
       // Prefer the currently selected location in the dropdown (avoids stale URL coords)
       let lat = null;
       let lon = null;
@@ -753,7 +791,7 @@ Weather{% endblock %} {% block extra_css %}
         reloadDetail();
       }
     }
-    
+
     // Attach event listeners
     locSel.addEventListener('change', function(){
       console.log('Location changed');
@@ -767,19 +805,18 @@ Weather{% endblock %} {% block extra_css %}
       console.log('Model changed');
       reloadWithCurrentCoords(true);
     });
-    
+
     // Initial prune based on current model on page load
     rebuildDayOptions(modelSel ? modelSel.value : '{{ model_name }}');
     console.log('Event listeners attached successfully');
   }
-  
+
   // Try to setup immediately, and also on DOMContentLoaded
   if(document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setupModelDetailListeners);
   } else {
     setupModelDetailListeners();
   }
-
 </script>
 
 <!-- Include location picker map component -->

@@ -21,10 +21,10 @@ class TestConditionIcon:
         assert condition_icon("storm") == "bolt"
 
     def test_ice_keywords(self):
-        """Test ice-related keywords return icicles icon."""
-        assert condition_icon("Icy conditions") == "icicles"
-        assert condition_icon("Freezing rain") == "icicles"
-        assert condition_icon("Sleet") == "icicles"
+        """Test ice-related keywords return cloud-meatball icon."""
+        assert condition_icon("Icy conditions") == "cloud-meatball"
+        assert condition_icon("Freezing rain") == "cloud-meatball"
+        assert condition_icon("Sleet") == "cloud-meatball"
 
     def test_snow_keywords(self):
         """Test snow-related keywords return snowflake icon."""

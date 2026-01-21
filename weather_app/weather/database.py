@@ -32,6 +32,7 @@ class Base(DeclarativeBase):
 
 class LocationDB(Base):
     """Database model for locations."""
+
     __tablename__ = "locations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -42,7 +43,9 @@ class LocationDB(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    forecasts: Mapped[List["ForecastDB"]] = relationship("ForecastDB", back_populates="location")
+    forecasts: Mapped[List["ForecastDB"]] = relationship(
+        "ForecastDB", back_populates="location"
+    )
 
     def to_domain(self) -> Location:
         """Convert database model to domain model."""
@@ -50,7 +53,7 @@ class LocationDB(Base):
             name=self.name,
             latitude=self.latitude,
             longitude=self.longitude,
-            zip_code=self.zip_code
+            zip_code=self.zip_code,
         )
 
     @classmethod
@@ -60,16 +63,19 @@ class LocationDB(Base):
             name=location.name,
             latitude=location.latitude,
             longitude=location.longitude,
-            zip_code=location.zip_code
+            zip_code=location.zip_code,
         )
 
 
 class ForecastDB(Base):
     """Database model for weather forecasts."""
+
     __tablename__ = "forecasts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"), nullable=False)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("locations.id"), nullable=False
+    )
     forecast_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     temperature: Mapped[int] = mapped_column(Integer, nullable=False)
     apparent_temperature: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -89,17 +95,24 @@ class ForecastDB(Base):
     valid_until: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     # Relationships
-    location: Mapped[LocationDB] = relationship("LocationDB", back_populates="forecasts")
+    location: Mapped[LocationDB] = relationship(
+        "LocationDB", back_populates="forecasts"
+    )
     alerts: Mapped[List["AlertDB"]] = relationship("AlertDB", back_populates="forecast")
 
 
 class AlertDB(Base):
     """Database model for weather alerts."""
+
     __tablename__ = "alerts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    forecast_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("forecasts.id"), nullable=True)
-    location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"), nullable=False)
+    forecast_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("forecasts.id"), nullable=True
+    )
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("locations.id"), nullable=False
+    )
 
     event: Mapped[str] = mapped_column(String(100), nullable=False)
     headline: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -112,7 +125,9 @@ class AlertDB(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    forecast: Mapped[Optional[ForecastDB]] = relationship("ForecastDB", back_populates="alerts")
+    forecast: Mapped[Optional[ForecastDB]] = relationship(
+        "ForecastDB", back_populates="alerts"
+    )
     location: Mapped[LocationDB] = relationship("LocationDB")
 
 
@@ -126,17 +141,16 @@ class DatabaseManager:
         if self.database_url.startswith("sqlite"):
             # Convert SQLite URL for async operation
             if not self.database_url.startswith("sqlite+aiosqlite"):
-                self.database_url = self.database_url.replace("sqlite://", "sqlite+aiosqlite://")
+                self.database_url = self.database_url.replace(
+                    "sqlite://", "sqlite+aiosqlite://"
+                )
 
         self.engine = create_async_engine(
-            self.database_url,
-            echo=get_config().database.echo
+            self.database_url, echo=get_config().database.echo
         )
 
         self.async_session_factory = async_sessionmaker(
-            self.engine,
-            class_=AsyncSession,
-            expire_on_commit=False
+            self.engine, class_=AsyncSession, expire_on_commit=False
         )
 
     async def create_tables(self):
@@ -197,7 +211,9 @@ class ForecastRepository:
 
             for forecast in forecasts:
                 # Get or create location
-                location_stmt = select(LocationDB).where(LocationDB.name == forecast.location.name)
+                location_stmt = select(LocationDB).where(
+                    LocationDB.name == forecast.location.name
+                )
                 location_result = await session.execute(location_stmt)
                 location_db = location_result.scalar_one_or_none()
 
@@ -218,7 +234,9 @@ class ForecastRepository:
                     short_forecast=forecast.weather.short_forecast,
                     detailed_forecast=forecast.weather.detailed_forecast,
                     icon_url=forecast.weather.icon_url,
-                    valid_until=datetime.utcnow().replace(hour=23, minute=59, second=59)
+                    valid_until=datetime.utcnow().replace(
+                        hour=23, minute=59, second=59
+                    ),
                 )
 
                 session.add(forecast_db)
@@ -231,7 +249,7 @@ class ForecastRepository:
         self,
         location_name: str,
         start_date: Optional[date] = None,
-        end_date: Optional[date] = None
+        end_date: Optional[date] = None,
     ) -> List[ForecastDB]:
         """Get forecasts for a location within a date range."""
         async with self.db_manager.get_session() as session:
@@ -239,7 +257,9 @@ class ForecastRepository:
                 select(ForecastDB)
                 .join(LocationDB)
                 .where(LocationDB.name == location_name)
-                .options(selectinload(ForecastDB.location), selectinload(ForecastDB.alerts))
+                .options(
+                    selectinload(ForecastDB.location), selectinload(ForecastDB.alerts)
+                )
             )
 
             if start_date:

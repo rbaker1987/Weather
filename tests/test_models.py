@@ -24,7 +24,7 @@ class TestLocation:
         location = Location.objects.create(
             name="Austin, TX",
             latitude=Decimal("30.2672"),
-            longitude=Decimal("-97.7431")
+            longitude=Decimal("-97.7431"),
         )
 
         assert location.name == "Austin, TX"
@@ -38,7 +38,7 @@ class TestLocation:
             name="Austin, TX",
             custom_name="Home",
             latitude=Decimal("30.2672"),
-            longitude=Decimal("-97.7431")
+            longitude=Decimal("-97.7431"),
         )
 
         assert location.display_name == "Home"
@@ -48,7 +48,7 @@ class TestLocation:
         location = Location.objects.create(
             name="Austin, TX",
             latitude=Decimal("30.2672"),
-            longitude=Decimal("-97.7431")
+            longitude=Decimal("-97.7431"),
         )
 
         assert location.display_name == "Austin, TX"
@@ -56,9 +56,7 @@ class TestLocation:
     def test_location_update_coordinates(self):
         """Test updating location coordinates."""
         location = Location.objects.create(
-            name="Test Location",
-            latitude=Decimal("30.0"),
-            longitude=Decimal("-97.0")
+            name="Test Location", latitude=Decimal("30.0"), longitude=Decimal("-97.0")
         )
         location.update_coordinates(Decimal("31.0"), Decimal("-98.0"))
         assert location.latitude == Decimal("31.0")
@@ -78,15 +76,18 @@ class TestLocation:
     def test_location_type_choices(self):
         """Test location type choices."""
         location = Location.objects.create(
-            name="Home Office",
-            location_type=Location.LocationType.HOME
+            name="Home Office", location_type=Location.LocationType.HOME
         )
-        assert location.location_type == 'home'
+        assert location.location_type == "home"
 
     def test_location_ordering(self):
         """Test default ordering by current location flag."""
-        loc1 = Location.objects.create(name="A", is_current_location=False, display_order=0)
-        loc2 = Location.objects.create(name="B", is_current_location=True, display_order=1)
+        loc1 = Location.objects.create(
+            name="A", is_current_location=False, display_order=0
+        )
+        loc2 = Location.objects.create(
+            name="B", is_current_location=True, display_order=1
+        )
 
         locations = list(Location.objects.all())
         assert locations[0].id == loc2.id  # Current location first
@@ -109,7 +110,7 @@ class TestDailyForecast:
             low_temperature=65,
             short_forecast="Sunny",
             wind_speed=10,
-            wind_direction="N"
+            wind_direction="N",
         )
 
         assert forecast.location.name == "Test City"
@@ -127,7 +128,7 @@ class TestDailyForecast:
             period_end=timezone.now() + timedelta(hours=12),
             temperature=75,
             short_forecast="Sunny",
-            wind_speed=10
+            wind_speed=10,
         )
 
         assert forecast.apparent_temperature == 75
@@ -142,7 +143,7 @@ class TestDailyForecast:
             period_end=timezone.now() + timedelta(hours=12),
             temperature=75,
             short_forecast="Partly Cloudy",
-            wind_speed=10
+            wind_speed=10,
         )
 
         assert "Test City" in str(forecast)
@@ -165,7 +166,7 @@ class TestHourlyForecast:
             short_forecast="Clear",
             wind_speed=5,
             humidity=45,
-            dew_point=55
+            dew_point=55,
         )
 
         assert forecast.humidity == 45
@@ -183,7 +184,7 @@ class TestHourlyForecast:
             temperature=72,
             short_forecast="Clear",
             wind_speed=5,
-            humidity=100
+            humidity=100,
         )
 
         assert forecast.humidity == 100
@@ -206,7 +207,7 @@ class TestWeatherAlert:
             urgency=WeatherAlert.Urgency.IMMEDIATE,
             onset=timezone.now(),
             expires=timezone.now() + timedelta(hours=2),
-            is_active=True
+            is_active=True,
         )
 
         assert alert.event == "Severe Thunderstorm Warning"
@@ -227,7 +228,7 @@ class TestWeatherAlert:
             description="Test",
             severity=WeatherAlert.Severity.MINOR,
             urgency=WeatherAlert.Urgency.PAST,
-            expires=timezone.now() - timedelta(hours=1)
+            expires=timezone.now() - timedelta(hours=1),
         )
 
         # Active alert
@@ -239,7 +240,7 @@ class TestWeatherAlert:
             description="Test",
             severity=WeatherAlert.Severity.MINOR,
             urgency=WeatherAlert.Urgency.EXPECTED,
-            expires=timezone.now() + timedelta(hours=1)
+            expires=timezone.now() + timedelta(hours=1),
         )
 
         assert expired_alert.is_expired is True
@@ -255,7 +256,7 @@ class TestWeatherAlert:
             headline="Test",
             description="Test",
             severity=WeatherAlert.Severity.MODERATE,
-            urgency=WeatherAlert.Urgency.EXPECTED
+            urgency=WeatherAlert.Urgency.EXPECTED,
         )
 
         assert alert.is_expired is False
@@ -270,7 +271,7 @@ class TestWeatherAlert:
             headline="Test",
             description="Test",
             severity=WeatherAlert.Severity.MODERATE,
-            urgency=WeatherAlert.Urgency.EXPECTED
+            urgency=WeatherAlert.Urgency.EXPECTED,
         )
 
         assert "Heat Advisory" in str(alert)
@@ -288,7 +289,7 @@ class TestForecastRequest:
             request_type="forecast",
             status=ForecastRequest.RequestStatus.SUCCESS,
             response_time_ms=150,
-            cache_hit=False
+            cache_hit=False,
         )
 
         assert request.session_key == "test_session_123"
@@ -304,7 +305,7 @@ class TestForecastRequest:
         request = ForecastRequest.objects.create(
             session_key="test_session",
             request_type="bulk_forecast",
-            status=ForecastRequest.RequestStatus.SUCCESS
+            status=ForecastRequest.RequestStatus.SUCCESS,
         )
         request.locations_requested.add(loc1, loc2)
 
@@ -317,7 +318,7 @@ class TestForecastRequest:
             session_key="test_session",
             request_type="forecast",
             status=ForecastRequest.RequestStatus.FAILED,
-            error_message="API timeout"
+            error_message="API timeout",
         )
 
         assert request.status == "failed"
@@ -328,7 +329,7 @@ class TestForecastRequest:
         request = ForecastRequest.objects.create(
             session_key="abcd1234567890",
             request_type="forecast",
-            status=ForecastRequest.RequestStatus.SUCCESS
+            status=ForecastRequest.RequestStatus.SUCCESS,
         )
 
         string_repr = str(request)

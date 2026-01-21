@@ -131,10 +131,10 @@
             const timeEl = document.getElementById(mapId + '_time');
             if (timeEl && radarFrames[frameIndex]) {
                 const time = radarFrames[frameIndex];
-                timeEl.textContent = time.toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    minute: '2-digit', 
-                    hour12: true 
+                timeEl.textContent = time.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
                 });
             }
         }
@@ -144,12 +144,12 @@
             currentFrame = frameIndex;
             const frameTime = radarFrames[frameIndex];
             const timestamp = frameTime.toISOString();
-            
+
             // Update WMS layer with TIME parameter
             radarLayer.setParams({
                 time: timestamp
             });
-            
+
             updateRadarTime(frameIndex);
             document.getElementById(mapId + '_slider').value = frameIndex;
         }

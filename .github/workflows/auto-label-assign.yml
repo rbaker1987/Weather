@@ -15,17 +15,17 @@ jobs:
             const pr = context.payload.pull_request;
             const author = pr.user.login;
             const fallback = pr.base.repo.owner.login;
-            
+
             // Fetch changed files to determine labels
             const files = await github.rest.pulls.listFiles({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: pr.number
             });
-            
+
             const changedFiles = files.data.map(f => f.filename);
             const labels = [];
-            
+
             // Auto-detect labels based on file changes
             if (changedFiles.some(f => f.includes('test_') || f.includes('tests/'))) {
               labels.push('tests');
@@ -33,13 +33,13 @@ jobs:
             if (changedFiles.some(f => f.includes('README') || f.includes('.md') || f.includes('docs/'))) {
               labels.push('documentation');
             }
-            
+
             // Branch/PR title/body based labels
             const branchName = pr.head.ref.toLowerCase();
             const prTitle = pr.title.toLowerCase();
             const prBody = (pr.body || '').toLowerCase();
             const prText = `${branchName} ${prTitle} ${prBody}`;
-            
+
             if (branchName.startsWith('feature/') || prText.includes('feature') || prText.includes('feat:')) {
               labels.push('feature');
             }
@@ -49,7 +49,7 @@ jobs:
             if (branchName.includes('update') || prText.includes('update') || prText.includes('upgrade')) {
               labels.push('update');
             }
-            
+
             // Add labels if any were detected
             if (labels.length > 0) {
               await github.rest.issues.addLabels({
@@ -59,7 +59,7 @@ jobs:
                 labels: labels
               });
             }
-            
+
             // Assign to author with fallback
             try {
               await github.rest.issues.addAssignees({

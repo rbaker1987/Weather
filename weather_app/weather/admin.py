@@ -54,14 +54,14 @@ class LocationAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="Coordinates")
     def coordinates_display(self, obj):
         """Display coordinates in a readable format."""
         if obj.latitude and obj.longitude:
             return f"{obj.latitude:.4f}, {obj.longitude:.4f}"
         return "No coordinates"
 
-    coordinates_display.short_description = "Coordinates"
-
+    @admin.display(description="Forecasts")
     def forecast_count(self, obj):
         """Display count of forecasts."""
         count = obj.forecasts.count()
@@ -75,18 +75,16 @@ class LocationAdmin(admin.ModelAdmin):
             )
         return "0 forecasts"
 
-    forecast_count.short_description = "Forecasts"
-
+    @admin.display(description="Last Update")
     def last_update(self, obj):
         """Display last forecast update."""
         if obj.last_forecast_update:
             return obj.last_forecast_update.strftime("%Y-%m-%d %H:%M")
         return "Never"
 
-    last_update.short_description = "Last Update"
-
     actions = ["update_forecasts", "deactivate_locations"]
 
+    @admin.action(description="Update forecasts")
     def update_forecasts(self, request, queryset):
         """Trigger forecast update for selected locations."""
         count = 0
@@ -98,14 +96,11 @@ class LocationAdmin(admin.ModelAdmin):
 
         self.message_user(request, f"Triggered forecast update for {count} locations.")
 
-    update_forecasts.short_description = "Update forecasts"
-
+    @admin.action(description="Deactivate selected locations")
     def deactivate_locations(self, request, queryset):
         """Deactivate selected locations."""
         count = queryset.update(is_active=False)
         self.message_user(request, f"Deactivated {count} locations.")
-
-    deactivate_locations.short_description = "Deactivate selected locations"
 
 
 @admin.register(DailyForecast)
@@ -164,21 +159,20 @@ class DailyForecastAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="Location")
     def location_name(self, obj):
         """Display location name with link."""
         url = reverse("admin:weather_location_change", args=[obj.location.id])
         return format_html('<a href="{}">{}</a>', url, obj.location.name)
 
-    location_name.short_description = "Location"
-
+    @admin.display(description="Temperature")
     def temperature_display(self, obj):
         """Display temperature range."""
         if obj.high_temperature and obj.low_temperature:
             return f"{obj.low_temperature}°{obj.temperature_unit} - {obj.high_temperature}°{obj.temperature_unit}"
         return f"{obj.temperature}°{obj.temperature_unit}"
 
-    temperature_display.short_description = "Temperature"
-
+    @admin.display(description="Wind")
     def wind_info(self, obj):
         """Display wind information."""
         wind = f"{obj.wind_speed} mph"
@@ -187,8 +181,6 @@ class DailyForecastAdmin(admin.ModelAdmin):
         if obj.wind_gust:
             wind += f" (gusts {obj.wind_gust})"
         return wind
-
-    wind_info.short_description = "Wind"
 
 
 @admin.register(HourlyForecast)
@@ -209,20 +201,18 @@ class HourlyForecastAdmin(admin.ModelAdmin):
     date_hierarchy = "period_start"
     ordering = ["-period_start", "location__name"]
 
+    @admin.display(description="Location")
     def location_name(self, obj):
         """Display location name."""
         return obj.location.name
 
-    location_name.short_description = "Location"
-
+    @admin.display(description="Temperature")
     def temperature_display(self, obj):
         """Display temperature with feels-like."""
         temp = f"{obj.temperature}°{obj.temperature_unit}"
         if obj.apparent_temperature and obj.apparent_temperature != obj.temperature:
             temp += f" (feels {obj.apparent_temperature}°)"
         return temp
-
-    temperature_display.short_description = "Temperature"
 
 
 @admin.register(WeatherAlert)
@@ -262,27 +252,26 @@ class WeatherAlertAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="Location")
     def location_name(self, obj):
         """Display location name."""
         return obj.location.name
 
-    location_name.short_description = "Location"
-
+    @admin.display(
+        description="Expired",
+        boolean=True,
+    )
     def is_expired(self, obj):
         """Check if alert is expired."""
         return obj.is_expired
 
-    is_expired.boolean = True
-    is_expired.short_description = "Expired"
-
     actions = ["deactivate_alerts"]
 
+    @admin.action(description="Deactivate selected alerts")
     def deactivate_alerts(self, request, queryset):
         """Deactivate selected alerts."""
         count = queryset.update(is_active=False)
         self.message_user(request, f"Deactivated {count} alerts.")
-
-    deactivate_alerts.short_description = "Deactivate selected alerts"
 
 
 @admin.register(ForecastRequest)
@@ -329,18 +318,17 @@ class ForecastRequestAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="Session")
     def session_display(self, obj):
         """Display session key or Unknown."""
         return obj.session_key[:12] if obj.session_key else "Unknown"
 
-    session_display.short_description = "Session"
-
+    @admin.display(description="Locations")
     def location_count(self, obj):
         """Display number of locations requested."""
         return obj.locations_requested.count()
 
-    location_count.short_description = "Locations"
-
+    @admin.display(description="Response Time")
     def response_time_display(self, obj):
         """Display response time in readable format."""
         if obj.response_time_ms:
@@ -349,14 +337,11 @@ class ForecastRequestAdmin(admin.ModelAdmin):
             return f"{obj.response_time_ms / 1000:.2f}s"
         return "N/A"
 
-    response_time_display.short_description = "Response Time"
-
+    @admin.display(description="Requested Locations")
     def location_names(self, obj):
         """Display requested location names."""
         names = list(obj.locations_requested.values_list("name", flat=True))
         return ", ".join(names) if names else "None"
-
-    location_names.short_description = "Requested Locations"
 
 
 # Customize admin site

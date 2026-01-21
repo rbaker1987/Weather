@@ -54,10 +54,7 @@ class NWSClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
-                headers={
-                    "User-Agent": self.user_agent,
-                    "Accept": "application/json"
-                }
+                headers={"User-Agent": self.user_agent, "Accept": "application/json"},
             )
         try:
             yield self._client
@@ -75,7 +72,9 @@ class NWSClient:
 
         self._last_request_time = asyncio.get_event_loop().time()
 
-    async def _make_request(self, url: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def _make_request(
+        self, url: str, params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Make a rate-limited HTTP request to the NWS API."""
         await self._rate_limit()
 
@@ -93,7 +92,9 @@ class NWSClient:
                         raise LocationNotFoundError(f"Location not found: {url}")
                     if data["status"] == 429:
                         raise RateLimitError("API rate limit exceeded")
-                    raise NWSAPIError(f"API error {data['status']}: {data.get('title', 'Unknown error')}")
+                    raise NWSAPIError(
+                        f"API error {data['status']}: {data.get('title', 'Unknown error')}"
+                    )
 
                 return data
 
@@ -121,7 +122,9 @@ class NWSClient:
         url = f"{self.base_url}/gridpoints/{wfo}/{x},{y}/forecast/hourly"
         return await self._make_request(url)
 
-    async def get_alerts_for_point(self, lat: float, lon: float) -> List[Dict[str, Any]]:
+    async def get_alerts_for_point(
+        self, lat: float, lon: float
+    ) -> List[Dict[str, Any]]:
         """Get active weather alerts for a point."""
         url = f"{self.base_url}/alerts/active"
         params = {"point": f"{lat},{lon}"}
@@ -133,7 +136,9 @@ class NWSClient:
             logger.warning(f"Failed to get alerts for {lat},{lon}: {e}")
             return []
 
-    async def get_forecast_for_location(self, location: Location) -> List[HourlyForecast]:
+    async def get_forecast_for_location(
+        self, location: Location
+    ) -> List[HourlyForecast]:
         """Get complete forecast data for a location."""
         if location.latitude is None or location.longitude is None:
             raise ValueError(f"Location {location.name} must have coordinates")
@@ -152,7 +157,9 @@ class NWSClient:
             periods = hourly_data["properties"]["periods"]
 
             # Get alerts
-            alerts_data = await self.get_alerts_for_point(location.latitude, location.longitude)
+            alerts_data = await self.get_alerts_for_point(
+                location.latitude, location.longitude
+            )
             alerts = [self._parse_alert(alert_data) for alert_data in alerts_data]
 
             # Parse forecast periods into our models
@@ -165,9 +172,13 @@ class NWSClient:
 
         except Exception as e:
             logger.error(f"Failed to get forecast for {location.name}: {e}")
-            raise ForecastNotAvailableError(f"Forecast not available for {location.name}: {str(e)}")
+            raise ForecastNotAvailableError(
+                f"Forecast not available for {location.name}: {str(e)}"
+            )
 
-    def _parse_hourly_period(self, period: Dict[str, Any], location: Location, alerts: List[WeatherAlert]) -> HourlyForecast:
+    def _parse_hourly_period(
+        self, period: Dict[str, Any], location: Location, alerts: List[WeatherAlert]
+    ) -> HourlyForecast:
         """Parse a single hourly forecast period."""
         start_time = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00"))
 
@@ -175,7 +186,7 @@ class NWSClient:
         temp_value = period["temperature"]
         temp_unit = period["temperatureUnit"]
         if temp_unit == "C":
-            temp_value = int(temp_value * 9/5 + 32)  # Convert to Fahrenheit
+            temp_value = int(temp_value * 9 / 5 + 32)  # Convert to Fahrenheit
 
         # Extract wind data
         wind_speed = 0
@@ -193,8 +204,11 @@ class NWSClient:
 
         # Find relevant alerts for this time period
         relevant_alerts = [
-            alert for alert in alerts
-            if alert.start_time <= start_time <= (alert.end_time or start_time + timedelta(hours=1))
+            alert
+            for alert in alerts
+            if alert.start_time
+            <= start_time
+            <= (alert.end_time or start_time + timedelta(hours=1))
         ]
 
         # Wind gust
@@ -223,21 +237,25 @@ class NWSClient:
             location=location,
             forecast_time=start_time,
             temperature=Temperature(value=temp_value),
-            wind=WindCondition(speed=wind_speed, direction=wind_direction, gust=wind_gust),
+            wind=WindCondition(
+                speed=wind_speed, direction=wind_direction, gust=wind_gust
+            ),
             weather=WeatherCondition(
                 short_forecast=period.get("shortForecast", "Unknown"),
                 detailed_forecast=period.get("detailedForecast"),
-                icon_url=period.get("icon")
+                icon_url=period.get("icon"),
             ),
             alerts=relevant_alerts,
-            precipitation_probability=precip_prob
+            precipitation_probability=precip_prob,
         )
 
     def _parse_alert(self, alert_data: Dict[str, Any]) -> WeatherAlert:
         """Parse NWS alert data into our model."""
         properties = alert_data["properties"]
 
-        start_time = datetime.fromisoformat(properties.get("onset", properties.get("sent", "")))
+        start_time = datetime.fromisoformat(
+            properties.get("onset", properties.get("sent", ""))
+        )
         end_time = None
         if properties.get("ends"):
             end_time = datetime.fromisoformat(properties["ends"])
@@ -248,7 +266,7 @@ class NWSClient:
             description=properties.get("description"),
             start_time=start_time,
             end_time=end_time,
-            severity=properties.get("severity")
+            severity=properties.get("severity"),
         )
 
     async def close(self):
@@ -264,7 +282,9 @@ class WeatherService:
     def __init__(self):
         self.nws_client = NWSClient()
 
-    async def get_forecasts_for_locations(self, locations: List[Location]) -> Dict[str, List[HourlyForecast]]:
+    async def get_forecasts_for_locations(
+        self, locations: List[Location]
+    ) -> Dict[str, List[HourlyForecast]]:
         """Get forecasts for multiple locations."""
         results = {}
         failed_locations = []
@@ -280,11 +300,15 @@ class WeatherService:
                 results[location.name] = []
 
         if failed_locations:
-            logger.warning(f"Failed to get forecasts for {len(failed_locations)} locations")
+            logger.warning(
+                f"Failed to get forecasts for {len(failed_locations)} locations"
+            )
 
         return results
 
-    def group_hourly_into_daily(self, hourly_forecasts: List[HourlyForecast]) -> List[DailyForecast]:
+    def group_hourly_into_daily(
+        self, hourly_forecasts: List[HourlyForecast]
+    ) -> List[DailyForecast]:
         """Group hourly forecasts into daily forecasts."""
         if not hourly_forecasts:
             return []
@@ -304,7 +328,7 @@ class WeatherService:
                 daily_forecast = DailyForecast(
                     date=date_key,
                     location=hourly_list[0].location,
-                    hourly_forecasts=hourly_list
+                    hourly_forecasts=hourly_list,
                 )
                 daily_forecasts.append(daily_forecast)
 
