@@ -1896,8 +1896,8 @@ class ModelDetailView(TemplateView):
     }
 
     EXTENDED_HOURLY = (
-        # Temperatures (include higher pressure levels; interpolate pseudo 650/550/450 later)
-        "temperature_2m,temperature_925hPa,temperature_850hPa,temperature_700hPa,temperature_600hPa,temperature_500hPa,temperature_400hPa,apparent_temperature,"
+        # Temperatures (2m, surface pressure levels 925/850/800/700, upper levels 600/550/500/400)
+        "temperature_2m,temperature_925hPa,temperature_850hPa,temperature_800hPa,temperature_700hPa,temperature_600hPa,temperature_550hPa,temperature_500hPa,temperature_400hPa,apparent_temperature,"
         # Humidity
         "relativehumidity_2m,relativehumidity_925hPa,relativehumidity_850hPa,relativehumidity_700hPa,relativehumidity_500hPa,"
         # Other surface / diagnostic fields
@@ -1905,6 +1905,162 @@ class ModelDetailView(TemplateView):
         # Precipitation & cloud
         "precipitation,snowfall,cloudcover,pressure_msl"
     )
+
+    @staticmethod
+    def _classify_precip_types(hourly: dict) -> tuple[list[str], list[float]]:
+        """
+        Infer precip phase and snow-to-liquid ratio per hour using surface and low/mid-level temps.
+        
+        Returns:
+            (types, slrs) where:
+            - types: list of precip phases ("snow", "sleet", "freezing_rain", "rain", "unknown")
+            - slrs: list of snow-to-liquid ratios (1.0 for sleet, <1.0 for freezing rain, 5-30 for snow)
+        """
+
+        def val(seq, idx):
+            if seq is None:
+                return None
+            if idx < len(seq):
+                try:
+                    return float(seq[idx])
+                except Exception:
+                    return None
+            return None
+
+        temps = hourly.get("temperature_2m") or []
+        t925 = hourly.get("temperature_925hPa") or []
+        t850 = hourly.get("temperature_850hPa") or []
+        t800 = hourly.get("temperature_800hPa") or []
+        t700 = hourly.get("temperature_700hPa") or []
+        t600 = hourly.get("temperature_600hPa") or []
+        t550 = hourly.get("temperature_550hPa") or []
+        t500 = hourly.get("temperature_500hPa") or []
+        snowfall = hourly.get("snowfall") or []
+        precip = hourly.get("precipitation") or []
+
+        n = max(
+            len(temps),
+            len(t925),
+            len(t850),
+            len(t800),
+            len(t700),
+            len(t600),
+            len(t550),
+            len(t500),
+            len(snowfall),
+            len(precip),
+        )
+        if n == 0:
+            return [], []
+
+        FREEZE = 32.0
+        SURFACE_SLUSH = 34.0  # allow snow/sleet depiction a bit above freezing
+        # Treat any slight warm nose aloft as melting layer (> 32.1°F)
+        WARM = 32.1
+        # Helper: Fahrenheit to Celsius for SLR/dendritic logic
+        def f_to_c(v: float | None) -> float | None:
+            if v is None:
+                return None
+            return (v - 32.0) * (5.0 / 9.0)
+
+        types: list[str] = []
+        slrs: list[float] = []
+
+        for i in range(n):
+            sf = val(snowfall, i)
+            ts = val(temps, i)
+            t925v = val(t925, i)
+            t850v = val(t850, i)
+            t800v = val(t800, i)
+            t700v = val(t700, i)
+            t600v = val(t600, i)
+            t550v = val(t550, i)
+            t500v = val(t500, i)
+
+            # Warmest temperature in column (similar to Kuchera method) in °C
+            warmest_f = max(
+                [v for v in (ts, t925v, t850v, t800v, t700v, t600v, t550v, t500v) if v is not None],
+                default=None,
+            )
+            warmest_c = f_to_c(warmest_f) if warmest_f is not None else None
+
+            # Warm layer: check key melting zone levels (925, 850, 800, 700)
+            warm_layer = max(
+                [v for v in (t925v, t850v, t800v, t700v) if v is not None],
+                default=None,
+            )
+            
+            # Peak dendritic growth zone temp (around 550 hPa, evaluate in °C)
+            dendritic_c = f_to_c(t550v) if t550v is not None else None
+
+            # If both 925 and 850 are cold, treat column as snow-favoring even if 700 is warmer
+            if (t925v is not None and t925v <= FREEZE) and (t850v is not None and t850v <= FREEZE):
+                warm_layer = None
+
+            if ts is None:
+                types.append("unknown")
+                slrs.append(1.0)  # default neutral ratio
+                continue
+
+            ptype = "unknown"
+            slr = 1.0
+
+            # If a warm layer exists, honor it before snowfall hints to avoid false snow
+            if warm_layer is not None and warm_layer > WARM:
+                # Melting layer present; determine sleet vs freezing rain using low-level cold strength.
+                # Heuristic: strong cold layer (<= ~28°F at 925 mb) favors sleet; otherwise freezing rain if surface <= 32°F.
+                if ts <= FREEZE:
+                    if t925v is not None and t925v <= 28.0:
+                        ptype = "sleet"
+                        slr = 3.0
+                    else:
+                        ptype = "freezing_rain"
+                        slr = 0.75  # <1:1 ice accretion ratio
+                else:
+                    ptype = "rain"
+                    slr = 1.0
+            else:
+                # No strong warm layer aloft; allow snowfall flag to set snow
+                if sf is not None and sf > 0.01:
+                    ptype = "snow"
+                    # Estimate SLR based on warmest column temp (Kuchera-like) and dendritic growth
+                    if warmest_c is not None:
+                        # Adjust SLR based on dendritic growth zone (550 hPa)
+                        dendritic_strength = 0.0
+                        if dendritic_c is not None:
+                            # Peak dendritic growth at -12 to -15°C
+                            if -16 <= dendritic_c <= -11:
+                                dendritic_strength = 1.0  # strong dendritic zone
+                            elif -20 <= dendritic_c < -16 or -11 < dendritic_c <= -8:
+                                dendritic_strength = 0.7  # moderate dendritic
+                            else:
+                                dendritic_strength = 0.3  # weak dendritic
+
+                        # Kuchera-inspired logic with dendritic boost (all thresholds in °C)
+                        if warmest_c < -18:
+                            slr = 26.0 + (2.0 * dendritic_strength)  # very cold, very light
+                        elif warmest_c < -12:
+                            slr = 18.0 + (4.0 * dendritic_strength)  # cold, dendritic growth zone
+                        elif warmest_c < -5:
+                            slr = 10.0 + (2.0 * dendritic_strength)  # moderately cold
+                        else:
+                            slr = 6.0 + (2.0 * dendritic_strength)  # borderline, denser snow
+                    else:
+                        slr = 12.0  # default to middle of range
+                else:
+                    # Surface-driven decision with marginal above-freezing allowance
+                    if ts > SURFACE_SLUSH:
+                        ptype = "rain"
+                        slr = 1.0
+                    else:
+                        ptype = "snow"
+                        # No dendritic zone active, assume moderate snow
+                        slr = 10.0
+
+            types.append(ptype)
+            slrs.append(slr)
+
+        return types, slrs
 
     def get_context_data(self, **kwargs):
         import time
@@ -2168,6 +2324,16 @@ class ModelDetailView(TemplateView):
                         logger.info(f"Trimmed hourly data from {len(times)} to {trim_idx} points (forecast_days={forecast_days})")
             except Exception as e:
                 logger.warning(f"Failed to trim hourly data: {e}")
+
+        # Derive precip phase (snow/sleet/freezing_rain/rain) and SLRs per hour
+        if data and data.get("hourly"):
+            try:
+                precip_types, slrs = self._classify_precip_types(data["hourly"])
+                data["hourly"]["precip_type"] = precip_types
+                data["hourly"]["snow_liquid_ratio"] = slrs
+                logger.info(f"Derived precip_type and SLRs for {len(precip_types)} hours")
+            except Exception as e:
+                logger.warning(f"Failed to classify precip types: {e}")
         
         # Inject metadata into data dict so it's available in the frontend
         if data:
