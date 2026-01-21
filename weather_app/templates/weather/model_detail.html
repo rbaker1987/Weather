@@ -81,13 +81,13 @@ Weather{% endblock %} {% block extra_css %}
   <div class="col-md-2">
     <label for="detailForecastDays" class="form-label">Forecast Days</label>
     <select id="detailForecastDays" class="form-select">
-      <option value="2" {% if forecast_days="" ="2" %}selected{% endif %}>2</option>
-      <option value="3" {% if forecast_days="" ="3" %}selected{% endif %}>3</option>
-      <option value="5" {% if forecast_days="" ="5" %}selected{% endif %}>5</option>
-      <option value="7" {% if forecast_days="" ="7" %}selected{% endif %}>7</option>
-      <option value="10" {% if forecast_days="" ="10" %}selected{% endif %}>10</option>
-      <option value="14" {% if forecast_days="" ="14" %}selected{% endif %}>14</option>
-      <option value="16" {% if forecast_days="" ="16" %}selected{% endif %}>16</option>
+      <option value="2" {% if forecast_days == "2" %}selected{% endif %}>2</option>
+      <option value="3" {% if forecast_days == "3" %}selected{% endif %}>3</option>
+      <option value="5" {% if forecast_days == "5" %}selected{% endif %}>5</option>
+      <option value="7" {% if forecast_days == "7" %}selected{% endif %}>7</option>
+      <option value="10" {% if forecast_days == "10" %}selected{% endif %}>10</option>
+      <option value="14" {% if forecast_days == "14" %}selected{% endif %}>14</option>
+      <option value="16" {% if forecast_days == "16" %}selected{% endif %}>16</option>
     </select>
   </div>
   <div class="col-md-5">
