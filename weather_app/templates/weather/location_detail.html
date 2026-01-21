@@ -1805,7 +1805,8 @@ async function loadLocationModelData() {
         // Fetch 3-day forecast from GFS, NAM, ECMWF, and Canadian GEM
         const modelConfigs = [
             { name: 'GFS', url: `https://api.open-meteo.com/v1/gfs?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
-            { name: 'NAM', url: `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3&models=ncep_nam_conus` },
+            // Request 4 days from NAM to guarantee three daily rows (NAM sometimes returns only 2–3 days at shorter horizons)
+            { name: 'NAM', url: `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=4&models=ncep_nam_conus` },
             { name: 'ECMWF', url: `https://api.open-meteo.com/v1/ecmwf?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` },
             { name: 'GEM', url: `https://api.open-meteo.com/v1/gem?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=3` }
         ];
