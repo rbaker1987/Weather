@@ -1,7 +1,7 @@
 """Core weather data models using Pydantic for validation and serialization."""
 
 from datetime import date as date_type
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional, Union
 

@@ -19,8 +19,7 @@ try:
     from .core.models import DailyForecast as PydanticDaily
     from .core.models import HourlyForecast as PydanticHourly
     from .core.models import Location as PydanticLocation
-    from .utils.datetime_utils import parse_nws_datetime
-    from .utils.geocoding import bulk_geocode_locations, create_location_from_string
+    from .utils.geocoding import create_location_from_string
 
     WEATHER_BACKEND_AVAILABLE = True
 except ImportError as e:
