@@ -138,7 +138,9 @@ class DatabaseManager:
         self.database_url = database_url or get_config().database.url
 
         # Create async engine
-        if self.database_url.startswith("sqlite") and not self.database_url.startswith("sqlite+aiosqlite"):
+        if self.database_url.startswith("sqlite") and not self.database_url.startswith(
+            "sqlite+aiosqlite"
+        ):
             # Convert SQLite URL for async operation
             self.database_url = self.database_url.replace(
                 "sqlite://", "sqlite+aiosqlite://"

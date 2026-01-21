@@ -36,7 +36,7 @@ repos:
     rev: 1.15.0
     hooks:
       - id: django-upgrade
-        args: [--target-version, "4.2"]
+        args: [--target-version, '4.2']
 
   # JavaScript/JSON formatting
   - repo: https://github.com/pre-commit/mirrors-prettier

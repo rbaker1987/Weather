@@ -63,9 +63,7 @@ class WeatherIntegrationService:
         """Get all active Django locations."""
         return list(Location.objects.filter(is_active=True))
 
-    async def create_location_from_input(
-        self, location_input: str
-    ) -> Location | None:
+    async def create_location_from_input(self, location_input: str) -> Location | None:
         """Create a Django location from string input using existing geocoding logic."""
         if not WEATHER_BACKEND_AVAILABLE:
             logger.error("Weather backend components not available")
@@ -312,9 +310,7 @@ class SyncWeatherService:
     """Synchronous wrapper for async weather service."""
 
     @staticmethod
-    def create_location_from_input(
-        location_input: str, _user=None
-    ) -> Location | None:
+    def create_location_from_input(location_input: str, _user=None) -> Location | None:
         """Sync version of create_location_from_input."""
 
         async def _async_create():
