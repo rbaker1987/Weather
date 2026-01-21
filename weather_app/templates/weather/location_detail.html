@@ -1940,19 +1940,19 @@ function displayModelComparison(modelData, container) {
                     <span class="text-danger fw-bold">${gfsMaxTemp[i]?.toFixed(0)}°</span> / 
                     <span class="text-primary fw-bold">${gfsMinTemp[i]?.toFixed(0)}°</span>
                 </td>
-                <td class="text-center">${gfsPrecip[i]?.toFixed(2) || '0.00'}"</td>
+                <td class="text-center">${gfsPrecip[i] !== undefined && gfsPrecip[i] !== null ? gfsPrecip[i].toFixed(2) + '"' : 'N/A'}</td>
                 <td class="text-center">
                     ${(namMax !== undefined && namMax !== null) ? `<span class="text-danger fw-bold">${namMax.toFixed(0)}°</span> / <span class="text-primary fw-bold">${namMin?.toFixed(0)}°</span>` : 'N/A'}
                 </td>
-                <td class="text-center">${(namPcp !== undefined && namPcp !== null) ? namPcp.toFixed(2) : 'N/A'}</td>
+                <td class="text-center">${(namPcp !== undefined && namPcp !== null) ? namPcp.toFixed(2) + '"' : 'N/A'}</td>
                 <td class="text-center">
                     ${ecmwfMaxTemp[i] ? `<span class="text-danger fw-bold">${ecmwfMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${ecmwfMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
                 </td>
-                <td class="text-center">${ecmwfPrecip[i]?.toFixed(2) || 'N/A'}</td>
+                <td class="text-center">${(ecmwfPrecip[i] !== undefined && ecmwfPrecip[i] !== null) ? ecmwfPrecip[i].toFixed(2) + '"' : 'N/A'}</td>
                 <td class="text-center">
                     ${gemMaxTemp[i] ? `<span class="text-danger fw-bold">${gemMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${gemMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
                 </td>
-                <td class="text-center">${gemPrecip[i]?.toFixed(2) || 'N/A'}</td>
+                <td class="text-center">${(gemPrecip[i] !== undefined && gemPrecip[i] !== null) ? gemPrecip[i].toFixed(2) + '"' : 'N/A'}</td>
             </tr>
         `;
     }
