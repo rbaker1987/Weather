@@ -17,6 +17,8 @@ db.sqlite3-journal
 *.pot
 *.pyc
 local_settings.py
+.env
+!.env.example
 
 # Linting and formatting
 .ruff_cache/
