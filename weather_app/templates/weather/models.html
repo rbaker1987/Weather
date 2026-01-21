@@ -437,7 +437,6 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const namTemp = modelData.NAM?.hourly?.[tempField] || [];
     const rgemTemp = modelData.RGEM?.hourly?.[tempField] || [];
     const nbmTemp = modelData.NBM?.hourly?.[tempField] || [];
-    const nbmTemp = modelData.NBM?.hourly?.[tempField] || [];
 
     // Precipitation data
     const gfsPrec = modelData.GFS?.hourly?.precipitation || [];
@@ -460,7 +459,6 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const sampledHrrrTemp = hrrrTemp.filter((_, i) => i % 3 === 0);
     const sampledNamTemp = namTemp.filter((_, i) => i % 3 === 0);
     const sampledRgemTemp = rgemTemp.filter((_, i) => i % 3 === 0);
-    const sampledNbmTemp = nbmTemp.filter((_, i) => i % 3 === 0);
     const sampledNbmTemp = nbmTemp.filter((_, i) => i % 3 === 0);
 
     // Sampled precipitation
