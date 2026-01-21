@@ -1893,6 +1893,11 @@ class ModelDetailView(TemplateView):
             "models": "cmc_gem_rdps",
             "max_days": 2,
         },
+        "NBM": {
+            "url": "https://api.open-meteo.com/v1/gfs",
+            "models": "ncep_nbm_conus",
+            "max_days": 11,
+        },
     }
 
     EXTENDED_HOURLY = (
@@ -1907,7 +1912,9 @@ class ModelDetailView(TemplateView):
         # Other surface / diagnostic fields
         "dewpoint_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
         # Precipitation & cloud
-        "precipitation,snowfall,cloudcover,pressure_msl"
+        "precipitation,snowfall,cloudcover,pressure_msl,"
+        # Precip type probabilities (available for GFS/HRRR/NBM; inferred for others via _classify_precip_types)
+        "rain_probability,snowfall_probability,freezing_rain_probability,ice_pellets_probability"
     )
 
     @staticmethod

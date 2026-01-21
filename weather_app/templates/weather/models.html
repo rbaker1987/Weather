@@ -145,6 +145,14 @@
             </h6>
         </div>
     </div>
+    <div class="col-md-3">
+        <div class="model-card" id="model-nbm" data-model="NBM" onclick="cardClick(event)">
+            <h6>
+                <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="NBM" onchange="onModelSelectionChange()">
+                NBM <span class="badge bg-info text-dark model-badge">NOAA (US)</span>
+            </h6>
+        </div>
+    </div>
 </div>
 
 
@@ -211,7 +219,8 @@ function getModelDomRefs(modelName) {
         'GEM': 'model-gem',
         'HRRR': 'model-hrrr',
         'NAM': 'model-nam',
-        'RGEM': 'model-gem-regional'
+        'RGEM': 'model-gem-regional',
+        'NBM': 'model-nbm'
     };
     const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     const cardId = cardIdMap[modelName] || fallbackId;
@@ -285,7 +294,8 @@ async function loadModelData() {
                     'GEM': 'model-gem',
                     'HRRR': 'model-hrrr',
                     'NAM': 'model-nam',
-                    'RGEM': 'model-gem-regional'
+                    'RGEM': 'model-gem-regional',
+                    'NBM': 'model-nbm'
                 };
                 const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
                 const cardId = cardIdMap[modelName] || fallbackId;
@@ -315,7 +325,9 @@ async function loadModelData() {
                     'GEM': 'model-gem',
                     'HRRR': 'model-hrrr',
                     'NAM': 'model-nam',
-                    'RGEM': 'model-gem-regional'
+                    'RGEM': 'model-gem-regional',
+                    'NBM': 'model-nbm'
+                    'NBM': 'model-nbm'
                 };
                 let runTimeStr = '—';
                 if (model.data.hourly?.time?.[0]) {
@@ -424,6 +436,8 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const hrrrTemp = modelData.HRRR?.hourly?.[tempField] || [];
     const namTemp = modelData.NAM?.hourly?.[tempField] || [];
     const rgemTemp = modelData.RGEM?.hourly?.[tempField] || [];
+    const nbmTemp = modelData.NBM?.hourly?.[tempField] || [];
+    const nbmTemp = modelData.NBM?.hourly?.[tempField] || [];
 
     // Precipitation data
     const gfsPrec = modelData.GFS?.hourly?.precipitation || [];
@@ -434,6 +448,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const hrrrPrec = modelData.HRRR?.hourly?.precipitation || [];
     const namPrec = modelData.NAM?.hourly?.precipitation || [];
     const rgemPrec = modelData.RGEM?.hourly?.precipitation || [];
+    const nbmPrec = modelData.NBM?.hourly?.precipitation || [];
 
     // Sample every 3 hours for cleaner charts
     const sampledTimes = times.filter((_, i) => i % 3 === 0);
@@ -445,6 +460,8 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const sampledHrrrTemp = hrrrTemp.filter((_, i) => i % 3 === 0);
     const sampledNamTemp = namTemp.filter((_, i) => i % 3 === 0);
     const sampledRgemTemp = rgemTemp.filter((_, i) => i % 3 === 0);
+    const sampledNbmTemp = nbmTemp.filter((_, i) => i % 3 === 0);
+    const sampledNbmTemp = nbmTemp.filter((_, i) => i % 3 === 0);
 
     // Sampled precipitation
     const sampledGfsPrec = gfsPrec.filter((_, i) => i % 3 === 0);
@@ -455,6 +472,7 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const sampledHrrrPrec = hrrrPrec.filter((_, i) => i % 3 === 0);
     const sampledNamPrec = namPrec.filter((_, i) => i % 3 === 0);
     const sampledRgemPrec = rgemPrec.filter((_, i) => i % 3 === 0);
+    const sampledNbmPrec = nbmPrec.filter((_, i) => i % 3 === 0);
 
     // Format time labels
     const labels = sampledTimes.map(t => {
@@ -513,7 +531,8 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const regionalTempDatasets = [
         { label: 'HRRR Temp', data: sampledHrrrTemp, borderColor: '#6610f2', backgroundColor: 'rgba(102, 16, 242, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
         { label: 'NAM Temp', data: sampledNamTemp, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
-        { label: 'RGEM Temp', data: sampledRgemTemp, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' }
+        { label: 'RGEM Temp', data: sampledRgemTemp, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' },
+        { label: 'NBM Temp', data: sampledNbmTemp, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.1)', tension: 0.4, borderDash: [5, 5], spanGaps: true, borderWidth: 2, type: 'line', yAxisID: 'y' }
     ];
 
     // Precipitation datasets (bar chart, right y-axis)
@@ -527,7 +546,8 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
     const regionalPrecipDatasets = [
         { label: 'HRRR Precip', data: sampledHrrrPrec, borderColor: '#6610f2', backgroundColor: 'rgba(102, 16, 242, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
         { label: 'NAM Precip', data: sampledNamPrec, borderColor: '#20c997', backgroundColor: 'rgba(32, 201, 151, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
-        { label: 'RGEM Precip', data: sampledRgemPrec, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true }
+        { label: 'RGEM Precip', data: sampledRgemPrec, borderColor: '#6c757d', backgroundColor: 'rgba(108, 117, 125, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true },
+        { label: 'NBM Precip', data: sampledNbmPrec, borderColor: '#0dcaf0', backgroundColor: 'rgba(13, 202, 240, 0.3)', type: 'bar', yAxisID: 'y1', spanGaps: true }
     ];
 
     // Combine all datasets
@@ -635,7 +655,23 @@ function cardClick(event) {
 }
 
 function showModelDetails(modelName) {
-    window.location.href = `/models/${encodeURIComponent(modelName)}/`;
+    // Preserve current location and forecast days when jumping to detail page
+    const locationSelect = document.getElementById('locationSelect');
+    const daysSelect = document.getElementById('forecastDays');
+    const selectedOption = locationSelect?.options[locationSelect.selectedIndex];
+    const lat = selectedOption?.dataset?.lat;
+    const lon = selectedOption?.dataset?.lon;
+    const locationId = selectedOption?.value;
+    const days = daysSelect ? daysSelect.value : '';
+
+    const params = new URLSearchParams();
+    if (lat) params.set('latitude', lat);
+    if (lon) params.set('longitude', lon);
+    if (locationId) params.set('location_id', locationId);
+    if (days) params.set('forecast_days', days);
+
+    const qs = params.toString();
+    window.location.href = qs ? `/models/${encodeURIComponent(modelName)}/?${qs}` : `/models/${encodeURIComponent(modelName)}/`;
 }
 
 document.addEventListener('DOMContentLoaded', function() {

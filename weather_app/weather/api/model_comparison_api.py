@@ -52,6 +52,11 @@ class ModelComparisonAPIView(APIView):
             "max_days": 2,
             "models": "cmc_gem_rdps",
         },
+        "NBM": {
+            "url": "https://api.open-meteo.com/v1/gfs",
+            "max_days": 11,
+            "models": "ncep_nbm_conus",
+        },
     }
 
     def fetch_model_data(
