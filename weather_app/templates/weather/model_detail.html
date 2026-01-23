@@ -50,13 +50,7 @@ Weather{% endblock %} {% block extra_css %}
     </h3>
     {% if run_time %}
     <small class="text-muted">
-      <i class="fas fa-clock"></i> Model Run: {{ run_time|date:'Y-m-d H:i' }} UTC {% if
-      model_source %}<span class="ms-2 badge bg-info">{{ model_source }}</span>{% endif
-      %} {% if ensemble and ensemble != 'det' %}<span class="ms-2 badge bg-secondary"
-        >Ens: {{ ensemble }}</span
-      >{% endif %} {% if cycle %}<span class="ms-2 badge bg-dark"
-        >Cycle {{ cycle }}</span
-      >{% endif %}
+      <i class="fas fa-clock"></i> Model Run: {{ run_time|date:'Y-m-d' }} {{ run_time|date:'H' }}Z {% if model_source %}<span class="ms-2 badge bg-info">{{ model_source }}</span>{% endif %} {% if ensemble and ensemble != 'det' %}<span class="ms-2 badge bg-secondary">Ens: {{ ensemble }}</span>{% endif %} {% if cycle %}<span class="ms-2 badge bg-dark">Cycle {{ cycle }}</span>{% endif %}
     </small>
     {% endif %}
   </div>
@@ -103,8 +97,7 @@ Weather{% endblock %} {% block extra_css %}
 <div class="alert alert-danger">Error fetching model data: {{ error }}</div>
 {% endif %}
 <div class="mb-3 text-muted">
-  {% if latitude and longitude %}<i class="fas fa-map-marker-alt"></i> Lat {{
-  latitude|floatformat:4 }}, Lon {{ longitude|floatformat:4 }}{% endif %}
+  {% if latitude and longitude %}<i class="fas fa-map-marker-alt"></i> Lat {{ latitude|floatformat:4 }}, Lon {{ longitude|floatformat:4 }}{% endif %}
   <span class="ms-3"
     ><i class="fas fa-calendar-day"></i> Days: {{ forecast_days }}</span
   >
@@ -425,6 +418,7 @@ Weather{% endblock %} {% block extra_css %}
     // Use server-side precip_type classification + liquid precipitation + SLRs, or NBM precip type probabilities
     const precipTypes = hourly.precip_type || [];
     const slrs = hourly.snow_liquid_ratio || [];
+    const defaultSlrs = hourly.default_slrs || null;  // NBM uses static SLRs dict
     const precipPeriodSampled = hourly.precipitation || [];
 
     // For NBM/models with native precip type probabilities, use those as fallback
@@ -491,29 +485,63 @@ Weather{% endblock %} {% block extra_css %}
 
     // Note: Total liquid will be recalculated after filtering to match the displayed bars (every 3 hours)
 
-    // Calculate frozen depth using dynamic SLRs from server
+    // Calculate frozen depth using static SLRs (NBM) or dynamic SLRs (others)
     let totalFrozenDepthVal = 0;
     const nSnow = snowPortion.length;
     for(let i=0; i<nSnow; i++){
-      const slr = (slrs[i] !== undefined) ? slrs[i] : 10; // default 10:1 if missing
+      let slr = (slrs[i] !== undefined) ? slrs[i] : 10; // default 10:1 if missing
+
       if(precipTypes[i] === 'snow') {
+        // Use backend SLR if available, otherwise defaultSlrs if present
+        if(defaultSlrs) slr = defaultSlrs.snow || 10.0;
         totalFrozenDepthVal += snowPortion[i] * slr;
       } else if(precipTypes[i] === 'sleet') {
-        totalFrozenDepthVal += sleetPortion[i] * slr;  // use backend SLR
+        if(defaultSlrs) slr = defaultSlrs.sleet || 2.5;
+        totalFrozenDepthVal += sleetPortion[i] * slr;
       } else if(precipTypes[i] === 'freezing_rain') {
-        totalFrozenDepthVal += freezingRainPortion[i] * slr;  // use backend SLR
+        if(defaultSlrs) slr = defaultSlrs.freezing_rain || 0.5;
+        totalFrozenDepthVal += freezingRainPortion[i] * slr;
       }
     }
 
-    // Convert liquid shares to depth using dynamic SLRs for ALL precip types
+    // Convert liquid shares to depth using static SLRs (NBM) or dynamic SLRs (others)
     const snowDepths = [];
     const sleetDepths = [];
     const freezingRainDepths = [];
     for(let i=0; i<snowPortion.length; i++){
-      const slr = (slrs[i] !== undefined) ? slrs[i] : 10;
-      snowDepths.push(parseFloat((snowPortion[i] * slr).toFixed(3)));
-      sleetDepths.push(parseFloat((sleetPortion[i] * slr).toFixed(3)));
-      freezingRainDepths.push(parseFloat((freezingRainPortion[i] * slr).toFixed(3)));
+      let slr = (slrs[i] !== undefined) ? slrs[i] : 10;
+
+      if(defaultSlrs) {
+        // For NBM: use probabilities to determine dominant type, then apply static SLR
+        const rp = (rainProb[i] || 0) / 100;
+        const sp = (snowfallProb[i] || 0) / 100;
+        const frp = (freezingRainProb[i] || 0) / 100;
+        const ipp = (icePelletsProb[i] || 0) / 100;
+
+        // Apply correct SLR based on dominant precipitation type
+        if(snowPortion[i] > 0) {
+          snowDepths.push(parseFloat((snowPortion[i] * (defaultSlrs.snow || 10.0)).toFixed(3)));
+        } else {
+          snowDepths.push(0);
+        }
+
+        if(sleetPortion[i] > 0) {
+          sleetDepths.push(parseFloat((sleetPortion[i] * (defaultSlrs.sleet || 2.5)).toFixed(3)));
+        } else {
+          sleetDepths.push(0);
+        }
+
+        if(freezingRainPortion[i] > 0) {
+          freezingRainDepths.push(parseFloat((freezingRainPortion[i] * (defaultSlrs.freezing_rain || 0.5)).toFixed(3)));
+        } else {
+          freezingRainDepths.push(0);
+        }
+      } else {
+        // For other models with dynamic SLRs per hour
+        snowDepths.push(parseFloat((snowPortion[i] * slr).toFixed(3)));
+        sleetDepths.push(parseFloat((sleetPortion[i] * slr).toFixed(3)));
+        freezingRainDepths.push(parseFloat((freezingRainPortion[i] * slr).toFixed(3)));
+      }
     }
     const cumulativeFrozen = [];
     let runFrozen = 0;

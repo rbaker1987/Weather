@@ -66,6 +66,18 @@ pre-commit install
 
 Install recommended extensions (`.vscode/extensions.json`) for auto-formatting on save.
 
+**Running Django Development Server:**
+
+The project includes a VS Code task for easy server startup:
+
+1. Press **`Ctrl + Shift + P`** (Command Palette)
+2. Type: **`Tasks: Run Task`**
+3. Select: **`Django Runserver`**
+
+The server will start at http://127.0.0.1:8000/
+
+To stop the server, press **`Ctrl + C`** in the terminal.
+
 ## Usage
 
 ### Web Interface
