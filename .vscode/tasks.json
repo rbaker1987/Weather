@@ -1,12 +1,12 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "Django Runserver",
-			"type": "shell",
-			"command": "cd weather_app && python manage.py runserver",
-			"isBackground": true,
-			"problemMatcher": []
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Django Runserver",
+      "type": "shell",
+      "command": "cd weather_app && python manage.py runserver",
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
 }
