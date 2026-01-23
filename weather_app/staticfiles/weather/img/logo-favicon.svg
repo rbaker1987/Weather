@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Weather Favicon">
+  <defs>
+    <style>
+      .lightning { fill: #FFD700; stroke: #FFA500; stroke-width: 1.5; stroke-linejoin: miter; }
+    </style>
+  </defs>
+  
+  <!-- Second lightning bolt as shadow accent -->
+  <path d="M 37,16 L 27,36 L 37,36 L 27,56 Z" fill="#FFD700" opacity="0.4" stroke="#FFA500" stroke-width="1"/>
+  
+  <!-- Main lightning bolt -->
+  <path class="lightning" d="M 32,14 L 22,34 L 32,34 L 22,54 Z"/>
+</svg>

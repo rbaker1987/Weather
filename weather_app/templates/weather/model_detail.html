@@ -75,9 +75,7 @@ Weather{% endblock %} {% block extra_css %}
 </div>
 <!-- Toggles replicated from main models page -->
 <div class="row g-3 align-items-end mb-4">
-  {% include "weather/components/location_selector.html" with locations=locations
-  latitude=latitude longitude=longitude location_col_class='col-md-4'
-  map_btn_col_class='col-md-1' %}
+  {% include "weather/components/location_selector.html" with locations=locations latitude=latitude longitude=longitude location_col_class='col-md-4' map_btn_col_class='col-md-1' %}
   <div class="col-md-2">
     <label for="detailForecastDays" class="form-label">Forecast Days</label>
     <select id="detailForecastDays" class="form-select">
@@ -143,12 +141,26 @@ Weather{% endblock %} {% block extra_css %}
   <canvas id="windDetailChart" height="240"></canvas>
 </div>
 <div class="row">
-  <div class="col-md-3">
+  <div class="col-md-4">
     <div class="metric-card">
       <h6>Total Liquid (in)</h6>
       <div id="liquidTotal">—</div>
     </div>
   </div>
+  <div class="col-md-4">
+    <div class="metric-card">
+      <h6>High Temp (°F)</h6>
+      <div id="highTemp">—</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="metric-card">
+      <h6>Low Temp (°F)</h6>
+      <div id="lowTemp">—</div>
+    </div>
+  </div>
+</div>
+<div class="row mt-2">
   <div class="col-md-3">
     <div class="metric-card">
       <h6>Total Frozen (in)</h6>
@@ -157,14 +169,20 @@ Weather{% endblock %} {% block extra_css %}
   </div>
   <div class="col-md-3">
     <div class="metric-card">
-      <h6>High Temp (°F)</h6>
-      <div id="highTemp">—</div>
+      <h6>Freezing Rain (in)</h6>
+      <div id="freezingRainTotal">—</div>
     </div>
   </div>
   <div class="col-md-3">
     <div class="metric-card">
-      <h6>Low Temp (°F)</h6>
-      <div id="lowTemp">—</div>
+      <h6>Sleet (in)</h6>
+      <div id="sleetTotal">—</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="metric-card">
+      <h6>Snow (in)</h6>
+      <div id="snowTotal">—</div>
     </div>
   </div>
 </div>
@@ -201,12 +219,16 @@ Weather{% endblock %} {% block extra_css %}
       t925_count: hourly.temperature_925hPa?.length || 0,
       t850_count: hourly.temperature_850hPa?.length || 0,
       precip_count: hourly.precipitation?.length || 0,
+      precip_type_count: hourly.precip_type?.length || 0,
+      rain_prob_count: hourly.rain_probability?.length || 0,
+      snowfall_prob_count: hourly.snowfall_probability?.length || 0,
       gusts_count: hourly.wind_gusts_10m?.length || 0,
       wind_speed_count: hourly.wind_speed_10m?.length || 0,
       first_time: hourly.time?.[0],
       first_t2m: hourly.temperature_2m?.[0],
       first_t925: hourly.temperature_925hPa?.[0],
       first_precip: hourly.precipitation?.[0],
+      first_precip_type: hourly.precip_type?.[0],
       first_gust: hourly.wind_gusts_10m?.[0]
     });
 
@@ -405,19 +427,19 @@ Weather{% endblock %} {% block extra_css %}
     const slrs = hourly.snow_liquid_ratio || [];
     const precipPeriodSampled = hourly.precipitation || [];
 
-    // For NBM/models with native precip type probabilities, use those instead
+    // For NBM/models with native precip type probabilities, use those as fallback
     const rainProb = hourly.rain_probability || [];
     const snowfallProb = hourly.snowfall_probability || [];
     const freezingRainProb = hourly.freezing_rain_probability || [];
     const icePelletsProb = hourly.ice_pellets_probability || [];
-    const hasNativePrecipTypes = rainProb.length > 0 || snowfallProb.length > 0 || freezingRainProb.length > 0 || icePelletsProb.length > 0;
 
     const snowPortion = [];
     const freezingRainPortion = [];
     const sleetPortion = [];
     const rainPortion = [];
 
-    const nPrecip = Math.min(precipTypes.length || rainProb.length || 0, precipPeriodSampled.length || 0);
+    // Ensure we have enough data to iterate; if no precipitation data, create empty arrays aligned to temps
+    const nPrecip = Math.max(precipTypes.length || rainProb.length || 0, precipPeriodSampled.length || 0, tempLabels.length || 0);
     for(let i=0;i<nPrecip;i++){
       const p = Number(precipPeriodSampled[i]) || 0;
       let snowL=0, frL=0, slL=0, rnL=0;
@@ -427,8 +449,17 @@ Weather{% endblock %} {% block extra_css %}
         continue;
       }
 
-      // Use native precip type probabilities if available (NBM), otherwise use inferred classification
-      if(hasNativePrecipTypes && i < rainProb.length) {
+      // Prefer server-side classification (precip_type) when available, fall back to probabilities
+      if(precipTypes.length > 0 && i < precipTypes.length) {
+        // Use inferred classification from backend
+        const pt = precipTypes[i];
+        if(pt === 'snow') snowL = p;
+        else if(pt === 'sleet') slL = p;
+        else if(pt === 'freezing_rain') frL = p;
+        else if(pt === 'rain') rnL = p;
+        else rnL = p; // unknown -> treat as rain
+      } else if(i < rainProb.length) {
+        // Fall back to probability-based approach (for models without classification)
         const rp = (rainProb[i] || 0) / 100;
         const sp = (snowfallProb[i] || 0) / 100;
         const frp = (freezingRainProb[i] || 0) / 100;
@@ -439,15 +470,13 @@ Weather{% endblock %} {% block extra_css %}
           snowL = p * (sp / totalProb);
           frL = p * (frp / totalProb);
           slL = p * (ipp / totalProb);
+        } else {
+          // No valid probabilities, default to rain
+          rnL = p;
         }
       } else {
-        // Fall back to inferred classification
-        const pt = precipTypes[i];
-        if(pt === 'snow') snowL = p;
-        else if(pt === 'sleet') slL = p;
-        else if(pt === 'freezing_rain') frL = p;
-        else if(pt === 'rain') rnL = p;
-        else rnL = p; // unknown -> treat as rain
+        // No classification or probabilities, default to rain
+        rnL = p;
       }
 
       snowPortion.push(parseFloat(snowL.toFixed(3)));
@@ -460,8 +489,7 @@ Weather{% endblock %} {% block extra_css %}
     function padTo(arr,len){ while(arr.length<len) arr.push(0); }
     padTo(snowPortion,targetLen); padTo(freezingRainPortion,targetLen); padTo(sleetPortion,targetLen); padTo(rainPortion,targetLen);
 
-    // Calculate total liquid and total frozen depth using dynamic SLRs
-    const totalLiquid = (snowPortion.reduce((a,b)=>a+b,0) + freezingRainPortion.reduce((a,b)=>a+b,0) + sleetPortion.reduce((a,b)=>a+b,0) + rainPortion.reduce((a,b)=>a+b,0)).toFixed(2);
+    // Note: Total liquid will be recalculated after filtering to match the displayed bars (every 3 hours)
 
     // Calculate frozen depth using dynamic SLRs from server
     let totalFrozenDepthVal = 0;
@@ -471,22 +499,22 @@ Weather{% endblock %} {% block extra_css %}
       if(precipTypes[i] === 'snow') {
         totalFrozenDepthVal += snowPortion[i] * slr;
       } else if(precipTypes[i] === 'sleet') {
-        totalFrozenDepthVal += sleetPortion[i] * 3.0;  // 3:1 for sleet
+        totalFrozenDepthVal += sleetPortion[i] * slr;  // use backend SLR
       } else if(precipTypes[i] === 'freezing_rain') {
-        totalFrozenDepthVal += freezingRainPortion[i] * 0.75;  // <1:1 for freezing rain
+        totalFrozenDepthVal += freezingRainPortion[i] * slr;  // use backend SLR
       }
     }
-    document.getElementById('liquidTotal').textContent = totalLiquid;
 
-    // Convert liquid shares to depth using dynamic SLRs for snow, fixed for sleet/freezing rain
+    // Convert liquid shares to depth using dynamic SLRs for ALL precip types
     const snowDepths = [];
+    const sleetDepths = [];
+    const freezingRainDepths = [];
     for(let i=0; i<snowPortion.length; i++){
       const slr = (slrs[i] !== undefined) ? slrs[i] : 10;
       snowDepths.push(parseFloat((snowPortion[i] * slr).toFixed(3)));
+      sleetDepths.push(parseFloat((sleetPortion[i] * slr).toFixed(3)));
+      freezingRainDepths.push(parseFloat((freezingRainPortion[i] * slr).toFixed(3)));
     }
-    const sleetDepths = sleetPortion.map(v=>parseFloat((v*3).toFixed(3)));
-    // Freezing rain accretion: <1:1 ratio
-    const freezingRainDepths = freezingRainPortion.map(v=>parseFloat((v*0.75).toFixed(3)));
     const cumulativeFrozen = [];
     let runFrozen = 0;
     for(let i=0;i<snowPortion.length;i++){
@@ -499,10 +527,7 @@ Weather{% endblock %} {% block extra_css %}
       if(precipPlaceholder) precipPlaceholder.remove();
       const precipTypesCtx = document.getElementById('precipTypesChart').getContext('2d');
       const sampledIndices = [];
-      for(let i = 0; i < tempLabels.length; i += 3) { sampledIndices.push(i); }
-      // Ensure we include the final time step for matching "Total Frozen"
-      const lastIdx = tempLabels.length - 1;
-      if(sampledIndices[sampledIndices.length-1] !== lastIdx){ sampledIndices.push(lastIdx); }
+      for(let i = 0; i < tempLabels.length; i++) { sampledIndices.push(i); }
       const filteredSnow = snowPortion.filter((_, i) => sampledIndices.includes(i));
       const filteredFreezingRain = freezingRainPortion.filter((_, i) => sampledIndices.includes(i));
       const filteredSleet = sleetPortion.filter((_, i) => sampledIndices.includes(i));
@@ -524,6 +549,23 @@ Weather{% endblock %} {% block extra_css %}
       // Update Total Frozen metric to match the chart line's final value
       document.getElementById('frozenTotal').textContent = (filteredCumulativeFrozen.length ? filteredCumulativeFrozen[filteredCumulativeFrozen.length-1] : 0).toFixed(2);
 
+      // Calculate individual frozen type accumulations
+      const totalSnowDepth = filteredSnowDepths.reduce((a,b)=>a+b,0).toFixed(2);
+      const totalSleetDepth = filteredSleetDepths.reduce((a,b)=>a+b,0).toFixed(2);
+      const totalFreezingRainDepth = filteredFreezingRainDepths.reduce((a,b)=>a+b,0).toFixed(2);
+      document.getElementById('snowTotal').textContent = totalSnowDepth;
+      document.getElementById('sleetTotal').textContent = totalSleetDepth;
+      document.getElementById('freezingRainTotal').textContent = totalFreezingRainDepth;
+
+      // Calculate total liquid from filtered data to match displayed bars
+      const totalLiquid = (
+        filteredSnow.reduce((a,b)=>a+b,0) +
+        filteredFreezingRain.reduce((a,b)=>a+b,0) +
+        filteredSleet.reduce((a,b)=>a+b,0) +
+        filteredRain.reduce((a,b)=>a+b,0)
+      ).toFixed(2);
+      document.getElementById('liquidTotal').textContent = totalLiquid;
+
       new Chart(precipTypesCtx,{type:'bar',data:{labels:filteredLabels,datasets:[
         {label:'Snow (liq in)',data:filteredSnow,backgroundColor:'#6ec5ff',stack:'precip'},
         {label:'Freezing Rain (liq in)',data:filteredFreezingRain,backgroundColor:'#ff66b3',stack:'precip'},
@@ -533,6 +575,7 @@ Weather{% endblock %} {% block extra_css %}
       ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},layout:{padding:{bottom:36}},plugins:{legend:{position:'top'},tooltip:{callbacks:{
         label:(ctx)=>{
           const idx = ctx.dataIndex; const dsLabel = ctx.dataset.label;
+          const slr = slrs[idx] ? slrs[idx].toFixed(2) : '—';
           if(dsLabel.startsWith('Snow')){ return `Snow: liq ${filteredSnow[idx].toFixed(2)} in → depth ${filteredSnowDepths[idx].toFixed(2)} in`; }
           else if(dsLabel.startsWith('Sleet')){ return `Sleet: liq ${filteredSleet[idx].toFixed(2)} in → depth ${filteredSleetDepths[idx].toFixed(2)} in`; }
           else if(dsLabel.startsWith('Freezing Rain')){ return `Ice: liq ${filteredFreezingRain[idx].toFixed(2)} in → accretion ${filteredFreezingRainDepths[idx].toFixed(2)} in`; }
@@ -548,7 +591,8 @@ Weather{% endblock %} {% block extra_css %}
           const perDepthSleet = filteredSleetDepths[di]||0;
           const perDepthIce = filteredFreezingRainDepths[di]||0;
           const perDepthFrozen = (perDepthSnow+perDepthSleet+perDepthIce).toFixed(2);
-          return `Liquid Period Total: ${totalLiquid.toFixed(2)} in\nFrozen Period Depth: ${perDepthFrozen} in (S:${perDepthSnow.toFixed(2)} Sl:${perDepthSleet.toFixed(2)} I:${perDepthIce.toFixed(2)})`;
+          const slr = slrs[di] ? slrs[di].toFixed(2) : '—';
+          return `Liquid Period Total: ${totalLiquid.toFixed(2)} in\nFrozen Period Depth: ${perDepthFrozen} in (S:${perDepthSnow.toFixed(2)} Sl:${perDepthSleet.toFixed(2)} I:${perDepthIce.toFixed(2)})\nRatio: ${slr}:1`;
         }
       }}},scales:{x:{stacked:true},precip:{type:'linear',position:'left',stacked:true,title:{display:true,text:'Liquid Precipitation (in)'}},accum:{type:'linear',position:'right',title:{display:true,text:'Cumulative Frozen Depth (in)'},grid:{drawOnChartArea:false}}}}});
     }

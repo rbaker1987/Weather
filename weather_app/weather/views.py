@@ -1896,11 +1896,6 @@ class ModelDetailView(TemplateView):
             "models": None,
             "max_days": 10,
         },
-        "AIFS": {
-            "url": "https://api.open-meteo.com/v1/ecmwf",
-            "models": "ecmwf_aifs025",
-            "max_days": 10,
-        },
         "GEM": {
             "url": "https://api.open-meteo.com/v1/gem",
             "models": None,
@@ -2018,10 +2013,11 @@ class ModelDetailView(TemplateView):
         if n == 0:
             return [], []
 
-        freeze = 32.0
-        surface_slush = 34.0  # allow snow/sleet depiction a bit above freezing
-        # Treat any slight warm nose aloft as melting layer (> 32.1°F)
-        warm = 32.1
+        freeze_c = 0.0
+        surface_slush_c = 2.0  # 2°C threshold for wet snow
+        warm_nose_min_c = (
+            1.0  # warm nose by definition is where temp is > 1°C (strictly greater)
+        )
 
         # Helper: Fahrenheit to Celsius for SLR/dendritic logic
         def f_to_c(v: float | None) -> float | None:
@@ -2029,35 +2025,179 @@ class ModelDetailView(TemplateView):
                 return None
             return (v - 32.0) * (5.0 / 9.0)
 
+        # Helper to estimate SLR for snow with DGZ thickness, dendritic factor, and surface adjustment
+        def snow_slr(
+            dendritic_c: float | None,
+            ts: float | None,
+            warmest_c: float | None,
+            profile_levels: list[tuple[float, float]],
+        ) -> float:
+            # Base SLR logic: if good dendritic zone and cold surface, use higher base despite warm mid-layer
+            base_slr = 12.0  # default
+
+            # Check for strong dendritic conditions: optimal DGZ temp + cold surface
+            strong_dendritic = (
+                dendritic_c is not None
+                and -16 <= dendritic_c <= -11
+                and ts is not None
+                and ts < -2.0
+            )
+
+            if warmest_c is not None:
+                if warmest_c < -18:
+                    base_slr = 30.0
+                elif warmest_c < -12:
+                    base_slr = 22.0
+                elif warmest_c < -5:
+                    # If strong dendritic + cold surface, use 18 instead of 12
+                    base_slr = 18.0 if strong_dendritic else 12.0
+                else:
+                    # If strong dendritic + cold surface, use 12 instead of 8
+                    base_slr = 12.0 if strong_dendritic else 8.0
+
+            # Dendritic factor from ~550 hPa temp (multiplicative)
+            dendritic_factor = 1.0
+            if dendritic_c is not None:
+                if -16 <= dendritic_c <= -11:
+                    dendritic_factor = 1.10  # strong DGZ near optimal temp
+                elif (-20 <= dendritic_c < -16) or (-11 < dendritic_c <= -8):
+                    dendritic_factor = 1.07  # moderate
+                else:
+                    dendritic_factor = 1.03  # weak but present
+
+            # Compute DGZ thickness between -18°C and -12°C using a 5 hPa grid
+            dgz_thickness = 0.0
+            try:
+                profile_sorted = sorted(
+                    profile_levels, key=lambda x: x[0], reverse=True
+                )
+
+                def interp_temp_local(p_target: float) -> float | None:
+                    for idx in range(len(profile_sorted) - 1):
+                        p1, t1 = profile_sorted[idx]
+                        p2, t2 = profile_sorted[idx + 1]
+                        if (p1 >= p_target >= p2) or (p2 >= p_target >= p1):
+                            if p1 == p2:
+                                return t1
+                            frac = (p_target - p2) / (p1 - p2)
+                            return t2 + (t1 - t2) * frac
+                    return profile_sorted[-1][1] if profile_sorted else None
+
+                if profile_sorted:
+                    max_p = max(p for p, _ in profile_sorted)
+                    min_p = min(p for p, _ in profile_sorted)
+                    step_hpa_local = 5.0
+                    p_cursor = max_p
+                    while p_cursor > min_p:
+                        p_next = max(p_cursor - step_hpa_local, min_p)
+                        p_mid = (p_cursor + p_next) / 2.0
+                        t_mid_c = interp_temp_local(p_mid)
+                        if t_mid_c is not None and -18.0 <= t_mid_c <= -12.0:
+                            dgz_thickness += abs(p_cursor - p_next)
+                        p_cursor = p_next
+            except Exception:
+                dgz_thickness = 0.0
+
+            # DGZ thickness factor: up to +25% boost for deep DGZ (cap at 150 hPa)
+            dgz_factor = 1.0 + min(dgz_thickness, 150.0) / 600.0
+
+            # Surface wet-snow penalty
+            surface_factor = 1.0
+            if ts is not None:
+                if ts >= 3.0:
+                    surface_factor = 0.75
+                elif ts >= -0.6:
+                    surface_factor = 0.90
+
+            slr_calc = base_slr * dendritic_factor * dgz_factor * surface_factor
+            # Clamp to reasonable bounds
+            return max(6.0, min(35.0, slr_calc))
+
         types: list[str] = []
         slrs: list[float] = []
 
         for i in range(n):
-            sf = val(snowfall, i)
-            ts = val(temps, i)
-            t975v = val(t975, i)
-            t950v = val(t950, i)
-            t925v = val(t925, i)
-            t900v = val(t900, i)
-            t875v = val(t875, i)
-            t850v = val(t850, i)
-            t825v = val(t825, i)
-            t800v = val(t800, i)
-            t775v = val(t775, i)
-            t750v = val(t750, i)
-            t725v = val(t725, i)
-            t700v = val(t700, i)
-            t675v = val(t675, i)
-            t650v = val(t650, i)
-            t625v = val(t625, i)
-            t600v = val(t600, i)
-            t575v = val(t575, i)
-            t550v = val(t550, i)
-            t525v = val(t525, i)
-            t500v = val(t500, i)
+            # snowfall value (sf) not needed - using inferred classification
+            ts_f = val(temps, i)
+            t975v_f = val(t975, i)
+            t950v_f = val(t950, i)
+            t925v_f = val(t925, i)
+            t900v_f = val(t900, i)
+            t875v_f = val(t875, i)
+            t850v_f = val(t850, i)
+            t825v_f = val(t825, i)
+            t800v_f = val(t800, i)
+            t775v_f = val(t775, i)
+            t750v_f = val(t750, i)
+            t725v_f = val(t725, i)
+            t700v_f = val(t700, i)
+            t675v_f = val(t675, i)
+            t650v_f = val(t650, i)
+            t625v_f = val(t625, i)
+            t600v_f = val(t600, i)
+            t575v_f = val(t575, i)
+            t550v_f = val(t550, i)
+            t525v_f = val(t525, i)
+            t500v_f = val(t500, i)
+
+            # Convert all temps to Celsius immediately
+            ts = f_to_c(ts_f)
+            t975v = f_to_c(t975v_f)
+            t950v = f_to_c(t950v_f)
+            t925v = f_to_c(t925v_f)
+            t900v = f_to_c(t900v_f)
+            t875v = f_to_c(t875v_f)
+            t850v = f_to_c(t850v_f)
+            t825v = f_to_c(t825v_f)
+            t800v = f_to_c(t800v_f)
+            t775v = f_to_c(t775v_f)
+            t750v = f_to_c(t750v_f)
+            t725v = f_to_c(t725v_f)
+            t700v = f_to_c(t700v_f)
+            t675v = f_to_c(t675v_f)
+            t650v = f_to_c(t650v_f)
+            t625v = f_to_c(t625v_f)
+            t600v = f_to_c(t600v_f)
+            t575v = f_to_c(t575v_f)
+            t550v = f_to_c(t550v_f)
+            t525v = f_to_c(t525v_f)
+            t500v = f_to_c(t500v_f)
+
+            # If 550 hPa not available, interpolate from nearby levels
+            if t550v is None:
+                available_temps = [
+                    (975, t975v),
+                    (950, t950v),
+                    (925, t925v),
+                    (900, t900v),
+                    (875, t875v),
+                    (850, t850v),
+                    (825, t825v),
+                    (800, t800v),
+                    (775, t775v),
+                    (750, t750v),
+                    (725, t725v),
+                    (700, t700v),
+                    (675, t675v),
+                    (650, t650v),
+                    (625, t625v),
+                    (600, t600v),
+                    (575, t575v),
+                    (525, t525v),
+                    (500, t500v),
+                ]
+                available_temps = [(p, t) for p, t in available_temps if t is not None]
+                if available_temps:
+                    for idx in range(len(available_temps) - 1):
+                        p1, t1 = available_temps[idx]
+                        p2, t2 = available_temps[idx + 1]
+                        if (p1 >= 550 >= p2) or (p2 >= 550 >= p1):
+                            frac = (550.0 - p2) / (p1 - p2)
+                            t550v = t2 + (t1 - t2) * frac
+                            break
 
             # Warmest temperature in column (similar to Kuchera method) in °C
-            warmest_f = max(
+            warmest_c = max(
                 [
                     v
                     for v in (
@@ -2087,159 +2227,354 @@ class ModelDetailView(TemplateView):
                 ],
                 default=None,
             )
-            warmest_c = f_to_c(warmest_f) if warmest_f is not None else None
 
-            # Warm layer: check key melting zone levels (925, 850, 800, 700)
-            warm_layer = max(
-                [
-                    v
-                    for v in (
-                        t975v,
-                        t950v,
-                        t925v,
-                        t900v,
-                        t875v,
-                        t850v,
-                        t825v,
-                        t800v,
-                        t775v,
-                        t750v,
-                        t725v,
-                        t700v,
-                        t675v,
-                        t650v,
-                    )
-                    if v is not None
-                ],
-                default=None,
-            )
+            # Build profile with surface and key levels
+            profile_levels: list[tuple[float, float]] = []
+            if ts is not None:
+                profile_levels.append((1013.25, ts))
+            pressure_levels = [
+                (975, t975v),
+                (950, t950v),
+                (925, t925v),
+                (900, t900v),
+                (875, t875v),
+                (850, t850v),
+                (825, t825v),
+                (800, t800v),
+                (775, t775v),
+                (750, t750v),
+                (725, t725v),
+                (700, t700v),
+                (675, t675v),
+                (650, t650v),
+            ]
+            valid_levels = [(p, t) for p, t in pressure_levels if t is not None]
+            profile_levels.extend(valid_levels)
 
-            # Peak dendritic growth zone temp (around 550 hPa, evaluate in °C)
-            dendritic_c = f_to_c(t550v) if t550v is not None else None
+            # Dendritic growth zone temp (around 550 hPa)
+            dendritic_c = t550v
 
-            # If both 925 and 850 are cold, treat column as snow-favoring even if 700 is warmer
-            if (t925v is not None and t925v <= freeze) and (
-                t850v is not None and t850v <= freeze
+            # If both 925 and 850 are cold, force snow-favoring column
+            if (t925v is not None and t925v <= freeze_c) and (
+                t850v is not None and t850v <= freeze_c
             ):
-                warm_layer = None
+                warmest_c = min(warmest_c, 0.0) if warmest_c is not None else warmest_c
 
             if ts is None:
                 types.append("unknown")
-                slrs.append(1.0)  # default neutral ratio
+                slrs.append(1.0)
+                continue
+
+            if not profile_levels:
+                types.append("unknown")
+                slrs.append(1.0)
                 continue
 
             ptype = "unknown"
             slr = 1.0
 
             # If a warm layer exists, honor it before snowfall hints to avoid false snow
-            if warm_layer is not None and warm_layer > warm:
-                # Melting layer present; determine sleet vs freezing rain.
-                # Key factors:
-                # 1. Depth/intensity of warm layer (how completely snow melts)
-                # 2. Depth/intensity of cold layer below (refreeze potential)
-                # 3. Surface temperature (determines if refrozen drops stick or accumulate)
+            has_warm_nose = warmest_c is not None and warmest_c > warm_nose_min_c
 
-                if ts <= freeze:
-                    # Calculate cold layer depth: how many subfreezing levels below warm layer
-                    cold_levels_below_warm = []
-                    for temp_val in [
-                        ts,
-                        t975v,
-                        t950v,
-                        t925v,
-                        t900v,
-                        t875v,
-                        t850v,
-                        t825v,
-                    ]:
-                        if temp_val is not None and temp_val <= freeze:
-                            cold_levels_below_warm.append(temp_val)
+            if not has_warm_nose:
+                ptype = "snow"
+                slr = snow_slr(dendritic_c, ts, warmest_c, profile_levels)
+                types.append(ptype)
+                slrs.append(slr)
+                continue
 
-                    # Calculate warm layer strength
-                    warm_layer - freeze  # degrees above freezing
-                    warm_layer_depth = 0
-                    for temp_val in [t925v, t850v, t800v, t700v]:
-                        if temp_val is not None and temp_val > warm:
-                            warm_layer_depth += 1
+            # If surface is above the slushy cutoff, default to rain despite aloft structure
+            if ts > surface_slush_c:
+                types.append("rain")
+                slrs.append(1.0)
+                continue
 
-                    # Decision logic:
-                    # Sleet requires: sufficient cold depth below + strong enough cold layer to refreeze
-                    # Classic sleet profile: warm nose at 850/800, strong cold at surface/925
+            # Build a finely interpolated profile (5 hPa spacing) to integrate warm vs cold area
+            profile_sorted = sorted(profile_levels, key=lambda x: x[0], reverse=True)
 
-                    if len(cold_levels_below_warm) >= 2:
-                        # At least 2 subfreezing levels below warm layer
-                        avg_cold = sum(cold_levels_below_warm) / len(
-                            cold_levels_below_warm
-                        )
+            def interp_temp_helper(
+                profile_sorted: list[tuple[float, float]], p_target: float
+            ) -> float:
+                for idx in range(len(profile_sorted) - 1):
+                    p1, t1 = profile_sorted[idx]
+                    p2, t2 = profile_sorted[idx + 1]
+                    if (p1 >= p_target >= p2) or (p2 >= p_target >= p1):
+                        if p1 == p2:
+                            return t1
+                        frac = (p_target - p2) / (p1 - p2)
+                        return t2 + (t1 - t2) * frac
+                return profile_sorted[-1][1]
 
-                        # Strong cold layer (< 28°F average) with deep warm nose = classic sleet
-                        if (
-                            avg_cold <= 28.0
-                            and warm_layer_depth >= 2
-                            or avg_cold <= 26.0
-                        ):
-                            ptype = "sleet"
-                            slr = 3.0
-                        # Otherwise: warm layer exists but not enough refreezing = freezing rain
-                        else:
-                            ptype = "freezing_rain"
-                            slr = 0.75
-                    else:
-                        # Shallow/weak cold layer below warm = freezing rain (drops don't fully refreeze)
-                        ptype = "freezing_rain"
-                        slr = 0.75
+            max_p = max(p for p, _ in profile_sorted)
+            min_p = min(p for p, _ in profile_sorted)
+            step_hpa = 5.0
+            grid_pressures: list[float] = []
+            p_cursor = max_p
+            while p_cursor > min_p:
+                grid_pressures.append(p_cursor)
+                p_cursor -= step_hpa
+            grid_pressures.append(min_p)
+
+            grid_temps = [interp_temp_helper(profile_sorted, p) for p in grid_pressures]
+
+            warm_indices = [
+                i for i, t in enumerate(grid_temps) if t is not None and t > freeze_c
+            ]
+            if not warm_indices:
+                ptype = "snow"
+                slr = snow_slr(dendritic_c, ts, warmest_c, profile_levels)
+                types.append(ptype)
+                slrs.append(slr)
+                continue
+
+            warm_band_bottom = max(grid_pressures[i] for i in warm_indices)
+
+            warm_area_total = 0.0
+            cold_area_total = 0.0
+            cold_layer_depth_mb = 0.0
+            warmest_in_warm_nose = None
+            coldest_in_cold_layer = None
+            has_thick_cold_section = False  # Track if >50mb of <-5°C exists
+
+            # Helper to integrate temperature above/below freezing across a segment (all in Celsius)
+            def segment_areas(t1: float, t2: float, dp: float) -> tuple[float, float]:
+                warm_area = 0.0
+                cold_area = 0.0
+                if t1 >= freeze_c and t2 >= freeze_c:
+                    warm_area = ((t1 - freeze_c) + (t2 - freeze_c)) / 2.0 * dp
+                elif t1 <= freeze_c and t2 <= freeze_c:
+                    cold_area = (abs(t1 - freeze_c) + abs(t2 - freeze_c)) / 2.0 * dp
                 else:
-                    # Surface above freezing = rain
-                    ptype = "rain"
-                    slr = 1.0
+                    frac = (freeze_c - t1) / (t2 - t1) if t1 != t2 else 0.5
+                    dp1 = abs(dp * frac)
+                    dp2 = abs(dp - dp1)
+                    if t1 > freeze_c:
+                        warm_area = ((t1 - freeze_c) + 0.0) / 2.0 * dp1
+                        cold_area = (abs(t2 - freeze_c) + 0.0) / 2.0 * dp2
+                    else:
+                        cold_area = (abs(t1 - freeze_c) + 0.0) / 2.0 * dp1
+                        warm_area = ((t2 - freeze_c) + 0.0) / 2.0 * dp2
+                return warm_area, cold_area
+
+            # Track continuous cold sections for refreeze potential
+            current_cold_depth = 0.0
+
+            for idx in range(len(grid_pressures) - 1):
+                p1 = grid_pressures[idx]
+                p2 = grid_pressures[idx + 1]
+                t1 = grid_temps[idx]
+                t2 = grid_temps[idx + 1]
+                if t1 is None or t2 is None:
+                    continue
+                dp = abs(p2 - p1)
+                w_area, c_area = segment_areas(t1, t2, dp)
+                warm_area_total += w_area
+                if min(p1, p2) >= warm_band_bottom:
+                    cold_area_total += c_area
+                    cold_layer_depth_mb += dp
+
+                    # Track continuous sections colder than -5°C for refreeze potential
+                    if t1 < -5.0 and t2 < -5.0:
+                        current_cold_depth += dp
+                        if current_cold_depth > 50.0:
+                            has_thick_cold_section = True
+                    else:
+                        current_cold_depth = 0.0
+
+                # Track extremes in warm band (above freeze)
+                if min(p1, p2) < warm_band_bottom:  # within warm band
+                    if t1 > freeze_c and (
+                        warmest_in_warm_nose is None or t1 > warmest_in_warm_nose
+                    ):
+                        warmest_in_warm_nose = t1
+                    if t2 > freeze_c and (
+                        warmest_in_warm_nose is None or t2 > warmest_in_warm_nose
+                    ):
+                        warmest_in_warm_nose = t2
+
+                # Track extremes in cold layer (below warm band, below freeze)
+                if min(p1, p2) >= warm_band_bottom:
+                    if t1 <= freeze_c and (
+                        coldest_in_cold_layer is None or t1 < coldest_in_cold_layer
+                    ):
+                        coldest_in_cold_layer = t1
+                    if t2 <= freeze_c and (
+                        coldest_in_cold_layer is None or t2 < coldest_in_cold_layer
+                    ):
+                        coldest_in_cold_layer = t2
+
+            # Hybrid classification: area-based + temperature-based
+            # Thresholds: warm nose needs to be somewhat strong to produce freezing rain
+            # Cold layer needs to be moderately cold to refreeze sleet
+
+            area_ratio_cold_to_warm = cold_area_total / max(warm_area_total, 1.0)
+            area_ratio_warm_to_cold = warm_area_total / max(cold_area_total, 1.0)
+
+            # Default to area-based decision
+            if warm_area_total > cold_area_total:
+                ptype = "freezing_rain"
+                slr = min(1.0, 2.0 / area_ratio_warm_to_cold)
             else:
-                # No strong warm layer aloft; allow snowfall flag to set snow
-                if sf is not None and sf > 0.01:
-                    ptype = "snow"
-                    # Estimate SLR based on warmest column temp (Kuchera-like) and dendritic growth
-                    if warmest_c is not None:
-                        # Adjust SLR based on dendritic growth zone (550 hPa)
-                        dendritic_strength = 0.0
-                        if dendritic_c is not None:
-                            # Peak dendritic growth at -12 to -15°C
-                            if -16 <= dendritic_c <= -11:
-                                dendritic_strength = 1.0  # strong dendritic zone
-                            elif -20 <= dendritic_c < -16 or -11 < dendritic_c <= -8:
-                                dendritic_strength = 0.7  # moderate dendritic
-                            else:
-                                dendritic_strength = 0.3  # weak dendritic
+                ptype = "sleet"
+                slr = 1.5 + min(area_ratio_cold_to_warm, 2.5)
 
-                        # Kuchera-inspired logic with dendritic boost (all thresholds in °C)
-                        if warmest_c < -18:
-                            slr = 26.0 + (
-                                2.0 * dendritic_strength
-                            )  # very cold, very light
-                        elif warmest_c < -12:
-                            slr = 18.0 + (
-                                4.0 * dendritic_strength
-                            )  # cold, dendritic growth zone
-                        elif warmest_c < -5:
-                            slr = 10.0 + (2.0 * dendritic_strength)  # moderately cold
-                        else:
-                            slr = 6.0 + (
-                                2.0 * dendritic_strength
-                            )  # borderline, denser snow
-                    else:
-                        slr = 12.0  # default to middle of range
+            # Refine with temperature logic
+            # First: if there's a thick cold section (>50mb of <-5°C), demote freezing rain to sleet (sufficient refreeze)
+            if ptype == "freezing_rain" and has_thick_cold_section:
+                ptype = "sleet"
+                slr = 1.5 + min(area_ratio_cold_to_warm, 2.5)
+
+            # Second: if cold layer is very weak (> -6°C / 21°F) or thick but marginal (>50mb but warmer than -5°C), promote to freezing rain
+            # BUT: only if there's no thick cold section (already checked above)
+            if (
+                ptype == "sleet"
+                and coldest_in_cold_layer is not None
+                and not has_thick_cold_section
+            ):
+                weak_cold_layer = coldest_in_cold_layer > -6.0
+                thick_but_marginal = (
+                    cold_layer_depth_mb > 50.0 and coldest_in_cold_layer > -5.0
+                )
+                if (
+                    (weak_cold_layer or thick_but_marginal)
+                    and warmest_in_warm_nose is not None
+                    and warmest_in_warm_nose > 1.0
+                ):
+                    ptype = "freezing_rain"
+                    slr = min(1.0, 2.0 / max(area_ratio_warm_to_cold, 0.5))
+
+            # Refine SLR scaling with temperature extremes
+            if ptype == "freezing_rain" and warmest_in_warm_nose is not None:
+                # Sliding scale for liquid fraction (SLR) between 0.2:1 (very wet) and 1.0:1 (cold/freezing mix)
+                # Inputs: warmest_in_warm_nose (>1°C by definition) and near-surface temperature ts
+                if ts > -1.0 or warmest_in_warm_nose >= 6.0:
+                    slr = 0.2  # very wet, pure liquid end
+                elif warmest_in_warm_nose <= 1.0:
+                    slr = 1.0  # coldest freezing rain / sleet-like mix
                 else:
-                    # Surface-driven decision with marginal above-freezing allowance
-                    if ts > surface_slush:
-                        ptype = "rain"
-                        slr = 1.0
-                    else:
-                        ptype = "snow"
-                        # No dendritic zone active, assume moderate snow
-                        slr = 10.0
+                    # Linear interpolation from 1.0 at 1°C down to 0.2 at 6°C
+                    frac = (warmest_in_warm_nose - 1.0) / (6.0 - 1.0)
+                    slr = max(0.2, min(1.0, 1.0 - frac * (1.0 - 0.2)))
+
+                # Boost SLR if there's a strong refreezing layer below despite warm mid-layer
+                # More refreezing → higher SLR (thicker accretion)
+                if coldest_in_cold_layer is not None:
+                    if coldest_in_cold_layer < -10.0:
+                        slr = min(1.0, slr * 1.5)  # strong refreezing boost
+                    elif coldest_in_cold_layer < -5.0:
+                        slr = min(1.0, slr * 1.25)  # moderate refreezing boost
+
+            if ptype == "sleet" and coldest_in_cold_layer is not None:
+                # Colder cold layer → more complete refreezing → higher SLR (drier sleet)
+                # Warmer cold layer → incomplete refreezing → lower SLR (wetter sleet)
+                if coldest_in_cold_layer < -15.0:
+                    slr = min(4.0, slr * 1.15)  # very dry sleet
+                elif coldest_in_cold_layer < -10.0:
+                    slr = min(4.0, slr * 1.05)  # dry sleet
+                else:
+                    slr = max(1.5, slr * 0.95)  # wet sleet
 
             types.append(ptype)
             slrs.append(slr)
 
         return types, slrs
+
+    @staticmethod
+    def aggregate_precip_by_6hour(hourly: dict, times: list[str]) -> dict:
+        """
+        Aggregate hourly precipitation by type into 6-hour periods with actual accumulation.
+
+        Multiplies precipitation by SLR (from _classify_precip_types) to get actual depth accumulation.
+        Uses type-based SLR defaults if SLR values missing.
+
+        Args:
+            hourly: dict with keys like 'precipitation', 'precip_type', 'snow_liquid_ratio', 'time'
+            times: list of ISO datetime strings (e.g., forecast period end times)
+
+        Returns:
+            dict mapping each time to {'snow': X_mm, 'sleet': Y_mm, 'freezing_rain': Z_mm, 'rain': W_mm, 'total': T_mm}
+            where values are actual depth accumulation (precip_mm × SLR)
+        """
+        precips = hourly.get("precipitation") or []
+        precip_types = hourly.get("precip_type") or []
+        slrs = hourly.get("snow_liquid_ratio") or []
+        times_list = hourly.get("time") or []
+
+        if not precips or not times or not precip_types:
+            return {}
+
+        from datetime import datetime
+
+        # SLR defaults by precip type (from _classify_precip_types logic)
+        default_slr = {
+            "snow": 10.0,  # 10:1 snow
+            "sleet": 2.5,  # 2.5:1 sleet
+            "freezing_rain": 0.35,  # 0.35:1 freezing rain
+            "rain": 1.0,  # Rain is 1:1 by definition
+        }
+
+        aggregated = {}
+
+        for time_str in times:
+            try:
+                # Parse the target forecast time
+                target_time = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                continue
+
+            # Sum precip by type for the 6 hours LEADING UP TO this time
+            # Multiply each hour by its calculated SLR to get actual accumulation depth
+            snow_total = 0.0
+            sleet_total = 0.0
+            freezing_rain_total = 0.0
+            rain_total = 0.0
+
+            for i, hour_time_str in enumerate(times_list):
+                try:
+                    hour_time = datetime.fromisoformat(
+                        hour_time_str.replace("Z", "+00:00")
+                    )
+                except (ValueError, AttributeError):
+                    continue
+
+                # Include hours from target_time - 6 hours to target_time (inclusive of target)
+                if (
+                    hour_time <= target_time
+                    and (target_time - hour_time).total_seconds() < 21600
+                ):  # 6 hours in seconds
+                    precip_val = precips[i] if i < len(precips) else 0.0
+                    precip_type = precip_types[i] if i < len(precip_types) else "rain"
+
+                    # Use calculated SLR from _classify_precip_types, or default by type
+                    slr = (
+                        slrs[i]
+                        if i < len(slrs) and slrs[i] > 0
+                        else default_slr.get(precip_type, 1.0)
+                    )
+
+                    if precip_val and precip_val > 0:
+                        # Multiply by SLR to get actual accumulation depth
+                        actual_accumulation = precip_val * slr
+
+                        if precip_type == "snow":
+                            snow_total += actual_accumulation
+                        elif precip_type == "sleet":
+                            sleet_total += actual_accumulation
+                        elif precip_type == "freezing_rain":
+                            freezing_rain_total += actual_accumulation
+                        else:  # rain or unknown
+                            rain_total += actual_accumulation
+
+            total = snow_total + sleet_total + freezing_rain_total + rain_total
+            aggregated[time_str] = {
+                "snow": round(snow_total, 2),
+                "sleet": round(sleet_total, 2),
+                "freezing_rain": round(freezing_rain_total, 2),
+                "rain": round(rain_total, 2),
+                "total": round(total, 2),
+            }
+
+        return aggregated
 
     def get_context_data(self, **kwargs):
         import time
@@ -2352,16 +2687,7 @@ class ModelDetailView(TemplateView):
                             run_time = datetime.fromisoformat(
                                 str(first_time).replace("Z", "+00:00")
                             )
-                        # Cache NOMADS result with metadata
-                        cache.set(
-                            cache_key,
-                            data,
-                            timeout=getattr(
-                                settings,
-                                "MODEL_DETAIL_CACHE_SECONDS",
-                                getattr(settings, "CACHE_TIMEOUT", 300),
-                            ),
-                        )
+                        # Cache will be set after precipitation classification
                     else:
                         logger.warning(f"NOMADS returned None for GFS {ensemble}")
                 except Exception as exc:  # noqa: BLE001
@@ -2412,15 +2738,7 @@ class ModelDetailView(TemplateView):
                         )
                     om_elapsed = time.time() - om_start
                     logger.info(f"Open-Meteo fetched in {om_elapsed:.2f}s")
-                    cache.set(
-                        cache_key,
-                        data,
-                        timeout=getattr(
-                            settings,
-                            "MODEL_DETAIL_CACHE_SECONDS",
-                            getattr(settings, "CACHE_TIMEOUT", 300),
-                        ),
-                    )
+                    # Cache will be set after precipitation classification
                 except Exception as exc:  # noqa: BLE001
                     om_elapsed = time.time() - om_start
                     logger.warning(f"Open-Meteo failed in {om_elapsed:.2f}s: {exc}")
@@ -2441,15 +2759,7 @@ class ModelDetailView(TemplateView):
                             run_time = datetime.fromisoformat(
                                 first_time.replace("Z", "+00:00")
                             )
-                        cache.set(
-                            cache_key,
-                            data,
-                            timeout=getattr(
-                                settings,
-                                "MODEL_DETAIL_CACHE_SECONDS",
-                                getattr(settings, "CACHE_TIMEOUT", 300),
-                            ),
-                        )
+                        # Cache will be set after precipitation classification
                 except Exception as exc:  # noqa: BLE001
                     logger.warning(
                         f"NOAA fetch failed for {model_name} after other fallbacks: {exc}"
@@ -2459,7 +2769,7 @@ class ModelDetailView(TemplateView):
             if not data and model_name != "GFS":
                 try:
                     om_start = time.time()
-                    logger.info(f"Fetching {model_name} from Open-Meteo at {lat},{lon}")
+                    logger.info(f"Fetching {model_name} from Open-Meteo")  # noqa: S101
                     params = {
                         "latitude": lat,
                         "longitude": lon,
@@ -2498,15 +2808,7 @@ class ModelDetailView(TemplateView):
                         )
                     om_elapsed = time.time() - om_start
                     logger.info(f"Open-Meteo {model_name} fetched in {om_elapsed:.2f}s")
-                    cache.set(
-                        cache_key,
-                        data,
-                        timeout=getattr(
-                            settings,
-                            "MODEL_DETAIL_CACHE_SECONDS",
-                            getattr(settings, "CACHE_TIMEOUT", 300),
-                        ),
-                    )
+                    # Cache will be set after precipitation classification
                 except Exception as exc:  # noqa: BLE001
                     om_elapsed = time.time() - om_start
                     logger.warning(
@@ -2571,6 +2873,19 @@ class ModelDetailView(TemplateView):
                 )
             except Exception as e:
                 logger.warning(f"Failed to classify precip types: {e}")
+
+        # Cache the final data with all derived fields
+        if data and cache_key:
+            cache.set(
+                cache_key,
+                data,
+                timeout=getattr(
+                    settings,
+                    "MODEL_DETAIL_CACHE_SECONDS",
+                    getattr(settings, "CACHE_TIMEOUT", 300),
+                ),
+            )
+            logger.info("Model data cached")  # noqa: S101
 
         # Inject metadata into data dict so it's available in the frontend
         if data:

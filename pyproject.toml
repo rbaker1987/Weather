@@ -124,3 +124,17 @@ DJANGO_SETTINGS_MODULE = "config.settings"
 markers = [
     "django_db: mark test as requiring database access",
 ]
+
+[tool.coverage.run]
+relative_files = true
+source = ["weather_app"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false

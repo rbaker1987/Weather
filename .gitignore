@@ -29,6 +29,13 @@ package-lock.json
 .eslintcache
 .prettierignore
 
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
 # Distribution / packaging
 build/
 dist/
