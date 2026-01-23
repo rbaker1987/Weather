@@ -2769,7 +2769,7 @@ class ModelDetailView(TemplateView):
             if not data and model_name != "GFS":
                 try:
                     om_start = time.time()
-                    logger.info(f"Fetching {model_name} from Open-Meteo at {lat},{lon}")
+                    logger.info(f"Fetching {model_name} from Open-Meteo")  # noqa: S101
                     params = {
                         "latitude": lat,
                         "longitude": lon,
@@ -2885,7 +2885,7 @@ class ModelDetailView(TemplateView):
                     getattr(settings, "CACHE_TIMEOUT", 300),
                 ),
             )
-            logger.info(f"Cached model data for {cache_key}")
+            logger.info("Model data cached")  # noqa: S101
 
         # Inject metadata into data dict so it's available in the frontend
         if data:
