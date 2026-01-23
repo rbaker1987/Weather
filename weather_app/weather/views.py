@@ -2484,16 +2484,16 @@ class ModelDetailView(TemplateView):
 
             # Borderline sleet/snow transition: if warm layer is marginal, blend SLR toward snow
             # Check if this is close to being snow (weak/shallow warm layer)
-            if ptype == "sleet" and warmest_in_warm_nose is not None and 1.0 < warmest_in_warm_nose <= 3.0:
+            if (
+                ptype == "sleet"
+                and warmest_in_warm_nose is not None
+                and 1.0 < warmest_in_warm_nose <= 3.0
+            ):
                 # Calculate snow SLR for comparison
-                snow_slr_value = snow_slr(
-                    dendritic_c, ts, warmest_c, profile_levels
-                )
+                snow_slr_value = snow_slr(dendritic_c, ts, warmest_c, profile_levels)
                 # Blend factor: closer to 1°C = more snow-like, closer to 3°C = more sleet-like
                 # Linear interpolation: at 1°C use 70% snow SLR, at 3°C use 0% snow SLR
-                blend_factor = (
-                    3.0 - warmest_in_warm_nose
-                ) / 2.0  # ranges 0.0 to 1.0
+                blend_factor = (3.0 - warmest_in_warm_nose) / 2.0  # ranges 0.0 to 1.0
                 blend_factor = max(0.0, min(0.7, blend_factor))  # clamp to 0-70%
                 # Interpolate between current sleet SLR and snow SLR
                 slr = slr * (1.0 - blend_factor) + snow_slr_value * blend_factor
