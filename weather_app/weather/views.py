@@ -2695,7 +2695,7 @@ class ModelDetailView(TemplateView):
             except Exception:
                 lat_f = lat
                 lon_f = lon
-            cache_key = f"model_detail:v2:{model_name}:{ensemble}:{lat_f}:{lon_f}:days:{forecast_days}"
+            cache_key = f"model_detail:v4:{model_name}:{ensemble}:{lat_f}:{lon_f}:days:{forecast_days}"
             cached = cache.get(cache_key)
             if cached is not None:
                 data = cached
@@ -2976,16 +2976,273 @@ class ModelDetailView(TemplateView):
                     f"Using static SLRs for NBM precipitation types: {default_slrs}"
                 )
             else:
-                # All other models: apply thermodynamic classification with dynamic SLRs
+                # All other models: prioritize classification approach based on available data
                 try:
-                    precip_types, slrs = self._classify_precip_types(data["hourly"])
-                    data["hourly"]["precip_type"] = precip_types
-                    data["hourly"]["snow_liquid_ratio"] = slrs
+                    # Check if model provides native precipitation type probabilities with actual signal
+                    # Require at least one probability > 0 to consider them usable
+                    prob_keys = [
+                        "rain_probability",
+                        "snowfall_probability",
+                        "freezing_rain_probability",
+                        "ice_pellets_probability",
+                    ]
+                    prob_signals: dict[str, float] = {}
+                    has_native_probs = False
+                    for prob_key in prob_keys:
+                        vals = data["hourly"].get(prob_key) or []
+                        max_val = max([(v or 0) for v in vals], default=0)
+                        prob_signals[prob_key] = max_val
+                        if max_val > 0:
+                            has_native_probs = True
                     logger.info(
-                        f"Derived precip_type and SLRs for {len(precip_types)} hours"
+                        "Precip probs signal check for %s: has_native_probs=%s, max_vals=%s",
+                        model_name,
+                        has_native_probs,
+                        prob_signals,
                     )
+
+                    # Check if model has sufficient atmospheric levels for thermodynamic classification
+                    required_levels = [
+                        "temperature_2m",
+                        "temperature_850hPa",
+                        "temperature_700hPa",
+                    ]
+                    has_sufficient_levels = all(
+                        level in data["hourly"] and data["hourly"][level]
+                        for level in required_levels
+                    )
+
+                    # Check if model has ANY atmospheric levels beyond surface
+                    atmospheric_level_keys = [
+                        k for k in data["hourly"] if "hPa" in k and "temperature" in k
+                    ]
+                    has_any_levels = len(atmospheric_level_keys) > 0
+
+                    logger.info(
+                        "Precip classification availability for %s: sufficient_levels=%s, any_levels=%s, native_probs=%s",
+                        model_name,
+                        has_sufficient_levels,
+                        has_any_levels,
+                        has_native_probs,
+                    )
+
+                    # Local helper to convert Fahrenheit to Celsius for simple surface checks
+                    def f_to_c_local(v):
+                        try:
+                            return (float(v) - 32.0) * (5.0 / 9.0)
+                        except Exception:
+                            return None
+
+                    if has_sufficient_levels:
+                        # Priority 1: If sufficient levels, use thermodynamic classification
+                        precip_types, slrs = self._classify_precip_types(data["hourly"])
+                        data["hourly"]["precip_type"] = precip_types
+                        data["hourly"]["snow_liquid_ratio"] = slrs
+                        logger.info(
+                            f"Derived precip_type and SLRs for {len(precip_types)} hours using sufficient atmospheric levels"
+                        )
+                    elif has_native_probs:
+                        # Priority 2: If insufficient levels but have probabilities, derive precip_type from probs.
+                        # If probs are all zero/None, fall back to surface temp to avoid misclassifying cold precip as rain.
+                        logger.info(
+                            f"Using native precipitation probabilities for {model_name} (insufficient atmospheric levels)"
+                        )
+                        num_hours = len(data["hourly"].get("time", []))
+                        temps2m = data["hourly"].get("temperature_2m") or []
+                        rain_probs = data["hourly"].get("rain_probability") or []
+                        snow_probs = data["hourly"].get("snowfall_probability") or []
+                        frz_probs = (
+                            data["hourly"].get("freezing_rain_probability") or []
+                        )
+                        ice_probs = data["hourly"].get("ice_pellets_probability") or []
+
+                        precip_types: list[str] = []
+                        slrs: list[float] = []
+
+                        for i in range(num_hours):
+                            rp = rain_probs[i] if i < len(rain_probs) else 0
+                            sp = snow_probs[i] if i < len(snow_probs) else 0
+                            fp = frz_probs[i] if i < len(frz_probs) else 0
+                            ip = ice_probs[i] if i < len(ice_probs) else 0
+                            t2m_f = temps2m[i] if i < len(temps2m) else None
+                            t2m_c = f_to_c_local(t2m_f)
+
+                            max_prob = max(rp or 0, sp or 0, fp or 0, ip or 0)
+
+                            if max_prob == 0 and t2m_c is not None and t2m_c <= 0.0:
+                                # No probability signal but subfreezing surface: treat as snow
+                                ptype = "snow"
+                            elif max_prob == 0:
+                                ptype = "rain"
+                            else:
+                                # Pick the type with the highest probability
+                                if (sp or 0) >= max_prob and (sp or 0) > 0:
+                                    ptype = "snow"
+                                elif (ip or 0) >= max_prob and (ip or 0) > 0:
+                                    ptype = "sleet"
+                                elif (fp or 0) >= max_prob and (fp or 0) > 0:
+                                    ptype = "freezing_rain"
+                                else:
+                                    ptype = "rain"
+
+                            # Assign SLR defaults by precip type
+                            if ptype == "snow":
+                                slr = 10.0
+                            elif ptype == "sleet":
+                                slr = 2.5
+                            elif ptype == "freezing_rain":
+                                slr = 0.5
+                            else:
+                                slr = 1.0
+
+                            precip_types.append(ptype)
+                            slrs.append(slr)
+
+                        data["hourly"]["precip_type"] = precip_types
+                        data["hourly"]["snow_liquid_ratio"] = slrs
+                        logger.info(
+                            f"Derived precip_type from native probabilities for {num_hours} hours (with subfreezing fallback)"
+                        )
+                    elif has_any_levels:
+                        # Priority 3: If insufficient levels but have SOME levels, still try thermodynamic with limited data
+                        precip_types, slrs = self._classify_precip_types(data["hourly"])
+                        data["hourly"]["precip_type"] = precip_types
+                        data["hourly"]["snow_liquid_ratio"] = slrs
+                        logger.info(
+                            f"Derived precip_type and SLRs for {len(precip_types)} hours using limited atmospheric levels"
+                        )
+                    else:
+                        # Priority 4: No atmospheric levels - use simple surface temperature rule
+                        surface_temps = data["hourly"].get("temperature_2m") or []
+                        num_hours = len(data["hourly"].get("time", []))
+                        slrs = []
+                        precip_types = []
+
+                        for temp_f in surface_temps:
+                            temp_c = f_to_c_local(temp_f)
+
+                            if temp_c is not None and temp_c <= 0.0:
+                                # Cold surface: snow (cannot determine warm nose/sleet without upper data)
+                                ptype = "snow"
+                                # Estimate SLR based on how cold it is
+                                if temp_c <= -10.0:
+                                    slr = 12.0
+                                elif temp_c <= -5.0:
+                                    slr = 10.0
+                                else:  # -5 < temp <= 0
+                                    slr = 8.0
+                            else:
+                                # Warm surface: rain
+                                ptype = "rain"
+                                slr = 1.0
+
+                            precip_types.append(ptype)
+                            slrs.append(slr)
+
+                        # Pad if needed
+                        while len(slrs) < num_hours:
+                            slrs.append(1.0)
+                            precip_types.append("rain")
+
+                        data["hourly"]["precip_type"] = precip_types[:num_hours]
+                        data["hourly"]["snow_liquid_ratio"] = slrs[:num_hours]
+                        logger.info(
+                            f"Using surface temperature-based precip type and SLR for {model_name} (no atmospheric levels, no probabilities)"
+                        )
+
+                    # Debug snapshot for NAM to verify per-hour classification and temps
+                    if model_name == "NAM" and data["hourly"]:
+                        try:
+                            sample_n = 12
+                            pt = (data["hourly"].get("precip_type") or [])[:sample_n]
+                            slr_sample = (
+                                data["hourly"].get("snow_liquid_ratio") or []
+                            )[:sample_n]
+                            t2m_f = (data["hourly"].get("temperature_2m") or [])[
+                                :sample_n
+                            ]
+                            t2m_c = [f_to_c_local(v) for v in t2m_f]
+                            rp = (data["hourly"].get("rain_probability") or [])[
+                                :sample_n
+                            ]
+                            sp = (data["hourly"].get("snowfall_probability") or [])[
+                                :sample_n
+                            ]
+                            frp = (
+                                data["hourly"].get("freezing_rain_probability") or []
+                            )[:sample_n]
+                            ipp = (data["hourly"].get("ice_pellets_probability") or [])[
+                                :sample_n
+                            ]
+                            logger.info(
+                                "NAM debug sample: precip_type=%s, slr=%s, t2m_f=%s, t2m_c=%s, rain_prob=%s, snow_prob=%s, frz_prob=%s, ice_prob=%s",
+                                pt,
+                                slr_sample,
+                                t2m_f,
+                                t2m_c,
+                                rp,
+                                sp,
+                                frp,
+                                ipp,
+                            )
+                        except Exception as debug_exc:
+                            logger.warning(f"NAM debug snapshot failed: {debug_exc}")
                 except Exception as e:
                     logger.warning(f"Failed to classify precip types: {e}")
+
+            # Safety fallback: if precip_type still missing/empty, derive from surface temps per hour
+            if data and data.get("hourly") and not data["hourly"].get("precip_type"):
+                try:
+                    temps2m = data["hourly"].get("temperature_2m") or []
+                    num_hours = len(data["hourly"].get("time", []))
+                    precip_types: list[str] = []
+                    slrs: list[float] = []
+
+                    def f_to_c_safe(v):
+                        try:
+                            return (float(v) - 32.0) * (5.0 / 9.0)
+                        except Exception:
+                            return None
+
+                    for temp_f in temps2m:
+                        temp_c = f_to_c_safe(temp_f)
+                        if temp_c is not None and temp_c <= 0.0:
+                            precip_types.append("snow")
+                            # keep same SLR scaling as surface fallback
+                            if temp_c <= -10.0:
+                                slrs.append(12.0)
+                            elif temp_c <= -5.0:
+                                slrs.append(10.0)
+                            else:
+                                slrs.append(8.0)
+                        else:
+                            precip_types.append("rain")
+                            slrs.append(1.0)
+
+                    while len(precip_types) < num_hours:
+                        precip_types.append("rain")
+                        slrs.append(1.0)
+
+                    data["hourly"]["precip_type"] = precip_types[:num_hours]
+                    data["hourly"]["snow_liquid_ratio"] = slrs[:num_hours]
+                    logger.info(
+                        "Safety fallback applied: precip_type derived from surface temps (%s hours)",
+                        len(precip_types[:num_hours]),
+                    )
+                except Exception as fallback_exc:
+                    logger.warning(
+                        f"Safety fallback failed to set precip_type: {fallback_exc}"
+                    )
+
+            # Derive cycle from run_time if not provided (snap to prior 6-hour boundary)
+            if run_time and not cycle:
+                try:
+                    cycle_hour = (run_time.hour // 6) * 6
+                    cycle = f"{cycle_hour:02d}Z"
+                    data["cycle"] = cycle
+                    logger.info(f"Derived cycle from run_time: {cycle}")
+                except Exception as cycle_exc:
+                    logger.warning(f"Failed to derive cycle from run_time: {cycle_exc}")
 
         # Cache the final data with all derived fields
         if data and cache_key:
