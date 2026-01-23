@@ -1,5 +1,5 @@
 function replaceDocument(docString) {
-  var doc = document.open("text/html");
+  var doc = document.open('text/html');
 
   doc.write(docString);
   doc.close();
@@ -7,7 +7,7 @@ function replaceDocument(docString) {
   if (window.djdt) {
     // If Django Debug Toolbar is available, reinitialize it so that
     // it can show updated panels from new `docString`.
-    window.addEventListener("load", djdt.init);
+    window.addEventListener('load', djdt.init);
   }
 }
 
@@ -17,7 +17,8 @@ function doAjaxSubmit(e) {
   var method = (
     btn.data('method') ||
     form.data('method') ||
-    form.attr('method') || 'GET'
+    form.attr('method') ||
+    'GET'
   ).toUpperCase();
 
   if (method === 'GET') {
@@ -42,7 +43,7 @@ function doAjaxSubmit(e) {
   var data;
 
   if (contentType) {
-    data = form.find('[data-override="content"]').val() || ''
+    data = form.find('[data-override="content"]').val() || '';
 
     if (contentType === 'multipart/form-data') {
       // We need to add a boundary parameter to the header
@@ -50,7 +51,10 @@ function doAjaxSubmit(e) {
       // regex is from RFC 2046 appendix A
       var boundaryCharNoSpace = "0-9A-Z'()+_,-./:=?";
       var boundaryChar = boundaryCharNoSpace + ' ';
-      var re = new RegExp('^--([' + boundaryChar + ']{0,69}[' + boundaryCharNoSpace + '])[\\s]*?$', 'im');
+      var re = new RegExp(
+        '^--([' + boundaryChar + ']{0,69}[' + boundaryCharNoSpace + '])[\\s]*?$',
+        'im'
+      );
       var boundary = data.match(re);
       if (boundary !== null) {
         contentType += '; boundary="' + boundary[1] + '"';
@@ -59,7 +63,7 @@ function doAjaxSubmit(e) {
       data = data.replace(/\n/g, '\r\n');
     }
   } else {
-    contentType = form.attr('enctype') || form.attr('encoding')
+    contentType = form.attr('enctype') || form.attr('encoding');
 
     if (contentType === 'multipart/form-data') {
       if (!window.FormData) {
@@ -73,7 +77,7 @@ function doAjaxSubmit(e) {
       contentType = false;
       data = new FormData(form[0]);
     } else {
-      contentType = 'application/x-www-form-urlencoded; charset=UTF-8'
+      contentType = 'application/x-www-form-urlencoded; charset=UTF-8';
       data = form.serialize();
     }
   }
@@ -85,16 +89,16 @@ function doAjaxSubmit(e) {
     contentType: contentType,
     processData: false,
     headers: {
-      'Accept': 'text/html; q=1.0, */*'
+      Accept: 'text/html; q=1.0, */*',
     },
   });
 
-  ret.always(function(data, textStatus, jqXHR) {
+  ret.always(function (data, textStatus, jqXHR) {
     if (textStatus != 'success') {
       jqXHR = data;
     }
 
-    var responseContentType = jqXHR.getResponseHeader("content-type") || "";
+    var responseContentType = jqXHR.getResponseHeader('content-type') || '';
 
     if (responseContentType.toLowerCase().indexOf('text/html') === 0) {
       replaceDocument(jqXHR.responseText);
@@ -123,11 +127,10 @@ function captureSubmittingElement(e) {
   form.clk = target;
 }
 
-$.fn.ajaxForm = function() {
-  var options = {}
+$.fn.ajaxForm = function () {
+  var options = {};
 
-  return this
-    .unbind('submit.form-plugin  click.form-plugin')
+  return this.unbind('submit.form-plugin  click.form-plugin')
     .bind('submit.form-plugin', options, doAjaxSubmit)
     .bind('click.form-plugin', options, captureSubmittingElement);
 };

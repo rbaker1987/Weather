@@ -548,7 +548,7 @@ Weather{% endblock %} {% block extra_css %}
       }
       // Update Total Frozen metric to match the chart line's final value
       document.getElementById('frozenTotal').textContent = (filteredCumulativeFrozen.length ? filteredCumulativeFrozen[filteredCumulativeFrozen.length-1] : 0).toFixed(2);
-      
+
       // Calculate individual frozen type accumulations
       const totalSnowDepth = filteredSnowDepths.reduce((a,b)=>a+b,0).toFixed(2);
       const totalSleetDepth = filteredSleetDepths.reduce((a,b)=>a+b,0).toFixed(2);
@@ -556,12 +556,12 @@ Weather{% endblock %} {% block extra_css %}
       document.getElementById('snowTotal').textContent = totalSnowDepth;
       document.getElementById('sleetTotal').textContent = totalSleetDepth;
       document.getElementById('freezingRainTotal').textContent = totalFreezingRainDepth;
-      
+
       // Calculate total liquid from filtered data to match displayed bars
       const totalLiquid = (
-        filteredSnow.reduce((a,b)=>a+b,0) + 
-        filteredFreezingRain.reduce((a,b)=>a+b,0) + 
-        filteredSleet.reduce((a,b)=>a+b,0) + 
+        filteredSnow.reduce((a,b)=>a+b,0) +
+        filteredFreezingRain.reduce((a,b)=>a+b,0) +
+        filteredSleet.reduce((a,b)=>a+b,0) +
         filteredRain.reduce((a,b)=>a+b,0)
       ).toFixed(2);
       document.getElementById('liquidTotal').textContent = totalLiquid;

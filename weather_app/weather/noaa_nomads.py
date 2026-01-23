@@ -264,7 +264,7 @@ def _decode_point(
     t550 = _extract_at_level(["t"], 550)
     t525 = _extract_at_level(["t"], 525)
     t500 = _extract_at_level(["t"], 500)
-    
+
     r925 = _extract_at_level(["r"], 925)
     r850 = _extract_at_level(["r"], 850)
     r700 = _extract_at_level(["r"], 700)

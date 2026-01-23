@@ -1,24 +1,24 @@
-$(document).ready(function() {
+$(document).ready(function () {
   // JSON highlighting.
   prettyPrint();
 
   // Bootstrap tooltips.
   $('.js-tooltip').tooltip({
     delay: 1000,
-    container: 'body'
+    container: 'body',
   });
 
   // Deal with rounded tab styling after tab clicks.
-  $('a[data-toggle="tab"]:first').on('shown', function(e) {
+  $('a[data-toggle="tab"]:first').on('shown', function (e) {
     $(e.target).parents('.tabbable').addClass('first-tab-active');
   });
 
-  $('a[data-toggle="tab"]:not(:first)').on('shown', function(e) {
+  $('a[data-toggle="tab"]:not(:first)').on('shown', function (e) {
     $(e.target).parents('.tabbable').removeClass('first-tab-active');
   });
 
-  $('a[data-toggle="tab"]').click(function() {
-    document.cookie = "tabstyle=" + this.name + "; path=/";
+  $('a[data-toggle="tab"]').click(function () {
+    document.cookie = 'tabstyle=' + this.name + '; path=/';
   });
 
   // Store tab preference in cookies & display appropriate tab on load.
@@ -41,7 +41,7 @@ $(document).ready(function() {
     $('.form-switcher a:first').tab('show');
   }
 
-  $(window).on('load', function() {
+  $(window).on('load', function () {
     $('#errorModal').modal('show');
   });
 });

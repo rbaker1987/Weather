@@ -2015,7 +2015,9 @@ class ModelDetailView(TemplateView):
 
         freeze_c = 0.0
         surface_slush_c = 2.0  # 2°C threshold for wet snow
-        warm_nose_min_c = 1.0  # warm nose by definition is where temp is > 1°C (strictly greater)
+        warm_nose_min_c = (
+            1.0  # warm nose by definition is where temp is > 1°C (strictly greater)
+        )
 
         # Helper: Fahrenheit to Celsius for SLR/dendritic logic
         def f_to_c(v: float | None) -> float | None:
@@ -2035,8 +2037,10 @@ class ModelDetailView(TemplateView):
 
             # Check for strong dendritic conditions: optimal DGZ temp + cold surface
             strong_dendritic = (
-                dendritic_c is not None and -16 <= dendritic_c <= -11 and
-                ts is not None and ts < -2.0
+                dendritic_c is not None
+                and -16 <= dendritic_c <= -11
+                and ts is not None
+                and ts < -2.0
             )
 
             if warmest_c is not None:
@@ -2064,7 +2068,9 @@ class ModelDetailView(TemplateView):
             # Compute DGZ thickness between -18°C and -12°C using a 5 hPa grid
             dgz_thickness = 0.0
             try:
-                profile_sorted = sorted(profile_levels, key=lambda x: x[0], reverse=True)
+                profile_sorted = sorted(
+                    profile_levels, key=lambda x: x[0], reverse=True
+                )
 
                 def interp_temp_local(p_target: float) -> float | None:
                     for idx in range(len(profile_sorted) - 1):
@@ -2107,7 +2113,6 @@ class ModelDetailView(TemplateView):
             # Clamp to reasonable bounds
             slr_calc = max(6.0, min(35.0, slr_calc))
             return slr_calc
-
 
         types: list[str] = []
         slrs: list[float] = []
@@ -2162,10 +2167,25 @@ class ModelDetailView(TemplateView):
             # If 550 hPa not available, interpolate from nearby levels
             if t550v is None:
                 available_temps = [
-                    (975, t975v), (950, t950v), (925, t925v), (900, t900v), (875, t875v),
-                    (850, t850v), (825, t825v), (800, t800v), (775, t775v), (750, t750v),
-                    (725, t725v), (700, t700v), (675, t675v), (650, t650v), (625, t625v),
-                    (600, t600v), (575, t575v), (525, t525v), (500, t500v)
+                    (975, t975v),
+                    (950, t950v),
+                    (925, t925v),
+                    (900, t900v),
+                    (875, t875v),
+                    (850, t850v),
+                    (825, t825v),
+                    (800, t800v),
+                    (775, t775v),
+                    (750, t750v),
+                    (725, t725v),
+                    (700, t700v),
+                    (675, t675v),
+                    (650, t650v),
+                    (625, t625v),
+                    (600, t600v),
+                    (575, t575v),
+                    (525, t525v),
+                    (500, t500v),
                 ]
                 available_temps = [(p, t) for p, t in available_temps if t is not None]
                 if available_temps:
@@ -2298,7 +2318,9 @@ class ModelDetailView(TemplateView):
 
             grid_temps = [interp_temp_helper(profile_sorted, p) for p in grid_pressures]
 
-            warm_indices = [i for i, t in enumerate(grid_temps) if t is not None and t > freeze_c]
+            warm_indices = [
+                i for i, t in enumerate(grid_temps) if t is not None and t > freeze_c
+            ]
             if not warm_indices:
                 ptype = "snow"
                 slr = snow_slr(dendritic_c, ts, warmest_c, profile_levels)
@@ -2365,16 +2387,24 @@ class ModelDetailView(TemplateView):
 
                 # Track extremes in warm band (above freeze)
                 if min(p1, p2) < warm_band_bottom:  # within warm band
-                    if t1 > freeze_c and (warmest_in_warm_nose is None or t1 > warmest_in_warm_nose):
+                    if t1 > freeze_c and (
+                        warmest_in_warm_nose is None or t1 > warmest_in_warm_nose
+                    ):
                         warmest_in_warm_nose = t1
-                    if t2 > freeze_c and (warmest_in_warm_nose is None or t2 > warmest_in_warm_nose):
+                    if t2 > freeze_c and (
+                        warmest_in_warm_nose is None or t2 > warmest_in_warm_nose
+                    ):
                         warmest_in_warm_nose = t2
 
                 # Track extremes in cold layer (below warm band, below freeze)
                 if min(p1, p2) >= warm_band_bottom:
-                    if t1 <= freeze_c and (coldest_in_cold_layer is None or t1 < coldest_in_cold_layer):
+                    if t1 <= freeze_c and (
+                        coldest_in_cold_layer is None or t1 < coldest_in_cold_layer
+                    ):
                         coldest_in_cold_layer = t1
-                    if t2 <= freeze_c and (coldest_in_cold_layer is None or t2 < coldest_in_cold_layer):
+                    if t2 <= freeze_c and (
+                        coldest_in_cold_layer is None or t2 < coldest_in_cold_layer
+                    ):
                         coldest_in_cold_layer = t2
 
             # Hybrid classification: area-based + temperature-based
@@ -2400,10 +2430,20 @@ class ModelDetailView(TemplateView):
 
             # Second: if cold layer is very weak (> -6°C / 21°F) or thick but marginal (>50mb but warmer than -5°C), promote to freezing rain
             # BUT: only if there's no thick cold section (already checked above)
-            if ptype == "sleet" and coldest_in_cold_layer is not None and not has_thick_cold_section:
+            if (
+                ptype == "sleet"
+                and coldest_in_cold_layer is not None
+                and not has_thick_cold_section
+            ):
                 weak_cold_layer = coldest_in_cold_layer > -6.0
-                thick_but_marginal = cold_layer_depth_mb > 50.0 and coldest_in_cold_layer > -5.0
-                if (weak_cold_layer or thick_but_marginal) and warmest_in_warm_nose is not None and warmest_in_warm_nose > 1.0:
+                thick_but_marginal = (
+                    cold_layer_depth_mb > 50.0 and coldest_in_cold_layer > -5.0
+                )
+                if (
+                    (weak_cold_layer or thick_but_marginal)
+                    and warmest_in_warm_nose is not None
+                    and warmest_in_warm_nose > 1.0
+                ):
                     ptype = "freezing_rain"
                     slr = min(1.0, 2.0 / max(area_ratio_warm_to_cold, 0.5))
 
@@ -2447,14 +2487,14 @@ class ModelDetailView(TemplateView):
     def aggregate_precip_by_6hour(hourly: dict, times: list[str]) -> dict:
         """
         Aggregate hourly precipitation by type into 6-hour periods with actual accumulation.
-        
+
         Multiplies precipitation by SLR (from _classify_precip_types) to get actual depth accumulation.
         Uses type-based SLR defaults if SLR values missing.
-        
+
         Args:
             hourly: dict with keys like 'precipitation', 'precip_type', 'snow_liquid_ratio', 'time'
             times: list of ISO datetime strings (e.g., forecast period end times)
-        
+
         Returns:
             dict mapping each time to {'snow': X_mm, 'sleet': Y_mm, 'freezing_rain': Z_mm, 'rain': W_mm, 'total': T_mm}
             where values are actual depth accumulation (precip_mm × SLR)
@@ -2471,10 +2511,10 @@ class ModelDetailView(TemplateView):
 
         # SLR defaults by precip type (from _classify_precip_types logic)
         default_slr = {
-            "snow": 10.0,          # 10:1 snow
-            "sleet": 2.5,          # 2.5:1 sleet
-            "freezing_rain": 0.35, # 0.35:1 freezing rain
-            "rain": 1.0            # Rain is 1:1 by definition
+            "snow": 10.0,  # 10:1 snow
+            "sleet": 2.5,  # 2.5:1 sleet
+            "freezing_rain": 0.35,  # 0.35:1 freezing rain
+            "rain": 1.0,  # Rain is 1:1 by definition
         }
 
         aggregated = {}
@@ -2482,7 +2522,7 @@ class ModelDetailView(TemplateView):
         for time_str in times:
             try:
                 # Parse the target forecast time
-                target_time = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+                target_time = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
                 continue
 
@@ -2495,17 +2535,26 @@ class ModelDetailView(TemplateView):
 
             for i, hour_time_str in enumerate(times_list):
                 try:
-                    hour_time = datetime.fromisoformat(hour_time_str.replace('Z', '+00:00'))
+                    hour_time = datetime.fromisoformat(
+                        hour_time_str.replace("Z", "+00:00")
+                    )
                 except (ValueError, AttributeError):
                     continue
 
                 # Include hours from target_time - 6 hours to target_time (inclusive of target)
-                if hour_time <= target_time and (target_time - hour_time).total_seconds() < 21600:  # 6 hours in seconds
+                if (
+                    hour_time <= target_time
+                    and (target_time - hour_time).total_seconds() < 21600
+                ):  # 6 hours in seconds
                     precip_val = precips[i] if i < len(precips) else 0.0
                     precip_type = precip_types[i] if i < len(precip_types) else "rain"
 
                     # Use calculated SLR from _classify_precip_types, or default by type
-                    slr = slrs[i] if i < len(slrs) and slrs[i] > 0 else default_slr.get(precip_type, 1.0)
+                    slr = (
+                        slrs[i]
+                        if i < len(slrs) and slrs[i] > 0
+                        else default_slr.get(precip_type, 1.0)
+                    )
 
                     if precip_val and precip_val > 0:
                         # Multiply by SLR to get actual accumulation depth
@@ -2526,7 +2575,7 @@ class ModelDetailView(TemplateView):
                 "sleet": round(sleet_total, 2),
                 "freezing_rain": round(freezing_rain_total, 2),
                 "rain": round(rain_total, 2),
-                "total": round(total, 2)
+                "total": round(total, 2),
             }
 
         return aggregated
