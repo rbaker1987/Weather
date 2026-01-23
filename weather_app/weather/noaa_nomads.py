@@ -243,11 +243,28 @@ def _decode_point(
     v10 = _extract_at_height(["v"], 10)
     gust10 = _extract_at_height(["gust"], 10)
 
-    # Pressure levels
+    # Pressure levels - extract all levels from 975 to 500 hPa needed for precip classification
+    t975 = _extract_at_level(["t"], 975)
+    t950 = _extract_at_level(["t"], 950)
     t925 = _extract_at_level(["t"], 925)
+    t900 = _extract_at_level(["t"], 900)
+    t875 = _extract_at_level(["t"], 875)
     t850 = _extract_at_level(["t"], 850)
+    t825 = _extract_at_level(["t"], 825)
+    t800 = _extract_at_level(["t"], 800)
+    t775 = _extract_at_level(["t"], 775)
+    t750 = _extract_at_level(["t"], 750)
+    t725 = _extract_at_level(["t"], 725)
     t700 = _extract_at_level(["t"], 700)
+    t675 = _extract_at_level(["t"], 675)
+    t650 = _extract_at_level(["t"], 650)
+    t625 = _extract_at_level(["t"], 625)
+    t600 = _extract_at_level(["t"], 600)
+    t575 = _extract_at_level(["t"], 575)
+    t550 = _extract_at_level(["t"], 550)
+    t525 = _extract_at_level(["t"], 525)
     t500 = _extract_at_level(["t"], 500)
+    
     r925 = _extract_at_level(["r"], 925)
     r850 = _extract_at_level(["r"], 850)
     r700 = _extract_at_level(["r"], 700)
@@ -260,9 +277,25 @@ def _decode_point(
     return {
         "time": time_vals,
         "temperature_2m": t2m,
+        "temperature_975hPa": t975,
+        "temperature_950hPa": t950,
         "temperature_925hPa": t925,
+        "temperature_900hPa": t900,
+        "temperature_875hPa": t875,
         "temperature_850hPa": t850,
+        "temperature_825hPa": t825,
+        "temperature_800hPa": t800,
+        "temperature_775hPa": t775,
+        "temperature_750hPa": t750,
+        "temperature_725hPa": t725,
         "temperature_700hPa": t700,
+        "temperature_675hPa": t675,
+        "temperature_650hPa": t650,
+        "temperature_625hPa": t625,
+        "temperature_600hPa": t600,
+        "temperature_575hPa": t575,
+        "temperature_550hPa": t550,
+        "temperature_525hPa": t525,
         "temperature_500hPa": t500,
         "relativehumidity_2m": r2m,
         "relativehumidity_925hPa": r925,

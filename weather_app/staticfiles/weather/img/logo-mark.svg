@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" role="img" aria-label="Ralph's Weather">
+  <defs>
+    <style>
+      .logo-text { 
+        font-family: 'Impact', 'Arial Black', sans-serif; 
+        fill: #ffffff; 
+        font-weight: 900;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+      .lightning { fill: #FFD700; stroke: #FFA500; stroke-width: 1.5; stroke-linejoin: miter; }
+    </style>
+  </defs>
+  
+  <!-- Text horizontally arranged -->
+  <text class="logo-text" font-size="20" x="5" y="28">Ralph's</text>
+  
+  <!-- Second lightning bolt as shadow accent (now on right) -->
+  <path d="M 102,10 L 92,22 L 102,22 L 92,34 Z" fill="#FFD700" opacity="0.4" stroke="#FFA500" stroke-width="1"/>
+  
+  <!-- Main lightning bolt between the words (centered, now on left) -->
+  <path class="lightning" d="M 97,8 L 87,20 L 97,20 L 87,32 Z"/>
+  
+  <text class="logo-text" font-size="20" x="105" y="28">Weather</text>
+</svg>
