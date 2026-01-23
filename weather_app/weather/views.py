@@ -2273,7 +2273,9 @@ class ModelDetailView(TemplateView):
             # Build a finely interpolated profile (5 hPa spacing) to integrate warm vs cold area
             profile_sorted = sorted(profile_levels, key=lambda x: x[0], reverse=True)
 
-            def interp_temp(p_target: float) -> float:
+            def interp_temp_helper(
+                profile_sorted: list[tuple[float, float]], p_target: float
+            ) -> float:
                 for idx in range(len(profile_sorted) - 1):
                     p1, t1 = profile_sorted[idx]
                     p2, t2 = profile_sorted[idx + 1]
@@ -2294,7 +2296,7 @@ class ModelDetailView(TemplateView):
                 p_cursor -= step_hpa
             grid_pressures.append(min_p)
 
-            grid_temps = [interp_temp(p) for p in grid_pressures]
+            grid_temps = [interp_temp_helper(profile_sorted, p) for p in grid_pressures]
 
             warm_indices = [i for i, t in enumerate(grid_temps) if t is not None and t > freeze_c]
             if not warm_indices:
