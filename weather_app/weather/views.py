@@ -2027,7 +2027,7 @@ class ModelDetailView(TemplateView):
         slrs: list[float] = []
 
         for i in range(n):
-            sf = val(snowfall, i)
+            # snowfall value (sf) not needed - using inferred classification
             ts_f = val(temps, i)
             t975v_f = val(t975, i)
             t950v_f = val(t950, i)
@@ -2172,13 +2172,13 @@ class ModelDetailView(TemplateView):
             def snow_slr() -> float:
                 # Base SLR logic: if good dendritic zone and cold surface, use higher base despite warm mid-layer
                 base_slr = 12.0  # default
-                
+
                 # Check for strong dendritic conditions: optimal DGZ temp + cold surface
                 strong_dendritic = (
                     dendritic_c is not None and -16 <= dendritic_c <= -11 and
                     ts is not None and ts < -2.0
                 )
-                
+
                 if warmest_c is not None:
                     if warmest_c < -18:
                         base_slr = 30.0
@@ -2331,7 +2331,7 @@ class ModelDetailView(TemplateView):
 
             # Track continuous cold sections for refreeze potential
             current_cold_depth = 0.0
-            
+
             for idx in range(len(grid_pressures) - 1):
                 p1 = grid_pressures[idx]
                 p2 = grid_pressures[idx + 1]
@@ -2345,7 +2345,7 @@ class ModelDetailView(TemplateView):
                 if min(p1, p2) >= warm_band_bottom:
                     cold_area_total += c_area
                     cold_layer_depth_mb += dp
-                    
+
                     # Track continuous sections colder than -5°C for refreeze potential
                     if t1 < -5.0 and t2 < -5.0:
                         current_cold_depth += dp
@@ -2353,14 +2353,14 @@ class ModelDetailView(TemplateView):
                             has_thick_cold_section = True
                     else:
                         current_cold_depth = 0.0
-                
+
                 # Track extremes in warm band (above freeze)
                 if min(p1, p2) < warm_band_bottom:  # within warm band
                     if t1 > freeze_c and (warmest_in_warm_nose is None or t1 > warmest_in_warm_nose):
                         warmest_in_warm_nose = t1
                     if t2 > freeze_c and (warmest_in_warm_nose is None or t2 > warmest_in_warm_nose):
                         warmest_in_warm_nose = t2
-                
+
                 # Track extremes in cold layer (below warm band, below freeze)
                 if min(p1, p2) >= warm_band_bottom:
                     if t1 <= freeze_c and (coldest_in_cold_layer is None or t1 < coldest_in_cold_layer):
@@ -2371,10 +2371,10 @@ class ModelDetailView(TemplateView):
             # Hybrid classification: area-based + temperature-based
             # Thresholds: warm nose needs to be somewhat strong to produce freezing rain
             # Cold layer needs to be moderately cold to refreeze sleet
-            
+
             area_ratio_cold_to_warm = cold_area_total / max(warm_area_total, 1.0)
             area_ratio_warm_to_cold = warm_area_total / max(cold_area_total, 1.0)
-            
+
             # Default to area-based decision
             if warm_area_total > cold_area_total:
                 ptype = "freezing_rain"
@@ -2382,13 +2382,13 @@ class ModelDetailView(TemplateView):
             else:
                 ptype = "sleet"
                 slr = 1.5 + min(area_ratio_cold_to_warm, 2.5)
-            
+
             # Refine with temperature logic
             # First: if there's a thick cold section (>50mb of <-5°C), demote freezing rain to sleet (sufficient refreeze)
             if ptype == "freezing_rain" and has_thick_cold_section:
                 ptype = "sleet"
                 slr = 1.5 + min(area_ratio_cold_to_warm, 2.5)
-            
+
             # Second: if cold layer is very weak (> -6°C / 21°F) or thick but marginal (>50mb but warmer than -5°C), promote to freezing rain
             # BUT: only if there's no thick cold section (already checked above)
             if ptype == "sleet" and coldest_in_cold_layer is not None and not has_thick_cold_section:
@@ -2397,7 +2397,7 @@ class ModelDetailView(TemplateView):
                 if (weak_cold_layer or thick_but_marginal) and warmest_in_warm_nose is not None and warmest_in_warm_nose > 1.0:
                     ptype = "freezing_rain"
                     slr = min(1.0, 2.0 / max(area_ratio_warm_to_cold, 0.5))
-            
+
             # Refine SLR scaling with temperature extremes
             if ptype == "freezing_rain" and warmest_in_warm_nose is not None:
                 # Sliding scale for liquid fraction (SLR) between 0.2:1 (very wet) and 1.0:1 (cold/freezing mix)
@@ -2410,7 +2410,7 @@ class ModelDetailView(TemplateView):
                     # Linear interpolation from 1.0 at 1°C down to 0.2 at 6°C
                     frac = (warmest_in_warm_nose - 1.0) / (6.0 - 1.0)
                     slr = max(0.2, min(1.0, 1.0 - frac * (1.0 - 0.2)))
-                
+
                 # Boost SLR if there's a strong refreezing layer below despite warm mid-layer
                 # More refreezing → higher SLR (thicker accretion)
                 if coldest_in_cold_layer is not None:
@@ -2418,7 +2418,7 @@ class ModelDetailView(TemplateView):
                         slr = min(1.0, slr * 1.5)  # strong refreezing boost
                     elif coldest_in_cold_layer < -5.0:
                         slr = min(1.0, slr * 1.25)  # moderate refreezing boost
-            
+
             if ptype == "sleet" and coldest_in_cold_layer is not None:
                 # Colder cold layer → more complete refreezing → higher SLR (drier sleet)
                 # Warmer cold layer → incomplete refreezing → lower SLR (wetter sleet)
@@ -2454,12 +2454,12 @@ class ModelDetailView(TemplateView):
         precip_types = hourly.get("precip_type") or []
         slrs = hourly.get("snow_liquid_ratio") or []
         times_list = hourly.get("time") or []
-        
+
         if not precips or not times or not precip_types:
             return {}
-        
+
         from datetime import datetime
-        
+
         # SLR defaults by precip type (from _classify_precip_types logic)
         default_slr = {
             "snow": 10.0,          # 10:1 snow
@@ -2467,41 +2467,41 @@ class ModelDetailView(TemplateView):
             "freezing_rain": 0.35, # 0.35:1 freezing rain
             "rain": 1.0            # Rain is 1:1 by definition
         }
-        
+
         aggregated = {}
-        
+
         for time_str in times:
             try:
                 # Parse the target forecast time
                 target_time = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
             except (ValueError, AttributeError):
                 continue
-            
+
             # Sum precip by type for the 6 hours LEADING UP TO this time
             # Multiply each hour by its calculated SLR to get actual accumulation depth
             snow_total = 0.0
             sleet_total = 0.0
             freezing_rain_total = 0.0
             rain_total = 0.0
-            
+
             for i, hour_time_str in enumerate(times_list):
                 try:
                     hour_time = datetime.fromisoformat(hour_time_str.replace('Z', '+00:00'))
                 except (ValueError, AttributeError):
                     continue
-                
+
                 # Include hours from target_time - 6 hours to target_time (inclusive of target)
                 if hour_time <= target_time and (target_time - hour_time).total_seconds() < 21600:  # 6 hours in seconds
                     precip_val = precips[i] if i < len(precips) else 0.0
                     precip_type = precip_types[i] if i < len(precip_types) else "rain"
-                    
+
                     # Use calculated SLR from _classify_precip_types, or default by type
                     slr = slrs[i] if i < len(slrs) and slrs[i] > 0 else default_slr.get(precip_type, 1.0)
-                    
+
                     if precip_val and precip_val > 0:
                         # Multiply by SLR to get actual accumulation depth
                         actual_accumulation = precip_val * slr
-                        
+
                         if precip_type == "snow":
                             snow_total += actual_accumulation
                         elif precip_type == "sleet":
@@ -2510,7 +2510,7 @@ class ModelDetailView(TemplateView):
                             freezing_rain_total += actual_accumulation
                         else:  # rain or unknown
                             rain_total += actual_accumulation
-            
+
             total = snow_total + sleet_total + freezing_rain_total + rain_total
             aggregated[time_str] = {
                 "snow": round(snow_total, 2),
@@ -2519,7 +2519,7 @@ class ModelDetailView(TemplateView):
                 "rain": round(rain_total, 2),
                 "total": round(total, 2)
             }
-        
+
         return aggregated
 
     def get_context_data(self, **kwargs):
