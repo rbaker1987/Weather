@@ -510,38 +510,45 @@ async function fetchModelDataForDate(dayIndex, localDay) {
                 if (model.data && model.data.hourly && !model.skipped) {
                     const temps = model.data.hourly.temperature_2m || [];
                     const precips = model.data.hourly.precipitation || [];
+                    const precipTypes = model.data.hourly.precip_type || [];  // Now populated server-side
+                    const slrs = model.data.hourly.snow_liquid_ratio || [];
                     chartData[model.name] = {};
 
-                    console.log(`${model.name}: ${temps.length} temperatures, ${precips.length} precip values`);
-                    console.log(`  Precips sample:`, precips.slice(0, 5));
+                    console.log(`${model.name}: ${temps.length} temperatures, ${precips.length} precip values, ${precipTypes.length} precip types`);
 
                     for (const timeObj of times) {
                         // Find index by calculating hours from forecast start
                         const hoursFromStart = (timeObj.utcTimeSeconds - forecastStartTime) / 3600;
                         const index = Math.round(hoursFromStart);
 
-                        console.log(`  ${timeObj.utcLabel}: hoursFromStart=${hoursFromStart}, index=${index}`);
-
                         if (index >= 0 && index < temps.length && temps[index] !== null && temps[index] !== undefined) {
                             const temp = Math.round(temps[index]);
 
-                            // Sum hourly precipitation for the 6 hours leading up to this forecast time
-                            let totalPrecip = 0;
+                            // Sum precipitation by type for the 6 hours leading up to this forecast time
+                            let snowLiq = 0, sleetLiq = 0, freezingRainLiq = 0, rainLiq = 0;
                             for (let i = Math.max(0, index - 5); i <= index; i++) {
-                                if (precips[i] !== null && precips[i] !== undefined) {
-                                    totalPrecip += precips[i];
+                                if (precips[i] !== null && precips[i] !== undefined && precips[i] > 0) {
+                                    const ptype = precipTypes[i] || 'rain';  // Use server-classified type
+                                    const pval = precips[i];
+                                    
+                                    if (ptype === 'snow') snowLiq += pval;
+                                    else if (ptype === 'sleet') sleetLiq += pval;
+                                    else if (ptype === 'freezing_rain') freezingRainLiq += pval;
+                                    else rainLiq += pval;
                                 }
                             }
 
                             chartData[model.name][timeObj.utcLabel] = {
                                 temp: temp,
-                                precip: totalPrecip
+                                totalPrecip: snowLiq + sleetLiq + freezingRainLiq + rainLiq,
+                                snow: snowLiq,
+                                sleet: sleetLiq,
+                                freezingRain: freezingRainLiq,
+                                rain: rainLiq
                             };
                             allTemps.push(temps[index]);
-                            console.log(`    -> Found temp: ${temps[index]}°C -> ${temp}°F, precip (6hr sum): ${totalPrecip}mm -> ${(totalPrecip / 25.4).toFixed(2)}"`);
                         } else {
                             chartData[model.name][timeObj.utcLabel] = null;
-                            console.log(`    -> No data (index out of range or null)`);
                         }
                     }
                 }
@@ -597,8 +604,18 @@ function createModelDataTable(dayId, chartData, times) {
         for (const time of times) {
             const data = chartData[model][time.utcLabel];
             if (data !== null && data !== undefined) {
-                const precipInches = (data.precip / 25.4).toFixed(2);
-                const precipStr = data.precip > 0 ? `<div style="font-size: 0.8em; color: #0066cc;">${precipInches}"</div>` : '';
+                const snowIn = (data.snow / 25.4).toFixed(2);
+                const sleetIn = (data.sleet / 25.4).toFixed(2);
+                const freezingRainIn = (data.freezingRain / 25.4).toFixed(2);
+                const rainIn = (data.rain / 25.4).toFixed(2);
+                
+                let precipStr = '<div style="font-size: 0.75em; color: #0066cc;">';
+                if (parseFloat(snowIn) > 0) precipStr += `S:${snowIn}" `;
+                if (parseFloat(sleetIn) > 0) precipStr += `Sl:${sleetIn}" `;
+                if (parseFloat(freezingRainIn) > 0) precipStr += `FR:${freezingRainIn}" `;
+                if (parseFloat(rainIn) > 0) precipStr += `R:${rainIn}"`;
+                precipStr += '</div>';
+                
                 html += `<td class="temp-cell">${data.temp}°${precipStr}</td>`;
             } else {
                 html += `<td class="temp-cell">—</td>`;

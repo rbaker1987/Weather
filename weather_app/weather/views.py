@@ -2434,6 +2434,94 @@ class ModelDetailView(TemplateView):
 
         return types, slrs
 
+    @staticmethod
+    def aggregate_precip_by_6hour(hourly: dict, times: list[str]) -> dict:
+        """
+        Aggregate hourly precipitation by type into 6-hour periods with actual accumulation.
+        
+        Multiplies precipitation by SLR (from _classify_precip_types) to get actual depth accumulation.
+        Uses type-based SLR defaults if SLR values missing.
+        
+        Args:
+            hourly: dict with keys like 'precipitation', 'precip_type', 'snow_liquid_ratio', 'time'
+            times: list of ISO datetime strings (e.g., forecast period end times)
+        
+        Returns:
+            dict mapping each time to {'snow': X_mm, 'sleet': Y_mm, 'freezing_rain': Z_mm, 'rain': W_mm, 'total': T_mm}
+            where values are actual depth accumulation (precip_mm × SLR)
+        """
+        precips = hourly.get("precipitation") or []
+        precip_types = hourly.get("precip_type") or []
+        slrs = hourly.get("snow_liquid_ratio") or []
+        times_list = hourly.get("time") or []
+        
+        if not precips or not times or not precip_types:
+            return {}
+        
+        from datetime import datetime
+        
+        # SLR defaults by precip type (from _classify_precip_types logic)
+        default_slr = {
+            "snow": 10.0,          # 10:1 snow
+            "sleet": 2.5,          # 2.5:1 sleet
+            "freezing_rain": 0.35, # 0.35:1 freezing rain
+            "rain": 1.0            # Rain is 1:1 by definition
+        }
+        
+        aggregated = {}
+        
+        for time_str in times:
+            try:
+                # Parse the target forecast time
+                target_time = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
+                continue
+            
+            # Sum precip by type for the 6 hours LEADING UP TO this time
+            # Multiply each hour by its calculated SLR to get actual accumulation depth
+            snow_total = 0.0
+            sleet_total = 0.0
+            freezing_rain_total = 0.0
+            rain_total = 0.0
+            
+            for i, hour_time_str in enumerate(times_list):
+                try:
+                    hour_time = datetime.fromisoformat(hour_time_str.replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    continue
+                
+                # Include hours from target_time - 6 hours to target_time (inclusive of target)
+                if hour_time <= target_time and (target_time - hour_time).total_seconds() < 21600:  # 6 hours in seconds
+                    precip_val = precips[i] if i < len(precips) else 0.0
+                    precip_type = precip_types[i] if i < len(precip_types) else "rain"
+                    
+                    # Use calculated SLR from _classify_precip_types, or default by type
+                    slr = slrs[i] if i < len(slrs) and slrs[i] > 0 else default_slr.get(precip_type, 1.0)
+                    
+                    if precip_val and precip_val > 0:
+                        # Multiply by SLR to get actual accumulation depth
+                        actual_accumulation = precip_val * slr
+                        
+                        if precip_type == "snow":
+                            snow_total += actual_accumulation
+                        elif precip_type == "sleet":
+                            sleet_total += actual_accumulation
+                        elif precip_type == "freezing_rain":
+                            freezing_rain_total += actual_accumulation
+                        else:  # rain or unknown
+                            rain_total += actual_accumulation
+            
+            total = snow_total + sleet_total + freezing_rain_total + rain_total
+            aggregated[time_str] = {
+                "snow": round(snow_total, 2),
+                "sleet": round(sleet_total, 2),
+                "freezing_rain": round(freezing_rain_total, 2),
+                "rain": round(rain_total, 2),
+                "total": round(total, 2)
+            }
+        
+        return aggregated
+
     def get_context_data(self, **kwargs):
         import time
 

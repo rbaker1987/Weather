@@ -204,9 +204,52 @@ class ModelComparisonAPIView(APIView):
         # Fetch all model data
         try:
             results = self.fetch_all_models(models, lat, lon, forecast_days)
+            
+            # Apply precipitation classification to each model using simple temperature logic
+            for result in results:
+                if result.get("data") and result.get("data", {}).get("hourly"):
+                    hourly = result["data"]["hourly"]
+                    temps = hourly.get("temperature_2m", [])
+                    precips = hourly.get("precipitation", [])
+                    
+                    if temps and precips:
+                        precip_types = []
+                        slrs = []
+                        
+                        # Simple temperature-based classification for each hour
+                        for i in range(len(precips)):
+                            temp_f = temps[i] if i < len(temps) else None
+                            
+                            # Classify based on temperature
+                            if temp_f is not None:
+                                if temp_f < 28:  # -2.2°C
+                                    ptype = "snow"
+                                    slr = 15.0
+                                elif temp_f < 32:  # 0°C
+                                    ptype = "sleet"
+                                    slr = 2.0
+                                elif temp_f < 37:  # 2.8°C
+                                    ptype = "freezing_rain"
+                                    slr = 0.3
+                                else:
+                                    ptype = "rain"
+                                    slr = 1.0
+                            else:
+                                ptype = "rain"
+                                slr = 1.0
+                            
+                            precip_types.append(ptype)
+                            slrs.append(slr)
+                        
+                        # Add to hourly data
+                        result["data"]["hourly"]["precip_type"] = precip_types
+                        result["data"]["hourly"]["snow_liquid_ratio"] = slrs
+            
             return Response({"status": "success", "models": results})
         except Exception as e:
             logger.error(f"Error fetching model data: {e}")
+            import traceback
+            traceback.print_exc()
             return Response(
                 {"status": "error", "error": "Failed to fetch model data"}, status=500
             )
