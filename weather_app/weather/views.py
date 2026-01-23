@@ -2111,8 +2111,7 @@ class ModelDetailView(TemplateView):
 
             slr_calc = base_slr * dendritic_factor * dgz_factor * surface_factor
             # Clamp to reasonable bounds
-            slr_calc = max(6.0, min(35.0, slr_calc))
-            return slr_calc
+            return max(6.0, min(35.0, slr_calc))
 
         types: list[str] = []
         slrs: list[float] = []
@@ -2346,10 +2345,7 @@ class ModelDetailView(TemplateView):
                 elif t1 <= freeze_c and t2 <= freeze_c:
                     cold_area = (abs(t1 - freeze_c) + abs(t2 - freeze_c)) / 2.0 * dp
                 else:
-                    if t1 != t2:
-                        frac = (freeze_c - t1) / (t2 - t1)
-                    else:
-                        frac = 0.5
+                    frac = (freeze_c - t1) / (t2 - t1) if t1 != t2 else 0.5
                     dp1 = abs(dp * frac)
                     dp2 = abs(dp - dp1)
                     if t1 > freeze_c:
