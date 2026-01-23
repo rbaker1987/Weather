@@ -2254,12 +2254,6 @@ class ModelDetailView(TemplateView):
             # Dendritic growth zone temp (around 550 hPa)
             dendritic_c = t550v
 
-            # If both 925 and 850 are cold, force snow-favoring column
-            if (t925v is not None and t925v <= freeze_c) and (
-                t850v is not None and t850v <= freeze_c
-            ):
-                warmest_c = min(warmest_c, 0.0) if warmest_c is not None else warmest_c
-
             if ts is None:
                 types.append("unknown")
                 slrs.append(1.0)
@@ -2418,6 +2412,18 @@ class ModelDetailView(TemplateView):
                 ptype = "sleet"
                 slr = 1.5 + min(area_ratio_cold_to_warm, 2.5)
 
+            # Freezing rain requires surface at or below 0°C to freeze on contact
+            # If surface is too warm, demote to sleet (if cold layer exists) or rain
+            if ptype == "freezing_rain" and ts is not None and ts > 0.0:
+                if cold_area_total > 0 and cold_layer_depth_mb > 20.0:
+                    # Sufficient cold layer exists below warm nose - classify as sleet
+                    ptype = "sleet"
+                    slr = 1.5 + min(area_ratio_cold_to_warm, 2.5)
+                else:
+                    # No significant refreezing layer - just rain
+                    ptype = "rain"
+                    slr = 1.0
+
             # Refine with temperature logic
             # First: if there's a thick cold section (>50mb of <-5°C), demote freezing rain to sleet (sufficient refreeze)
             if ptype == "freezing_rain" and has_thick_cold_section:
@@ -2425,11 +2431,13 @@ class ModelDetailView(TemplateView):
                 slr = 1.5 + min(area_ratio_cold_to_warm, 2.5)
 
             # Second: if cold layer is very weak (> -6°C / 21°F) or thick but marginal (>50mb but warmer than -5°C), promote to freezing rain
-            # BUT: only if there's no thick cold section (already checked above)
+            # BUT: only if there's no thick cold section (already checked above) AND surface is cold enough (≤0°C)
             if (
                 ptype == "sleet"
                 and coldest_in_cold_layer is not None
                 and not has_thick_cold_section
+                and ts is not None
+                and ts <= 0.0  # Surface must be at or below 0°C for freezing rain
             ):
                 weak_cold_layer = coldest_in_cold_layer > -6.0
                 thick_but_marginal = (
@@ -2473,6 +2481,47 @@ class ModelDetailView(TemplateView):
                     slr = min(4.0, slr * 1.05)  # dry sleet
                 else:
                     slr = max(1.5, slr * 0.95)  # wet sleet
+
+            # Borderline sleet/snow transition: if warm layer is marginal, blend SLR toward snow
+            # Check if this is close to being snow (weak/shallow warm layer)
+            if ptype == "sleet" and warmest_in_warm_nose is not None:
+                # Borderline threshold: warm nose barely above freezing (1-3°C)
+                if 1.0 < warmest_in_warm_nose <= 3.0:
+                    # Calculate snow SLR for comparison
+                    snow_slr_value = snow_slr(
+                        dendritic_c, ts, warmest_c, profile_levels
+                    )
+                    # Blend factor: closer to 1°C = more snow-like, closer to 3°C = more sleet-like
+                    # Linear interpolation: at 1°C use 70% snow SLR, at 3°C use 0% snow SLR
+                    blend_factor = (
+                        3.0 - warmest_in_warm_nose
+                    ) / 2.0  # ranges 0.0 to 1.0
+                    blend_factor = max(0.0, min(0.7, blend_factor))  # clamp to 0-70%
+                    # Interpolate between current sleet SLR and snow SLR
+                    slr = slr * (1.0 - blend_factor) + snow_slr_value * blend_factor
+
+            # Borderline sleet/freezing rain transition: blend when area ratios are close
+            if ptype == "freezing_rain" and area_ratio_warm_to_cold < 1.5:
+                # Borderline: warm area only slightly dominates (ratio 1.0-1.5)
+                # Sleet SLR would be ~1.5-4.0, freezing rain SLR ~0.2-1.0
+                # Blend toward sleet as warm dominance decreases
+                sleet_slr = 1.5 + min(area_ratio_cold_to_warm, 2.5)
+                # At ratio 1.0 (equal areas): 50% sleet SLR, at 1.5: 0% sleet SLR
+                blend_factor = (
+                    1.5 - area_ratio_warm_to_cold
+                ) / 0.5  # ranges 0.0 to 1.0
+                blend_factor = max(0.0, min(0.5, blend_factor))  # clamp to 0-50%
+                slr = slr * (1.0 - blend_factor) + sleet_slr * blend_factor
+            elif ptype == "sleet" and area_ratio_cold_to_warm < 1.5:
+                # Borderline: cold area only slightly dominates (ratio 1.0-1.5)
+                # Blend toward freezing rain as cold dominance decreases
+                frzr_slr = min(1.0, 2.0 / area_ratio_warm_to_cold)
+                # At ratio 1.0 (equal areas): 50% freezing rain SLR, at 1.5: 0% freezing rain SLR
+                blend_factor = (
+                    1.5 - area_ratio_cold_to_warm
+                ) / 0.5  # ranges 0.0 to 1.0
+                blend_factor = max(0.0, min(0.5, blend_factor))  # clamp to 0-50%
+                slr = slr * (1.0 - blend_factor) + frzr_slr * blend_factor
 
             types.append(ptype)
             slrs.append(slr)
@@ -2648,13 +2697,32 @@ class ModelDetailView(TemplateView):
             except Exception:
                 lat_f = lat
                 lon_f = lon
-            cache_key = f"model_detail:{model_name}:{ensemble}:{lat_f}:{lon_f}:days:{forecast_days}"
+            cache_key = f"model_detail:v2:{model_name}:{ensemble}:{lat_f}:{lon_f}:days:{forecast_days}"
             cached = cache.get(cache_key)
             if cached is not None:
                 data = cached
                 # Extract metadata from cached data if present
                 model_source = data.get("model_source", "Open-Meteo")
                 cycle = data.get("cycle")
+                # Extract model run time from first forecast hour (hour 0 = initialization)
+                # Times from API are in local timezone, convert to UTC to get model cycle
+                if data.get("hourly", {}).get("time"):
+                    from datetime import timezone
+
+                    import pytz
+
+                    first_time = data["hourly"]["time"][0]
+                    # Parse the local time
+                    first_dt = datetime.fromisoformat(str(first_time).replace("Z", ""))
+                    # Get timezone from API response
+                    tz_str = data.get("timezone", "America/Chicago")
+                    local_tz = pytz.timezone(tz_str)
+                    # Localize to the proper timezone, then convert to UTC
+                    if first_dt.tzinfo is None:
+                        first_dt_local = local_tz.localize(first_dt)
+                    else:
+                        first_dt_local = first_dt
+                    run_time = first_dt_local.astimezone(timezone.utc)
                 logger.info(
                     f"ModelDetailView cache hit for {cache_key} (source={model_source}, cycle={cycle})"
                 )
@@ -2682,6 +2750,7 @@ class ModelDetailView(TemplateView):
                         logger.info(
                             f"NOMADS successful in {nomads_elapsed:.2f}s: {len(data.get('hourly', {}).get('time', []))} time points"
                         )
+                        # NOMADS returns UTC times, so run_time is already in UTC
                         if data.get("hourly", {}).get("time"):
                             first_time = data["hourly"]["time"][0]
                             run_time = datetime.fromisoformat(
@@ -2731,11 +2800,25 @@ class ModelDetailView(TemplateView):
                     # Inject metadata into data dict for caching
                     data["model_source"] = model_source
                     data["cycle"] = cycle
+                    # Extract model run time from first forecast hour (hour 0 = initialization)
+                    # Times from API are in local timezone, convert to UTC to get model cycle
                     if data.get("hourly", {}).get("time"):
+                        from datetime import timezone
+
+                        import pytz
+
                         first_time = data["hourly"]["time"][0]
-                        run_time = datetime.fromisoformat(
-                            first_time.replace("Z", "+00:00")
-                        )
+                        # Parse the local time
+                        first_dt = datetime.fromisoformat(first_time.replace("Z", ""))
+                        # Get timezone from API response
+                        tz_str = data.get("timezone", "America/Chicago")
+                        local_tz = pytz.timezone(tz_str)
+                        # Localize to the proper timezone, then convert to UTC
+                        if first_dt.tzinfo is None:
+                            first_dt_local = local_tz.localize(first_dt)
+                        else:
+                            first_dt_local = first_dt
+                        run_time = first_dt_local.astimezone(timezone.utc)
                     om_elapsed = time.time() - om_start
                     logger.info(f"Open-Meteo fetched in {om_elapsed:.2f}s")
                     # Cache will be set after precipitation classification
@@ -2801,11 +2884,21 @@ class ModelDetailView(TemplateView):
                     # Inject metadata into data dict for caching
                     data["model_source"] = model_source
                     data["cycle"] = cycle
+                    # Extract model run time from first forecast hour - convert local to UTC
                     if data.get("hourly", {}).get("time"):
+                        from datetime import timezone
+
+                        import pytz
+
                         first_time = data["hourly"]["time"][0]
-                        run_time = datetime.fromisoformat(
-                            first_time.replace("Z", "+00:00")
-                        )
+                        first_dt = datetime.fromisoformat(first_time.replace("Z", ""))
+                        tz_str = data.get("timezone", "America/Chicago")
+                        local_tz = pytz.timezone(tz_str)
+                        if first_dt.tzinfo is None:
+                            first_dt_local = local_tz.localize(first_dt)
+                        else:
+                            first_dt_local = first_dt
+                        run_time = first_dt_local.astimezone(timezone.utc)
                     om_elapsed = time.time() - om_start
                     logger.info(f"Open-Meteo {model_name} fetched in {om_elapsed:.2f}s")
                     # Cache will be set after precipitation classification
@@ -2863,16 +2956,38 @@ class ModelDetailView(TemplateView):
                 logger.warning(f"Failed to trim hourly data: {e}")
 
         # Derive precip phase (snow/sleet/freezing_rain/rain) and SLRs per hour
+        # NBM provides native probabilities but only liquid equivalent, use static default SLRs
+        # GFS/HRRR have both probabilities and temperature profiles, use dynamic classification
         if data and data.get("hourly"):
-            try:
-                precip_types, slrs = self._classify_precip_types(data["hourly"])
-                data["hourly"]["precip_type"] = precip_types
-                data["hourly"]["snow_liquid_ratio"] = slrs
+            if model_name == "NBM":
+                # NBM: apply static default SLRs for accumulation calculation
+                num_hours = len(data["hourly"].get("time", []))
+                default_slrs = {
+                    "snow": 10.0,  # Standard 10:1 snow ratio
+                    "sleet": 2.5,  # Ice pellets ~2.5:1
+                    "freezing_rain": 0.5,  # Freezing rain accretion ~0.5:1
+                    "rain": 1.0,  # Rain is 1:1
+                }
+                # Create a SLR array per precipitation type for frontend calculation
+                # Frontend will use default_slrs dict to look up correct ratio based on precip_type
+                data["hourly"]["snow_liquid_ratio"] = [
+                    1.0
+                ] * num_hours  # Placeholder, frontend uses default_slrs
+                data["hourly"]["default_slrs"] = default_slrs
                 logger.info(
-                    f"Derived precip_type and SLRs for {len(precip_types)} hours"
+                    f"Using static SLRs for NBM precipitation types: {default_slrs}"
                 )
-            except Exception as e:
-                logger.warning(f"Failed to classify precip types: {e}")
+            else:
+                # All other models: apply thermodynamic classification with dynamic SLRs
+                try:
+                    precip_types, slrs = self._classify_precip_types(data["hourly"])
+                    data["hourly"]["precip_type"] = precip_types
+                    data["hourly"]["snow_liquid_ratio"] = slrs
+                    logger.info(
+                        f"Derived precip_type and SLRs for {len(precip_types)} hours"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to classify precip types: {e}")
 
         # Cache the final data with all derived fields
         if data and cache_key:
