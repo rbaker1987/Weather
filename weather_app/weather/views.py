@@ -2023,6 +2023,92 @@ class ModelDetailView(TemplateView):
                 return None
             return (v - 32.0) * (5.0 / 9.0)
 
+        # Helper to estimate SLR for snow with DGZ thickness, dendritic factor, and surface adjustment
+        def snow_slr(
+            dendritic_c: float | None,
+            ts: float | None,
+            warmest_c: float | None,
+            profile_levels: list[tuple[float, float]],
+        ) -> float:
+            # Base SLR logic: if good dendritic zone and cold surface, use higher base despite warm mid-layer
+            base_slr = 12.0  # default
+
+            # Check for strong dendritic conditions: optimal DGZ temp + cold surface
+            strong_dendritic = (
+                dendritic_c is not None and -16 <= dendritic_c <= -11 and
+                ts is not None and ts < -2.0
+            )
+
+            if warmest_c is not None:
+                if warmest_c < -18:
+                    base_slr = 30.0
+                elif warmest_c < -12:
+                    base_slr = 22.0
+                elif warmest_c < -5:
+                    # If strong dendritic + cold surface, use 18 instead of 12
+                    base_slr = 18.0 if strong_dendritic else 12.0
+                else:
+                    # If strong dendritic + cold surface, use 12 instead of 8
+                    base_slr = 12.0 if strong_dendritic else 8.0
+
+            # Dendritic factor from ~550 hPa temp (multiplicative)
+            dendritic_factor = 1.0
+            if dendritic_c is not None:
+                if -16 <= dendritic_c <= -11:
+                    dendritic_factor = 1.10  # strong DGZ near optimal temp
+                elif (-20 <= dendritic_c < -16) or (-11 < dendritic_c <= -8):
+                    dendritic_factor = 1.07  # moderate
+                else:
+                    dendritic_factor = 1.03  # weak but present
+
+            # Compute DGZ thickness between -18°C and -12°C using a 5 hPa grid
+            dgz_thickness = 0.0
+            try:
+                profile_sorted = sorted(profile_levels, key=lambda x: x[0], reverse=True)
+
+                def interp_temp_local(p_target: float) -> float | None:
+                    for idx in range(len(profile_sorted) - 1):
+                        p1, t1 = profile_sorted[idx]
+                        p2, t2 = profile_sorted[idx + 1]
+                        if (p1 >= p_target >= p2) or (p2 >= p_target >= p1):
+                            if p1 == p2:
+                                return t1
+                            frac = (p_target - p2) / (p1 - p2)
+                            return t2 + (t1 - t2) * frac
+                    return profile_sorted[-1][1] if profile_sorted else None
+
+                if profile_sorted:
+                    max_p = max(p for p, _ in profile_sorted)
+                    min_p = min(p for p, _ in profile_sorted)
+                    step_hpa_local = 5.0
+                    p_cursor = max_p
+                    while p_cursor > min_p:
+                        p_next = max(p_cursor - step_hpa_local, min_p)
+                        p_mid = (p_cursor + p_next) / 2.0
+                        t_mid_c = interp_temp_local(p_mid)
+                        if t_mid_c is not None and -18.0 <= t_mid_c <= -12.0:
+                            dgz_thickness += abs(p_cursor - p_next)
+                        p_cursor = p_next
+            except Exception:
+                dgz_thickness = 0.0
+
+            # DGZ thickness factor: up to +25% boost for deep DGZ (cap at 150 hPa)
+            dgz_factor = 1.0 + min(dgz_thickness, 150.0) / 600.0
+
+            # Surface wet-snow penalty
+            surface_factor = 1.0
+            if ts is not None:
+                if ts >= 3.0:
+                    surface_factor = 0.75
+                elif ts >= -0.6:
+                    surface_factor = 0.90
+
+            slr_calc = base_slr * dendritic_factor * dgz_factor * surface_factor
+            # Clamp to reasonable bounds
+            slr_calc = max(6.0, min(35.0, slr_calc))
+            return slr_calc
+
+
         types: list[str] = []
         slrs: list[float] = []
 
@@ -2168,91 +2254,12 @@ class ModelDetailView(TemplateView):
             ptype = "unknown"
             slr = 1.0
 
-            # Helper to estimate SLR for snow with DGZ thickness, dendritic factor, and surface adjustment
-            def snow_slr() -> float:
-                # Base SLR logic: if good dendritic zone and cold surface, use higher base despite warm mid-layer
-                base_slr = 12.0  # default
-
-                # Check for strong dendritic conditions: optimal DGZ temp + cold surface
-                strong_dendritic = (
-                    dendritic_c is not None and -16 <= dendritic_c <= -11 and
-                    ts is not None and ts < -2.0
-                )
-
-                if warmest_c is not None:
-                    if warmest_c < -18:
-                        base_slr = 30.0
-                    elif warmest_c < -12:
-                        base_slr = 22.0
-                    elif warmest_c < -5:
-                        # If strong dendritic + cold surface, use 18 instead of 12
-                        base_slr = 18.0 if strong_dendritic else 12.0
-                    else:
-                        # If strong dendritic + cold surface, use 12 instead of 8
-                        base_slr = 12.0 if strong_dendritic else 8.0
-
-                # Dendritic factor from ~550 hPa temp (multiplicative)
-                dendritic_factor = 1.0
-                if dendritic_c is not None:
-                    if -16 <= dendritic_c <= -11:
-                        dendritic_factor = 1.10  # strong DGZ near optimal temp
-                    elif (-20 <= dendritic_c < -16) or (-11 < dendritic_c <= -8):
-                        dendritic_factor = 1.07  # moderate
-                    else:
-                        dendritic_factor = 1.03  # weak but present
-
-                # Compute DGZ thickness between -18°C and -12°C using a 5 hPa grid
-                dgz_thickness = 0.0
-                try:
-                    profile_sorted = sorted(profile_levels, key=lambda x: x[0], reverse=True)
-
-                    def interp_temp_local(p_target: float) -> float | None:
-                        for idx in range(len(profile_sorted) - 1):
-                            p1, t1 = profile_sorted[idx]
-                            p2, t2 = profile_sorted[idx + 1]
-                            if (p1 >= p_target >= p2) or (p2 >= p_target >= p1):
-                                if p1 == p2:
-                                    return t1
-                                frac = (p_target - p2) / (p1 - p2)
-                                return t2 + (t1 - t2) * frac
-                        return profile_sorted[-1][1] if profile_sorted else None
-
-                    if profile_sorted:
-                        max_p = max(p for p, _ in profile_sorted)
-                        min_p = min(p for p, _ in profile_sorted)
-                        step_hpa_local = 5.0
-                        p_cursor = max_p
-                        while p_cursor > min_p:
-                            p_next = max(p_cursor - step_hpa_local, min_p)
-                            p_mid = (p_cursor + p_next) / 2.0
-                            t_mid_c = interp_temp_local(p_mid)
-                            if t_mid_c is not None and -18.0 <= t_mid_c <= -12.0:
-                                dgz_thickness += abs(p_cursor - p_next)
-                            p_cursor = p_next
-                except Exception:
-                    dgz_thickness = 0.0
-
-                # DGZ thickness factor: up to +25% boost for deep DGZ (cap at 150 hPa)
-                dgz_factor = 1.0 + min(dgz_thickness, 150.0) / 600.0
-
-                # Surface wet-snow penalty
-                surface_factor = 1.0
-                if ts is not None:
-                    if ts >= 3.0:
-                        surface_factor = 0.75
-                    elif ts >= -0.6:
-                        surface_factor = 0.90
-
-                slr_calc = base_slr * dendritic_factor * dgz_factor * surface_factor
-                # Clamp to reasonable bounds
-                slr_calc = max(6.0, min(35.0, slr_calc))
-                return slr_calc
-
+            # If a warm layer exists, honor it before snowfall hints to avoid false snow
             has_warm_nose = warmest_c is not None and warmest_c > warm_nose_min_c
 
             if not has_warm_nose:
                 ptype = "snow"
-                slr = snow_slr()
+                slr = snow_slr(dendritic_c, ts, warmest_c, profile_levels)
                 types.append(ptype)
                 slrs.append(slr)
                 continue
@@ -2292,7 +2299,7 @@ class ModelDetailView(TemplateView):
             warm_indices = [i for i, t in enumerate(grid_temps) if t is not None and t > freeze_c]
             if not warm_indices:
                 ptype = "snow"
-                slr = snow_slr()
+                slr = snow_slr(dendritic_c, ts, warmest_c, profile_levels)
                 types.append(ptype)
                 slrs.append(slr)
                 continue
