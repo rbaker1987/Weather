@@ -27,23 +27,20 @@ jobs:
 
       - name: Run pytest with coverage
         run: |
-          cd weather_app
-          pytest -v --cov=weather --cov-report=xml --cov-report=html --cov-report=term ../tests/
+          pytest -v --cov=weather_app.weather --cov-report=xml --cov-report=html --cov-report=term tests/
 
       - name: Django system checks
         run: |
-          cd weather_app
-          python manage.py check --deploy
+          cd weather_app && python manage.py check --deploy
 
       - name: Check for missing migrations
         run: |
-          cd weather_app
-          python manage.py makemigrations --check --dry-run
+          cd weather_app && python manage.py makemigrations --check --dry-run
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          files: ./weather_app/coverage.xml
+          files: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
@@ -55,4 +52,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           MINIMUM_GREEN: 80
           MINIMUM_ORANGE: 50
-          COVERAGE_PATH: ./weather_app
+          COVERAGE_PATH: ./
