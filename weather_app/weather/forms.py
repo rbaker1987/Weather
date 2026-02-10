@@ -13,8 +13,8 @@ class UniqueUsernameCreationForm(UserCreationForm):
         if not username:
             return username
         normalized = username.lower()
-        User = get_user_model()
-        if User.objects.filter(username__iexact=normalized).exists():
+        user_model = get_user_model()
+        if user_model.objects.filter(username__iexact=normalized).exists():
             raise forms.ValidationError(
                 "That username is already taken. Please choose another."
             )

@@ -3443,7 +3443,7 @@ class LocationDetailView(DetailView):
             queryset = queryset.filter(owner=self.request.user)
         else:
             location_ids = self.request.session.get("location_ids", [])
-            queryset = queryset.filter(id__in=location_ids)
+            queryset = queryset.filter(Q(id__in=location_ids) | Q(owner__isnull=True))
         return queryset.prefetch_related("alerts")
 
     def get(self, request, *args, **kwargs):
