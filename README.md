@@ -212,6 +212,30 @@ DATABASE_URL=postgresql://user:pass@localhost/weather
 REDIS_URL=redis://localhost:6379/0
 ```
 
+## Render Deployment
+
+Render setup expects commands in the repo root:
+
+```bash
+./render-build.sh
+./render-start.sh
+./render-worker.sh
+./render-release.sh
+```
+
+Recommended Render settings:
+
+- Root Directory: (leave blank)
+- Build Command: `./render-build.sh`
+- Start Command: `./render-start.sh`
+- Worker Start Command: `./render-worker.sh`
+
+Run migrations once after deploy:
+
+```bash
+./render-release.sh
+```
+
 ## Project Structure
 
 ```text
