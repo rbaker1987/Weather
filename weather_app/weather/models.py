@@ -6,6 +6,7 @@ Includes geographic support for locations and proper relationships.
 
 import uuid
 
+from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
@@ -32,6 +33,15 @@ class Location(TimeStampedModel):
         max_length=200,
         blank=True,
         help_text="Custom display name for this location (optional)",
+    )
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="locations",
+        help_text="User who owns this location (null for anonymous session)",
     )
 
     # Geographic coordinates
@@ -143,6 +153,7 @@ class Location(TimeStampedModel):
             models.Index(fields=["last_forecast_update"]),
             models.Index(fields=["is_favorite"]),
             models.Index(fields=["is_current_location"]),
+            models.Index(fields=["owner"]),
         ]
 
     def __str__(self):

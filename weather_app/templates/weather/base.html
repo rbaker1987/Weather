@@ -1,176 +1,228 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Ralph's Weather{% endblock %}</title>
     {% load static %}
 
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="{% static 'weather/img/logo-favicon.svg' %}">
-    <link rel="shortcut icon" href="{% static 'weather/img/logo-favicon.svg' %}">
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="{% static 'weather/img/logo-favicon.svg' %}"
+    />
+    <link rel="shortcut icon" href="{% static 'weather/img/logo-favicon.svg' %}" />
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" type="text/css" href="{% static 'weather/css/style.css' %}">
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{% static 'weather/css/style.css' %}"
+    />
 
     <!-- CSRF Token -->
     {% csrf_token %}
     <style>
-        .weather-card {
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s;
-        }
+      .weather-card {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
+      }
 
-        .weather-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-        }
+      .weather-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+      }
 
-        a > .card.weather-card:hover {
-            border: 2px solid #FFD700;
-        }
+      a > .card.weather-card:hover {
+        border: 2px solid #ffd700;
+      }
 
-        .alert-severe { border-left: 4px solid #dc3545; }
-        .alert-moderate { border-left: 4px solid #fd7e14; }
-        .alert-minor { border-left: 4px solid #FFD700; }
+      .alert-severe {
+        border-left: 4px solid #dc3545;
+      }
+      .alert-moderate {
+        border-left: 4px solid #fd7e14;
+      }
+      .alert-minor {
+        border-left: 4px solid #ffd700;
+      }
 
-        .temp-high { color: #dc3545; font-weight: bold; }
-        .temp-low { color: #4169E1; font-weight: bold; }
+      .temp-high {
+        color: #dc3545;
+        font-weight: bold;
+      }
+      .temp-low {
+        color: #4169e1;
+        font-weight: bold;
+      }
 
-        .navbar-brand {
-            font-weight: bold;
-            font-size: 1.5rem;
-            color: white !important;
-        }
+      .navbar-brand {
+        font-weight: bold;
+        font-size: 1.5rem;
+        color: white !important;
+      }
 
-        .navbar-brand:hover {
-            color: #FFD700 !important;
-        }
+      .navbar-brand:hover {
+        color: #ffd700 !important;
+      }
 
-        .footer {
-            background-color: #f8f9fa;
-            margin-top: 2rem;
-            padding: 2rem 0;
-        }
+      .footer {
+        background-color: #f8f9fa;
+        margin-top: 2rem;
+        padding: 2rem 0;
+      }
 
-        .weather-icon {
-            font-size: 2rem;
-            margin-right: 0.5rem;
-        }
+      .weather-icon {
+        font-size: 2rem;
+        margin-right: 0.5rem;
+      }
 
-        .forecast-day {
-            text-align: center;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 0.5rem;
-            background: linear-gradient(135deg, #4169E1 0%, #667eea 100%);
-            color: white;
-        }
+      .forecast-day {
+        text-align: center;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 0.5rem;
+        background: linear-gradient(135deg, #4169e1 0%, #667eea 100%);
+        color: white;
+      }
 
-        .bg-primary {
-            background-color: #4169E1 !important;
-        }
+      .bg-primary {
+        background-color: #4169e1 !important;
+      }
     </style>
 
     {% block extra_css %}{% endblock %}
-</head>
-<body>
+  </head>
+  <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            {% include 'weather/components/logo.html' %}
+      <div class="container">
+        {% include 'weather/components/logo.html' %}
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
 
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'weather:dashboard' %}">
-                            <i class="fas fa-home"></i> Home
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'weather:location-list' %}">
-                            <i class="fas fa-map-marker-alt"></i> Locations
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'weather:forecast-list' %}">
-                            <i class="fas fa-calendar-alt"></i> Forecasts
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'weather:alert-list' %}">
-                            <i class="fas fa-exclamation-triangle"></i> Alerts
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'weather:models' %}">
-                            <i class="fas fa-chart-line"></i> Models
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'weather:custom-forecast' %}">
-                            <i class="fas fa-sliders-h"></i> Custom Forecast
-                        </a>
-                    </li>
-                </ul>
-            </div>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'weather:dashboard' %}">
+                <i class="fas fa-home"></i> Home
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'weather:location-list' %}">
+                <i class="fas fa-map-marker-alt"></i> Locations
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'weather:forecast-list' %}">
+                <i class="fas fa-calendar-alt"></i> Forecasts
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'weather:alert-list' %}">
+                <i class="fas fa-exclamation-triangle"></i> Alerts
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'weather:models' %}">
+                <i class="fas fa-chart-line"></i> Models
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'weather:custom-forecast' %}">
+                <i class="fas fa-sliders-h"></i> Custom Forecast
+              </a>
+            </li>
+          </ul>
+          <ul class="navbar-nav ms-auto align-items-center">
+            {% if user.is_authenticated %}
+            <li class="nav-item">
+              <span
+                class="navbar-text me-2 d-flex align-items-center"
+                style="line-height: 1"
+              >
+                <i class="fas fa-user"></i> {{ user.username }}
+              </span>
+            </li>
+            <li class="nav-item">
+              <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button class="btn btn-link nav-link" type="submit">
+                  <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+              </form>
+            </li>
+            {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'login' %}">
+                <i class="fas fa-sign-in-alt"></i> Login
+              </a>
+            </li>
+            {% endif %}
+          </ul>
         </div>
+      </div>
     </nav>
 
     <!-- Main Content -->
     <main class="container my-4">
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-
-        {% block content %}{% endblock %}
+      {% if messages %} {% for message in messages %}
+      <div
+        class="alert alert-{{ message.tags }} alert-dismissible fade show"
+        role="alert"
+      >
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %} {% endif %} {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
     <footer class="footer mt-auto">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-6">
-                    <h6>Ralph's Weather</h6>
-                    <p class="text-muted">
-                        Powered by the National Weather Service API
-                    </p>
-                </div>
-                <div class="col-md-6 text-end">
-                    <p class="text-muted">
-                        <small>
-                            Data refreshed: {{ "now"|date:"Y-m-d H:i T" }}
-                        </small>
-                    </p>
-                    <div>
-                        <a href="/api/" class="text-decoration-none me-3">
-                            <i class="fas fa-code"></i> API Docs
-                        </a>
-                        <a href="{% url 'admin:index' %}" class="text-decoration-none">
-                            <i class="fas fa-cogs"></i> Admin
-                        </a>
-                    </div>
-                </div>
+      <div class="container">
+        <div class="row">
+          <div class="col-md-6">
+            <h6>Ralph's Weather</h6>
+            <p class="text-muted">Powered by the National Weather Service API</p>
+          </div>
+          <div class="col-md-6 text-end">
+            <p class="text-muted">
+              <small> Data refreshed: {{ "now"|date:"Y-m-d H:i T" }} </small>
+            </p>
+            <div>
+              <a href="/api/" class="text-decoration-none me-3">
+                <i class="fas fa-code"></i> API Docs
+              </a>
+              <a href="{% url 'admin:index' %}" class="text-decoration-none">
+                <i class="fas fa-cogs"></i> Admin
+              </a>
             </div>
+          </div>
         </div>
+      </div>
     </footer>
 
     <!-- Bootstrap JS -->
@@ -189,5 +241,5 @@
     <script src="{% static 'weather/js/weather.js' %}?v=2"></script>
 
     {% block extra_js %}{% endblock %}
-</body>
+  </body>
 </html>

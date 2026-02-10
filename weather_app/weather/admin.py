@@ -20,14 +20,15 @@ class LocationAdmin(admin.ModelAdmin):
 
     list_display = [
         "name",
+        "owner",
         "zip_code",
         "coordinates_display",
         "forecast_count",
         "last_update",
         "is_active",
     ]
-    list_filter = ["is_active", "created_at", "nws_office"]
-    search_fields = ["name", "zip_code", "nws_office"]
+    list_filter = ["is_active", "created_at", "nws_office", "owner"]
+    search_fields = ["name", "zip_code", "nws_office", "owner__username"]
     readonly_fields = [
         "id",
         "created_at",
@@ -39,7 +40,7 @@ class LocationAdmin(admin.ModelAdmin):
     ordering = ["name"]
 
     fieldsets = (
-        ("Basic Information", {"fields": ("name", "is_active")}),
+        ("Basic Information", {"fields": ("name", "owner", "is_active")}),
         ("Geographic Data", {"fields": ("point", "zip_code")}),
         (
             "NWS Data",

@@ -236,6 +236,23 @@ Run migrations once after deploy:
 ./render-release.sh
 ```
 
+### Render Postgres Connection (pgAdmin)
+
+Use the External Database URL from Render when connecting locally:
+
+1. Render dashboard -> Postgres service -> Connections.
+2. Copy the External Database URL.
+3. In pgAdmin, set:
+
+- Host name/address: the host from the External URL
+- Port: 5432
+- Maintenance database: the database name
+- Username: the user from Render
+- Password: the Render password
+- SSL Mode: require
+
+If the connection fails, allow your IP in the Render database settings.
+
 ## Project Structure
 
 ```text
