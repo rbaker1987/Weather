@@ -3,13 +3,13 @@ services:
     name: weather-app
     env: python
     plan: free
-    buildCommand: pip install .[django] ; cd weather_app ; python manage.py collectstatic --noinput
-    startCommand: cd weather_app ; gunicorn config.wsgi:application
+    buildCommand: ./render-build.sh
+    startCommand: ./render-start.sh
     autoDeploy: true
     healthCheckPath: /
     envVars:
       - key: DJANGO_DEBUG
-        value: "False"
+        value: 'False'
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
@@ -26,12 +26,12 @@ services:
     name: weather-worker
     env: python
     plan: free
-    buildCommand: pip install .[django]
-    startCommand: cd weather_app ; celery -A config worker --loglevel=info
+    buildCommand: ./render-build.sh
+    startCommand: ./render-worker.sh
     autoDeploy: true
     envVars:
       - key: DJANGO_DEBUG
-        value: "False"
+        value: 'False'
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
