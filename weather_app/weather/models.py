@@ -153,7 +153,6 @@ class Location(TimeStampedModel):
             models.Index(fields=["last_forecast_update"]),
             models.Index(fields=["is_favorite"]),
             models.Index(fields=["is_current_location"]),
-            models.Index(fields=["owner"]),
         ]
 
     def __str__(self):

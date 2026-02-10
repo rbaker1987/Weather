@@ -22,8 +22,4 @@ class Migration(migrations.Migration):
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
-        migrations.AddIndex(
-            model_name="location",
-            index=models.Index(fields=["owner"], name="weather_loc_owner_idx"),
-        ),
     ]
