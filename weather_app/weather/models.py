@@ -175,6 +175,108 @@ class Location(TimeStampedModel):
         self.save()
 
 
+class CurrentConditions(TimeStampedModel):
+    """Current weather conditions for a location (cached, 15-min TTL)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    location = models.OneToOneField(
+        Location,
+        on_delete=models.CASCADE,
+        related_name="current_conditions_cache",
+    )
+
+    # Temperature data
+    temperature = models.IntegerField(
+        validators=[MinValueValidator(-50), MaxValueValidator(150)],
+        help_text="Current temperature in degrees Fahrenheit",
+    )
+    feels_like_temperature = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-50), MaxValueValidator(150)],
+        help_text="Current apparent/feels-like temperature",
+    )
+
+    # Conditions description
+    condition = models.CharField(
+        max_length=200, help_text="Current weather condition description"
+    )
+
+    # Wind data
+    wind_speed = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(200)],
+        help_text="Wind speed in mph",
+    )
+    wind_direction = models.CharField(
+        max_length=10, blank=True, help_text="Wind direction (e.g., NE, SW)"
+    )
+    wind_gust = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(200)],
+        help_text="Wind gust speed in mph",
+    )
+
+    # Moisture/precipitation
+    humidity = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Relative humidity as percentage",
+    )
+    precipitation = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Precipitation amount in inches",
+    )
+
+    # Advanced metrics
+    pressure = models.FloatField(
+        null=True, blank=True, help_text="Barometric pressure in mb"
+    )
+    visibility = models.FloatField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="Visibility in miles",
+    )
+    uv_index = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text="UV index value",
+    )
+
+    # Data freshness tracking
+    last_observation_time = models.DateTimeField(
+        help_text="Timestamp of the observation/API response"
+    )
+
+    # Data source
+    raw_data = models.JSONField(
+        null=True, blank=True, help_text="Raw API response data"
+    )
+
+    class Meta:
+        verbose_name = "Current Conditions"
+        verbose_name_plural = "Current Conditions"
+        ordering = ["-last_observation_time"]
+        indexes = [
+            models.Index(fields=["location"]),
+            models.Index(fields=["last_observation_time"]),
+            models.Index(fields=["updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.location.name} - {self.temperature}°F - {self.condition}"
+
+    @property
+    def is_stale(self):
+        """Check if data is older than 15 minutes."""
+        from datetime import timedelta
+
+        return timezone.now() - self.updated_at > timedelta(minutes=15)
+
+
 class ForecastPeriod(TimeStampedModel):
     """Base forecast period model."""
 
@@ -256,6 +358,11 @@ class ForecastPeriod(TimeStampedModel):
     raw_data = models.JSONField(
         null=True, blank=True, help_text="Raw API response data"
     )
+    last_api_update = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when this forecast was last fetched from API",
+    )
 
     class Meta:
         verbose_name = "Forecast Period"
@@ -275,6 +382,15 @@ class ForecastPeriod(TimeStampedModel):
         """Save the forecast period."""
         # Don't set apparent_temperature here - let the signal handle it
         super().save(*args, **kwargs)
+
+    @property
+    def is_stale(self):
+        """Check if forecast is older than 15 minutes."""
+        from datetime import timedelta
+
+        if not self.last_api_update:
+            return True
+        return timezone.now() - self.last_api_update > timedelta(minutes=15)
 
 
 class HourlyForecast(ForecastPeriod):
