@@ -16,6 +16,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -255,8 +256,6 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Celery Beat periodic task schedule
-from celery.schedules import crontab
-
 CELERY_BEAT_SCHEDULE = {
     "update-current-conditions-every-10-min": {
         "task": "weather.tasks.update_all_current_conditions",

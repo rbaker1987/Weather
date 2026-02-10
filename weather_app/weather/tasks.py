@@ -222,7 +222,7 @@ def generate_forecast_report(location_ids=None, report_type="daily"):
             )
 
         # Cache the report
-        cache_key = f'forecast_report_{report_type}_{"-".join(location_ids or ["all"])}'
+        cache_key = f"forecast_report_{report_type}_{'-'.join(location_ids or ['all'])}"
         cache.set(cache_key, report_data, 60 * 60)  # Cache for 1 hour
 
         logger.info(f"Generated {report_type} report for {len(locations)} locations")
@@ -258,8 +258,8 @@ def update_current_conditions_for_location(self, location_id: str):
         location = Location.objects.get(id=location_id)
         logger.info(f"Background task: Updating current conditions for {location.name}")
 
-        current_conditions = CurrentConditionsService.fetch_and_cache_current_conditions(
-            location
+        current_conditions = (
+            CurrentConditionsService.fetch_and_cache_current_conditions(location)
         )
 
         if current_conditions:
@@ -272,9 +272,8 @@ def update_current_conditions_for_location(self, location_id: str):
                 "status": "success",
                 "temperature": current_conditions.temperature,
             }
-        else:
-            logger.warning(f"✗ Failed to fetch conditions for {location.name}")
-            raise Exception(f"Failed to fetch conditions for {location.name}")
+        logger.warning(f"✗ Failed to fetch conditions for {location.name}")
+        raise Exception(f"Failed to fetch conditions for {location.name}")
 
     except Location.DoesNotExist:
         logger.error(f"Location {location_id} not found")
@@ -282,7 +281,7 @@ def update_current_conditions_for_location(self, location_id: str):
     except Exception as exc:
         logger.error(f"Error updating conditions for {location_id}: {str(exc)}")
         # Retry after 60 seconds
-        raise self.retry(exc=exc, countdown=60, max_retries=self.max_retries)
+        raise self.retry(exc=exc, countdown=60, max_retries=self.max_retries) from exc
 
 
 @shared_task
@@ -316,8 +315,8 @@ def update_all_current_conditions():
     results = []
     for location in locations:
         try:
-            current_conditions = CurrentConditionsService.fetch_and_cache_current_conditions(
-                location
+            current_conditions = (
+                CurrentConditionsService.fetch_and_cache_current_conditions(location)
             )
             if current_conditions:
                 results.append(
@@ -345,9 +344,7 @@ def update_all_current_conditions():
             )
 
     successful = sum(1 for r in results if r["status"] == "success")
-    logger.info(
-        f"Periodic update complete: {successful}/{len(results)} successful"
-    )
+    logger.info(f"Periodic update complete: {successful}/{len(results)} successful")
     return results
 
 
@@ -390,7 +387,7 @@ def update_forecasts_for_location(self, location_id: str):
         return {"location_id": location_id, "status": "not_found"}
     except Exception as exc:
         logger.error(f"Error updating forecasts for {location_id}: {str(exc)}")
-        raise self.retry(exc=exc, countdown=60, max_retries=self.max_retries)
+        raise self.retry(exc=exc, countdown=60, max_retries=self.max_retries) from exc
 
 
 @shared_task

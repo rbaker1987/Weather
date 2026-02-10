@@ -362,7 +362,9 @@ class CurrentConditionsService:
     """Service for fetching current conditions with 15-minute cache validation."""
 
     @staticmethod
-    def get_or_fetch_current_conditions(location: Location, force_refresh: bool = False):
+    def get_or_fetch_current_conditions(
+        location: Location, force_refresh: bool = False
+    ):
         """
         Get current conditions for a location.
 
@@ -387,7 +389,9 @@ class CurrentConditionsService:
             current_conditions = None
 
         # Check if we need to fetch fresh data
-        should_fetch = force_refresh or current_conditions is None or current_conditions.is_stale
+        should_fetch = (
+            force_refresh or current_conditions is None or current_conditions.is_stale
+        )
 
         if should_fetch:
             logger.info(
@@ -396,13 +400,14 @@ class CurrentConditionsService:
                 f"stale={current_conditions.is_stale if current_conditions else 'N/A'})"
             )
             return CurrentConditionsService.fetch_and_cache_current_conditions(location)
-        else:
-            age_minutes = int((timezone.now() - current_conditions.updated_at).total_seconds() / 60)
-            logger.info(
-                f"Returning cached current conditions for {location.name} "
-                f"(age={age_minutes} minutes)"
-            )
-            return current_conditions
+        age_minutes = int(
+            (timezone.now() - current_conditions.updated_at).total_seconds() / 60
+        )
+        logger.info(
+            f"Returning cached current conditions for {location.name} "
+            f"(age={age_minutes} minutes)"
+        )
+        return current_conditions
 
     @staticmethod
     def fetch_and_cache_current_conditions(location: Location):
@@ -420,7 +425,9 @@ class CurrentConditionsService:
         from .models import CurrentConditions
 
         if not location.latitude or not location.longitude:
-            logger.warning(f"Location {location.name} has no coordinates, skipping fetch")
+            logger.warning(
+                f"Location {location.name} has no coordinates, skipping fetch"
+            )
             return None
 
         try:
@@ -429,9 +436,7 @@ class CurrentConditionsService:
             headers = {"User-Agent": "(Weather App, contact@example.com)"}
 
             # Get grid point data from NWS
-            grid_url = (
-                f"https://api.weather.gov/points/{location.latitude},{location.longitude}"
-            )
+            grid_url = f"https://api.weather.gov/points/{location.latitude},{location.longitude}"
             grid_response = requests.get(grid_url, headers=headers, timeout=10)
             grid_response.raise_for_status()
             grid_data = grid_response.json()
@@ -461,7 +466,9 @@ class CurrentConditionsService:
                 return None
 
             # Get latest observation
-            obs_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
+            obs_url = (
+                f"https://api.weather.gov/stations/{station_id}/observations/latest"
+            )
             obs_response = requests.get(obs_url, headers=headers, timeout=10)
             obs_response.raise_for_status()
             obs_data = obs_response.json()
@@ -478,10 +485,14 @@ class CurrentConditionsService:
             condition = obs_props.get("textDescription", "Unknown")
 
             wind_speed_ms = obs_props.get("windSpeed", {}).get("value")
-            wind_speed = int(wind_speed_ms * 2.237) if wind_speed_ms else 0  # m/s to mph
+            wind_speed = (
+                int(wind_speed_ms * 2.237) if wind_speed_ms else 0
+            )  # m/s to mph
 
             wind_direction = obs_props.get("windDirection", {}).get("value")
-            wind_direction_str = CurrentConditionsService._bearing_to_direction(wind_direction)
+            wind_direction_str = CurrentConditionsService._bearing_to_direction(
+                wind_direction
+            )
 
             wind_gust_ms = obs_props.get("windGust", {}).get("value")
             wind_gust = int(wind_gust_ms * 2.237) if wind_gust_ms else None
@@ -498,7 +509,9 @@ class CurrentConditionsService:
             pressure = pressure_pa / 100 if pressure_pa else None  # Pa to mb
 
             visibility_m = obs_props.get("visibility", {}).get("value")
-            visibility = visibility_m / 1609.34 if visibility_m else None  # meters to miles
+            visibility = (
+                visibility_m / 1609.34 if visibility_m else None
+            )  # meters to miles
 
             # Create or update CurrentConditions
             current_conditions, created = CurrentConditions.objects.update_or_create(
@@ -528,7 +541,9 @@ class CurrentConditionsService:
             logger.error(f"API request failed for {location.name}: {str(e)}")
             return None
         except Exception as e:
-            logger.error(f"Error fetching current conditions for {location.name}: {str(e)}")
+            logger.error(
+                f"Error fetching current conditions for {location.name}: {str(e)}"
+            )
             return None
 
     @staticmethod
@@ -537,8 +552,24 @@ class CurrentConditionsService:
         if bearing is None:
             return ""
         bearing = bearing % 360
-        directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-                      "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+        directions = [
+            "N",
+            "NNE",
+            "NE",
+            "ENE",
+            "E",
+            "ESE",
+            "SE",
+            "SSE",
+            "S",
+            "SSW",
+            "SW",
+            "WSW",
+            "W",
+            "WNW",
+            "NW",
+            "NNW",
+        ]
         idx = int((bearing + 11.25) / 22.5)
         return directions[idx % 16]
 
@@ -561,14 +592,14 @@ class ForecastService:
             QuerySet of HourlyForecast objects
         """
         # Get most recent forecast
-        recent_forecasts = location.forecasts.filter(
-            period_start__gte=timezone.now()
-        ).order_by('-last_api_update').first()
+        recent_forecasts = (
+            location.forecasts.filter(period_start__gte=timezone.now())
+            .order_by("-last_api_update")
+            .first()
+        )
 
         should_fetch = (
-            force_refresh or
-            recent_forecasts is None or
-            recent_forecasts.is_stale
+            force_refresh or recent_forecasts is None or recent_forecasts.is_stale
         )
 
         if should_fetch:
@@ -580,9 +611,8 @@ class ForecastService:
             # TODO: Call API fetch method
 
         return location.forecasts.filter(
-            period_start__gte=timezone.now(),
-            hourlyforecast__isnull=False
-        ).order_by('period_start')
+            period_start__gte=timezone.now(), hourlyforecast__isnull=False
+        ).order_by("period_start")
 
     @staticmethod
     def get_or_fetch_daily_forecasts(location: Location, force_refresh: bool = False):
@@ -597,15 +627,16 @@ class ForecastService:
             QuerySet of DailyForecast objects
         """
         # Get most recent forecast
-        recent_forecasts = location.forecasts.filter(
-            period_start__gte=timezone.now(),
-            dailyforecast__isnull=False
-        ).order_by('-last_api_update').first()
+        recent_forecasts = (
+            location.forecasts.filter(
+                period_start__gte=timezone.now(), dailyforecast__isnull=False
+            )
+            .order_by("-last_api_update")
+            .first()
+        )
 
         should_fetch = (
-            force_refresh or
-            recent_forecasts is None or
-            recent_forecasts.is_stale
+            force_refresh or recent_forecasts is None or recent_forecasts.is_stale
         )
 
         if should_fetch:
@@ -616,6 +647,5 @@ class ForecastService:
             # TODO: Call API fetch method
 
         return location.forecasts.filter(
-            period_start__gte=timezone.now(),
-            dailyforecast__isnull=False
-        ).order_by('period_start')
+            period_start__gte=timezone.now(), dailyforecast__isnull=False
+        ).order_by("period_start")
