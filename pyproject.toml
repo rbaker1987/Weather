@@ -72,6 +72,8 @@ django = [
     "django-redis>=5.4.0",         # Django Redis cache backend
     "Pillow>=10.1.0",              # Image processing
     "psycopg2-binary>=2.9.0",      # PostgreSQL support
+    "dj-database-url>=2.2.0",      # DATABASE_URL parsing
+    "gunicorn>=21.2.0",            # WSGI server for Render
     "whitenoise>=6.6.0",           # Static file serving
 ]
 ui = [
