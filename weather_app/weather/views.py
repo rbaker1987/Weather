@@ -1163,7 +1163,9 @@ class CurrentConditionsViewSet(viewsets.ReadOnlyModelViewSet):
 
         if not location_ids:
             return Response(
-                {"error": "location_ids query parameter required (comma-separated or repeated)"},
+                {
+                    "error": "location_ids query parameter required (comma-separated or repeated)"
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1179,6 +1181,7 @@ class CurrentConditionsViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = self.get_serializer(results, many=True)
         return Response(serializer.data)
+
     filterset_fields = ["location", "severity", "urgency"]
     ordering = ["-onset", "-created_at"]
 

@@ -235,3 +235,260 @@ def generate_forecast_report(location_ids=None, report_type="daily"):
     except Exception as exc:
         logger.error(f"Error generating report: {exc}")
         raise exc
+
+
+# ============================================================================
+# Cache-aware background tasks for CurrentConditions and Forecasts
+# ============================================================================
+
+
+@shared_task(bind=True, max_retries=3)
+def update_current_conditions_for_location(self, location_id: str):
+    """
+    Update current conditions for a single location using cache-aware service.
+
+    This task is called by the periodic task below, or can be triggered manually.
+
+    Args:
+        location_id: UUID of the Location to update
+    """
+    try:
+        from .services import CurrentConditionsService
+
+        location = Location.objects.get(id=location_id)
+        logger.info(f"Background task: Updating current conditions for {location.name}")
+
+        current_conditions = CurrentConditionsService.fetch_and_cache_current_conditions(
+            location
+        )
+
+        if current_conditions:
+            logger.info(
+                f"✓ Successfully updated current conditions for {location.name} - "
+                f"Temp: {current_conditions.temperature}°F"
+            )
+            return {
+                "location": location.name,
+                "status": "success",
+                "temperature": current_conditions.temperature,
+            }
+        else:
+            logger.warning(f"✗ Failed to fetch conditions for {location.name}")
+            raise Exception(f"Failed to fetch conditions for {location.name}")
+
+    except Location.DoesNotExist:
+        logger.error(f"Location {location_id} not found")
+        return {"location_id": location_id, "status": "not_found"}
+    except Exception as exc:
+        logger.error(f"Error updating conditions for {location_id}: {str(exc)}")
+        # Retry after 60 seconds
+        raise self.retry(exc=exc, countdown=60, max_retries=self.max_retries)
+
+
+@shared_task
+def update_all_current_conditions():
+    """
+    Periodic task to update current conditions for all active locations.
+
+    This should be scheduled to run every 10 minutes to keep data relatively fresh.
+
+    Configure in Django settings CELERY_BEAT_SCHEDULE:
+    ```
+    CELERY_BEAT_SCHEDULE = {
+        'update-current-conditions-every-10-min': {
+            'task': 'weather.tasks.update_all_current_conditions',
+            'schedule': timedelta(minutes=10),
+        },
+    }
+    ```
+    """
+    from .services import CurrentConditionsService
+
+    logger.info("Starting periodic update of all current conditions")
+
+    # Get all enabled locations with coordinates
+    locations = Location.objects.filter(
+        is_enabled=True, latitude__isnull=False, longitude__isnull=False
+    )
+
+    logger.info(f"Found {locations.count()} locations to update")
+
+    results = []
+    for location in locations:
+        try:
+            current_conditions = CurrentConditionsService.fetch_and_cache_current_conditions(
+                location
+            )
+            if current_conditions:
+                results.append(
+                    {
+                        "location": location.name,
+                        "status": "success",
+                        "temperature": current_conditions.temperature,
+                    }
+                )
+            else:
+                results.append(
+                    {
+                        "location": location.name,
+                        "status": "failed",
+                    }
+                )
+        except Exception as e:
+            logger.error(f"Error updating {location.name}: {str(e)}")
+            results.append(
+                {
+                    "location": location.name,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+
+    successful = sum(1 for r in results if r["status"] == "success")
+    logger.info(
+        f"Periodic update complete: {successful}/{len(results)} successful"
+    )
+    return results
+
+
+@shared_task(bind=True, max_retries=3)
+def update_forecasts_for_location(self, location_id: str):
+    """
+    Update hourly and daily forecasts for a single location.
+
+    Args:
+        location_id: UUID of the Location to update
+    """
+    try:
+        from .services import ForecastService
+
+        location = Location.objects.get(id=location_id)
+        logger.info(f"Background task: Updating forecasts for {location.name}")
+
+        # Get forecasts with cache validation
+        hourly = ForecastService.get_or_fetch_hourly_forecasts(
+            location, force_refresh=True
+        )
+        daily = ForecastService.get_or_fetch_daily_forecasts(
+            location, force_refresh=True
+        )
+
+        logger.info(
+            f"✓ Updated forecasts for {location.name} "
+            f"({hourly.count()} hourly, {daily.count()} daily)"
+        )
+
+        return {
+            "location": location.name,
+            "status": "success",
+            "hourly_count": hourly.count(),
+            "daily_count": daily.count(),
+        }
+
+    except Location.DoesNotExist:
+        logger.error(f"Location {location_id} not found")
+        return {"location_id": location_id, "status": "not_found"}
+    except Exception as exc:
+        logger.error(f"Error updating forecasts for {location_id}: {str(exc)}")
+        raise self.retry(exc=exc, countdown=60, max_retries=self.max_retries)
+
+
+@shared_task
+def update_all_forecasts():
+    """
+    Periodic task to update forecasts for all active locations.
+
+    This should be scheduled to run every 15 minutes.
+
+    Configure in Django settings CELERY_BEAT_SCHEDULE:
+    ```
+    CELERY_BEAT_SCHEDULE = {
+        'update-forecasts-every-15-min': {
+            'task': 'weather.tasks.update_all_forecasts',
+            'schedule': timedelta(minutes=15),
+        },
+    }
+    ```
+    """
+    from .services import ForecastService
+
+    logger.info("Starting periodic update of all forecasts")
+
+    locations = Location.objects.filter(
+        is_enabled=True, latitude__isnull=False, longitude__isnull=False
+    )
+
+    logger.info(f"Found {locations.count()} locations to update")
+
+    results = []
+    for location in locations:
+        try:
+            hourly = ForecastService.get_or_fetch_hourly_forecasts(
+                location, force_refresh=True
+            )
+            daily = ForecastService.get_or_fetch_daily_forecasts(
+                location, force_refresh=True
+            )
+
+            results.append(
+                {
+                    "location": location.name,
+                    "status": "success",
+                    "hourly_count": hourly.count(),
+                    "daily_count": daily.count(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error updating forecasts for {location.name}: {str(e)}")
+            results.append(
+                {
+                    "location": location.name,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+
+    successful = sum(1 for r in results if r["status"] == "success")
+    logger.info(
+        f"Periodic forecast update complete: {successful}/{len(results)} successful"
+    )
+    return results
+
+
+@shared_task
+def cleanup_stale_forecasts():
+    """
+    Periodic task to remove forecasts older than 7 days.
+
+    Helps keep the database lean and prevents excess storage usage.
+
+    Configure in Django settings CELERY_BEAT_SCHEDULE:
+    ```
+    CELERY_BEAT_SCHEDULE = {
+        'cleanup-old-forecasts-daily': {
+            'task': 'weather.tasks.cleanup_stale_forecasts',
+            'schedule': crontab(hour=2, minute=0),  # 2 AM daily
+        },
+    }
+    ```
+    """
+    cutoff_date = timezone.now() - timedelta(days=7)
+
+    # Delete old hourly forecasts
+    hourly_deleted, _ = HourlyForecast.objects.filter(
+        period_start__lt=cutoff_date
+    ).delete()
+
+    # Delete old daily forecasts
+    daily_deleted, _ = DailyForecast.objects.filter(
+        period_start__lt=cutoff_date
+    ).delete()
+
+    logger.info(
+        f"Cleanup complete: Deleted {hourly_deleted} hourly and {daily_deleted} daily forecasts older than {cutoff_date}"
+    )
+
+    return {
+        "hourly_deleted": hourly_deleted,
+        "daily_deleted": daily_deleted,
+    }
