@@ -19,6 +19,9 @@ router.register(
     r"daily-forecasts", views.DailyForecastViewSet, basename="dailyforecast"
 )
 router.register(r"alerts", views.WeatherAlertViewSet, basename="weatheralert")
+router.register(
+    r"current-conditions", views.CurrentConditionsViewSet, basename="currentconditions"
+)
 
 # URL patterns
 urlpatterns = [

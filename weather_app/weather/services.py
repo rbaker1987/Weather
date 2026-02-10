@@ -351,3 +351,271 @@ def get_weather_service():
 def is_weather_backend_available():
     """Check if weather backend components are available."""
     return WEATHER_BACKEND_AVAILABLE
+
+
+# ============================================================================
+# Cache-aware data fetching services for CurrentConditions and Forecasts
+# ============================================================================
+
+
+class CurrentConditionsService:
+    """Service for fetching current conditions with 15-minute cache validation."""
+
+    @staticmethod
+    def get_or_fetch_current_conditions(location: Location, force_refresh: bool = False):
+        """
+        Get current conditions for a location.
+
+        Strategy:
+        1. If force_refresh is True, fetch from API regardless of cache age
+        2. If no cached data exists, fetch from API
+        3. If cached data is stale (>15 min), fetch from API
+        4. Otherwise, return cached data
+
+        Args:
+            location: Location instance
+            force_refresh: If True, bypass cache and fetch fresh data
+
+        Returns:
+            CurrentConditions instance or None if fetch fails
+        """
+        from .models import CurrentConditions
+
+        try:
+            current_conditions = location.current_conditions_cache
+        except CurrentConditions.DoesNotExist:
+            current_conditions = None
+
+        # Check if we need to fetch fresh data
+        should_fetch = force_refresh or current_conditions is None or current_conditions.is_stale
+
+        if should_fetch:
+            logger.info(
+                f"Fetching fresh current conditions for {location.name} "
+                f"(force_refresh={force_refresh}, exists={current_conditions is not None}, "
+                f"stale={current_conditions.is_stale if current_conditions else 'N/A'})"
+            )
+            return CurrentConditionsService.fetch_and_cache_current_conditions(location)
+        else:
+            age_minutes = int((timezone.now() - current_conditions.updated_at).total_seconds() / 60)
+            logger.info(
+                f"Returning cached current conditions for {location.name} "
+                f"(age={age_minutes} minutes)"
+            )
+            return current_conditions
+
+    @staticmethod
+    def fetch_and_cache_current_conditions(location: Location):
+        """
+        Fetch current conditions from API and cache in database.
+
+        This integrates with existing fetch_current_conditions logic from views.
+
+        Args:
+            location: Location instance
+
+        Returns:
+            CurrentConditions instance or None if fetch fails
+        """
+        from .models import CurrentConditions
+
+        if not location.latitude or not location.longitude:
+            logger.warning(f"Location {location.name} has no coordinates, skipping fetch")
+            return None
+
+        try:
+            import requests
+
+            headers = {"User-Agent": "(Weather App, contact@example.com)"}
+
+            # Get grid point data from NWS
+            grid_url = (
+                f"https://api.weather.gov/points/{location.latitude},{location.longitude}"
+            )
+            grid_response = requests.get(grid_url, headers=headers, timeout=10)
+            grid_response.raise_for_status()
+            grid_data = grid_response.json()
+
+            properties = grid_data.get("properties", {})
+            observation_stations_url = properties.get("observationStations")
+
+            if not observation_stations_url:
+                logger.warning(f"No observation stations found for {location.name}")
+                return None
+
+            # Get observation stations
+            stations_response = requests.get(
+                observation_stations_url, headers=headers, timeout=10
+            )
+            stations_response.raise_for_status()
+            stations_data = stations_response.json()
+
+            stations = stations_data.get("features", [])
+            if not stations:
+                logger.warning(f"No stations available for {location.name}")
+                return None
+
+            station_id = stations[0].get("properties", {}).get("stationIdentifier")
+            if not station_id:
+                logger.warning(f"No station ID found for {location.name}")
+                return None
+
+            # Get latest observation
+            obs_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
+            obs_response = requests.get(obs_url, headers=headers, timeout=10)
+            obs_response.raise_for_status()
+            obs_data = obs_response.json()
+
+            obs_props = obs_data.get("properties", {})
+
+            # Extract values and convert units
+            temp_c = obs_props.get("temperature", {}).get("value")
+            temperature = int(temp_c * 9 / 5 + 32) if temp_c else None
+
+            feels_like_c = obs_props.get("apparentTemperature", {}).get("value")
+            feels_like = int(feels_like_c * 9 / 5 + 32) if feels_like_c else None
+
+            condition = obs_props.get("textDescription", "Unknown")
+
+            wind_speed_ms = obs_props.get("windSpeed", {}).get("value")
+            wind_speed = int(wind_speed_ms * 2.237) if wind_speed_ms else 0  # m/s to mph
+
+            wind_direction = obs_props.get("windDirection", {}).get("value")
+            wind_direction_str = CurrentConditionsService._bearing_to_direction(wind_direction)
+
+            wind_gust_ms = obs_props.get("windGust", {}).get("value")
+            wind_gust = int(wind_gust_ms * 2.237) if wind_gust_ms else None
+
+            humidity = obs_props.get("relativeHumidity", {}).get("value")
+            humidity_val = int(humidity) if humidity else 0
+
+            # Precipitation
+            precip_mm = obs_props.get("precipitationLast3Hours", {}).get("value")
+            precipitation = precip_mm / 25.4 if precip_mm else None  # mm to inches
+
+            # Advanced metrics
+            pressure_pa = obs_props.get("barometricPressure", {}).get("value")
+            pressure = pressure_pa / 100 if pressure_pa else None  # Pa to mb
+
+            visibility_m = obs_props.get("visibility", {}).get("value")
+            visibility = visibility_m / 1609.34 if visibility_m else None  # meters to miles
+
+            # Create or update CurrentConditions
+            current_conditions, created = CurrentConditions.objects.update_or_create(
+                location=location,
+                defaults={
+                    "temperature": temperature or 0,
+                    "feels_like_temperature": feels_like,
+                    "condition": condition,
+                    "wind_speed": wind_speed,
+                    "wind_direction": wind_direction_str,
+                    "wind_gust": wind_gust,
+                    "humidity": humidity_val,
+                    "precipitation": precipitation,
+                    "pressure": pressure,
+                    "visibility": visibility,
+                    "uv_index": None,  # TODO: Add UV index from separate source
+                    "last_observation_time": timezone.now(),
+                    "raw_data": obs_data,
+                },
+            )
+
+            action = "created" if created else "updated"
+            logger.info(f"Successfully {action} current conditions for {location.name}")
+            return current_conditions
+
+        except requests.RequestException as e:
+            logger.error(f"API request failed for {location.name}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching current conditions for {location.name}: {str(e)}")
+            return None
+
+    @staticmethod
+    def _bearing_to_direction(bearing):
+        """Convert bearing in degrees to cardinal direction."""
+        if bearing is None:
+            return ""
+        bearing = bearing % 360
+        directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+                      "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+        idx = int((bearing + 11.25) / 22.5)
+        return directions[idx % 16]
+
+
+class ForecastService:
+    """Service for fetching forecasts with 15-minute cache validation."""
+
+    @staticmethod
+    def get_or_fetch_hourly_forecasts(location: Location, force_refresh: bool = False):
+        """
+        Get hourly forecasts for a location.
+
+        Strategy: Same as CurrentConditionsService - check cache age, fetch if stale.
+
+        Args:
+            location: Location instance
+            force_refresh: If True, bypass cache
+
+        Returns:
+            QuerySet of HourlyForecast objects
+        """
+        # Get most recent forecast
+        recent_forecasts = location.forecasts.filter(
+            period_start__gte=timezone.now()
+        ).order_by('-last_api_update').first()
+
+        should_fetch = (
+            force_refresh or
+            recent_forecasts is None or
+            recent_forecasts.is_stale
+        )
+
+        if should_fetch:
+            logger.info(
+                f"Fetching fresh hourly forecasts for {location.name} "
+                f"(force_refresh={force_refresh}, exists={recent_forecasts is not None}, "
+                f"stale={recent_forecasts.is_stale if recent_forecasts else 'N/A'})"
+            )
+            # TODO: Call API fetch method
+
+        return location.forecasts.filter(
+            period_start__gte=timezone.now(),
+            hourlyforecast__isnull=False
+        ).order_by('period_start')
+
+    @staticmethod
+    def get_or_fetch_daily_forecasts(location: Location, force_refresh: bool = False):
+        """
+        Get daily forecasts for a location.
+
+        Args:
+            location: Location instance
+            force_refresh: If True, bypass cache
+
+        Returns:
+            QuerySet of DailyForecast objects
+        """
+        # Get most recent forecast
+        recent_forecasts = location.forecasts.filter(
+            period_start__gte=timezone.now(),
+            dailyforecast__isnull=False
+        ).order_by('-last_api_update').first()
+
+        should_fetch = (
+            force_refresh or
+            recent_forecasts is None or
+            recent_forecasts.is_stale
+        )
+
+        if should_fetch:
+            logger.info(
+                f"Fetching fresh daily forecasts for {location.name} "
+                f"(force_refresh={force_refresh})"
+            )
+            # TODO: Call API fetch method
+
+        return location.forecasts.filter(
+            period_start__gte=timezone.now(),
+            dailyforecast__isnull=False
+        ).order_by('period_start')

@@ -6,6 +6,7 @@ from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
 
 from .models import (
+    CurrentConditions,
     DailyForecast,
     ForecastRequest,
     HourlyForecast,
@@ -77,6 +78,55 @@ class LocationSerializer(ModelSerializer):
         return obj.display_name
 
 
+class CurrentConditionsSerializer(ModelSerializer):
+    """Current weather conditions serializer."""
+
+    location_name = serializers.CharField(source="location.name", read_only=True)
+    location_id = serializers.CharField(source="location.id", read_only=True)
+    is_stale = SerializerMethodField()
+    age_minutes = SerializerMethodField()
+
+    class Meta:
+        model = CurrentConditions
+        fields = [
+            "id",
+            "location",
+            "location_id",
+            "location_name",
+            "temperature",
+            "feels_like_temperature",
+            "condition",
+            "wind_speed",
+            "wind_direction",
+            "wind_gust",
+            "humidity",
+            "precipitation",
+            "pressure",
+            "visibility",
+            "uv_index",
+            "last_observation_time",
+            "is_stale",
+            "age_minutes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+            "last_observation_time",
+        ]
+
+    def get_is_stale(self, obj):
+        """Check if data is older than 15 minutes."""
+        return obj.is_stale
+
+    def get_age_minutes(self, obj):
+        """Get minutes since last update."""
+        age = timezone.now() - obj.updated_at
+        return int(age.total_seconds() / 60)
+
+
 class LocationCreateSerializer(serializers.Serializer):
     """Serializer for creating locations from various input formats."""
 
@@ -105,6 +155,7 @@ class HourlyForecastSerializer(ModelSerializer):
 
     location_name = serializers.CharField(source="location.name", read_only=True)
     apparent_temperature_display = SerializerMethodField()
+    is_stale = SerializerMethodField()
 
     class Meta:
         model = HourlyForecast
@@ -127,10 +178,12 @@ class HourlyForecastSerializer(ModelSerializer):
             "precipitation_probability",
             "humidity",
             "dew_point",
+            "last_api_update",
+            "is_stale",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at", "last_api_update"]
 
     def get_apparent_temperature_display(self, obj):
         """Get formatted apparent temperature."""
@@ -138,12 +191,17 @@ class HourlyForecastSerializer(ModelSerializer):
             return f"{obj.apparent_temperature}°{obj.temperature_unit}"
         return None
 
+    def get_is_stale(self, obj):
+        """Check if forecast is older than 15 minutes."""
+        return obj.is_stale
+
 
 class DailyForecastSerializer(ModelSerializer):
     """Daily forecast serializer."""
 
     location_name = serializers.CharField(source="location.name", read_only=True)
     temperature_range = SerializerMethodField()
+    is_stale = SerializerMethodField()
 
     class Meta:
         model = DailyForecast
@@ -166,10 +224,12 @@ class DailyForecastSerializer(ModelSerializer):
             "wind_direction",
             "wind_gust",
             "precipitation_probability",
+            "last_api_update",
+            "is_stale",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at", "last_api_update"]
 
     def get_temperature_range(self, obj):
         """Get formatted temperature range."""
@@ -179,6 +239,10 @@ class DailyForecastSerializer(ModelSerializer):
         if high_temp and low_temp:
             return f"{low_temp}°{obj.temperature_unit} - {high_temp}°{obj.temperature_unit}"
         return None
+
+    def get_is_stale(self, obj):
+        """Check if forecast is older than 15 minutes."""
+        return obj.is_stale
 
 
 class WeatherAlertSerializer(ModelSerializer):

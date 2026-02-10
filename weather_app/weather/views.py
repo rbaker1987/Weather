@@ -21,6 +21,7 @@ from rest_framework.views import APIView
 
 from .forms import UniqueUsernameCreationForm
 from .models import (
+    CurrentConditions,
     DailyForecast,
     ForecastRequest,
     HourlyForecast,
@@ -29,6 +30,7 @@ from .models import (
 )
 from .serializers import (
     BulkForecastRequestSerializer,
+    CurrentConditionsSerializer,
     DailyForecastSerializer,
     HourlyForecastSerializer,
     LocationSerializer,
@@ -1101,6 +1103,82 @@ class WeatherAlertViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = WeatherAlert.objects.filter(is_active=True)
     serializer_class = WeatherAlertSerializer
     permission_classes = [permissions.AllowAny]
+
+
+class CurrentConditionsViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API ViewSet for current weather conditions with cache-aware fetching.
+
+    This endpoint serves cached conditions from the database if fresh (<15 min),
+    or fetches from the API if stale. Use ?refresh=true to force a fresh API call.
+    """
+
+    queryset = CurrentConditions.objects.select_related("location")
+    serializer_class = CurrentConditionsSerializer
+    permission_classes = [permissions.AllowAny]
+
+    @action(detail=False, methods=["get"])
+    def by_location(self, request):
+        """Get current conditions for a specific location by location_id."""
+        from .services import CurrentConditionsService
+
+        location_id = request.query_params.get("location_id")
+        force_refresh = request.query_params.get("refresh", "false").lower() == "true"
+
+        if not location_id:
+            return Response(
+                {"error": "location_id query parameter required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            location = Location.objects.get(id=location_id)
+        except Location.DoesNotExist:
+            return Response(
+                {"error": f"Location with id {location_id} not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Use cache-aware fetching
+        current_conditions = CurrentConditionsService.get_or_fetch_current_conditions(
+            location, force_refresh=force_refresh
+        )
+
+        if not current_conditions:
+            return Response(
+                {"error": f"Unable to fetch current conditions for {location.name}"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        serializer = self.get_serializer(current_conditions)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["get"])
+    def for_locations(self, request):
+        """Get current conditions for multiple locations."""
+        from .services import CurrentConditionsService
+
+        location_ids = request.query_params.getlist("location_ids")
+        force_refresh = request.query_params.get("refresh", "false").lower() == "true"
+
+        if not location_ids:
+            return Response(
+                {"error": "location_ids query parameter required (comma-separated or repeated)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        locations = Location.objects.filter(id__in=location_ids)
+        results = []
+
+        for location in locations:
+            conditions = CurrentConditionsService.get_or_fetch_current_conditions(
+                location, force_refresh=force_refresh
+            )
+            if conditions:
+                results.append(conditions)
+
+        serializer = self.get_serializer(results, many=True)
+        return Response(serializer.data)
     filterset_fields = ["location", "severity", "urgency"]
     ordering = ["-onset", "-created_at"]
 
