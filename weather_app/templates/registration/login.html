@@ -1,0 +1,48 @@
+{% extends "weather/base.html" %} {% block title %}Login - Ralph's Weather{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="card weather-card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-sign-in-alt"></i> Login</h5>
+      </div>
+      <div class="card-body">
+        {% if form.errors %}
+        <div class="alert alert-danger">Please check your username and password.</div>
+        {% endif %}
+        <form method="post" action="{% url 'login' %}">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="id_username" class="form-label">Username</label>
+            <input
+              type="text"
+              class="form-control"
+              id="id_username"
+              name="username"
+              autocomplete="username"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="id_password" class="form-label">Password</label>
+            <input
+              type="password"
+              class="form-control"
+              id="id_password"
+              name="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <input type="hidden" name="next" value="{{ next }}" />
+          <button type="submit" class="btn btn-primary w-100">Sign In</button>
+        </form>
+        <div class="d-flex justify-content-between mt-3">
+          <a href="{% url 'password_reset' %}">Forgot password?</a>
+          <a href="{% url 'signup' %}">Create account</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

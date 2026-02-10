@@ -175,6 +175,18 @@ else:
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Authentication
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "weather:dashboard"
+LOGOUT_REDIRECT_URL = "weather:dashboard"
+
+# Email (password reset)
+EMAIL_BACKEND = os.getenv(
+    "DJANGO_EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@ralphs-weather.local")
+
 # Django REST Framework settings
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
