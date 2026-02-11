@@ -7,7 +7,7 @@ the weather application components now contained within the Django app.
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from asgiref.sync import async_to_sync, sync_to_async
@@ -28,7 +28,7 @@ except ImportError as e:
 
     warnings.warn(f"Weather backend components not available: {e}", stacklevel=2)
 
-from .models import DailyForecast, HourlyForecast, Location
+from .models import DailyForecast, HourlyForecast, Location, WeatherAlert
 
 logger = logging.getLogger("weather")
 
@@ -201,6 +201,7 @@ class WeatherIntegrationService:
                         "precipitation_probability": getattr(
                             forecast, "precipitation_probability", None
                         ),
+                        "last_api_update": timezone.now(),
                     },
                 )
                 if created:
@@ -241,6 +242,7 @@ class WeatherIntegrationService:
                         ),
                         "humidity": getattr(forecast, "humidity", None),
                         "dew_point": getattr(forecast, "dew_point", None),
+                        "last_api_update": timezone.now(),
                     },
                 )
                 if created:
@@ -591,9 +593,11 @@ class ForecastService:
         Returns:
             QuerySet of HourlyForecast objects
         """
-        # Get most recent forecast
+        # Get most recent hourly forecast
         recent_forecasts = (
-            location.forecasts.filter(period_start__gte=timezone.now())
+            HourlyForecast.objects.filter(
+                location=location, period_start__gte=timezone.now()
+            )
             .order_by("-last_api_update")
             .first()
         )
@@ -608,10 +612,10 @@ class ForecastService:
                 f"(force_refresh={force_refresh}, exists={recent_forecasts is not None}, "
                 f"stale={recent_forecasts.is_stale if recent_forecasts else 'N/A'})"
             )
-            # TODO: Call API fetch method
+            SyncWeatherService.update_forecasts_for_location(location)
 
-        return location.forecasts.filter(
-            period_start__gte=timezone.now(), hourlyforecast__isnull=False
+        return HourlyForecast.objects.filter(
+            location=location, period_start__gte=timezone.now()
         ).order_by("period_start")
 
     @staticmethod
@@ -626,10 +630,10 @@ class ForecastService:
         Returns:
             QuerySet of DailyForecast objects
         """
-        # Get most recent forecast
+        # Get most recent daily forecast
         recent_forecasts = (
-            location.forecasts.filter(
-                period_start__gte=timezone.now(), dailyforecast__isnull=False
+            DailyForecast.objects.filter(
+                location=location, forecast_date__gte=timezone.now().date()
             )
             .order_by("-last_api_update")
             .first()
@@ -644,8 +648,97 @@ class ForecastService:
                 f"Fetching fresh daily forecasts for {location.name} "
                 f"(force_refresh={force_refresh})"
             )
-            # TODO: Call API fetch method
+            SyncWeatherService.update_forecasts_for_location(location)
 
-        return location.forecasts.filter(
-            period_start__gte=timezone.now(), dailyforecast__isnull=False
-        ).order_by("period_start")
+        return DailyForecast.objects.filter(
+            location=location, forecast_date__gte=timezone.now().date()
+        ).order_by("forecast_date", "-is_daytime")
+
+
+class AlertsService:
+    """Service for fetching weather alerts with 15-minute cache validation."""
+
+    CACHE_MINUTES = 15
+
+    @staticmethod
+    def get_or_fetch_alerts(location: Location, force_refresh: bool = False):
+        """
+        Get active alerts for a location.
+
+        Strategy:
+        1. If force_refresh is True, fetch from API regardless of cache age
+        2. If no cached fetch timestamp exists, fetch from API
+        3. If cached fetch timestamp is stale (>15 min), fetch from API
+        4. Otherwise, return cached alerts from database
+        """
+        from django.core.cache import cache
+
+        cache_key = f"alerts:last_fetch:{location.id}"
+        last_fetch = cache.get(cache_key)
+        stale = True
+        if last_fetch:
+            stale = timezone.now() - last_fetch > timedelta(
+                minutes=AlertsService.CACHE_MINUTES
+            )
+
+        if force_refresh or stale:
+            return AlertsService.fetch_and_cache_alerts(location)
+
+        return WeatherAlert.objects.filter(
+            location=location, is_active=True, expires__gt=timezone.now()
+        ).order_by("-severity")
+
+    @staticmethod
+    def fetch_and_cache_alerts(location: Location):
+        """Fetch active alerts from NWS and update the database cache."""
+        import requests
+        from django.core.cache import cache
+
+        headers = {"User-Agent": "(Weather App, contact@example.com)"}
+        alerts_url = f"https://api.weather.gov/alerts/active?point={location.latitude},{location.longitude}"
+
+        response = requests.get(alerts_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        alerts_data = response.json()
+
+        WeatherAlert.objects.filter(location=location).update(is_active=False)
+
+        features = alerts_data.get("features", [])
+        for feature in features:
+            props = feature.get("properties", {})
+            nws_id = props.get("id")
+            if not nws_id:
+                continue
+
+            onset = props.get("onset")
+            expires = props.get("expires")
+            if onset:
+                onset = datetime.fromisoformat(onset.replace("Z", "+00:00"))
+            if expires:
+                expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+
+            WeatherAlert.objects.update_or_create(
+                nws_alert_id=nws_id,
+                defaults={
+                    "location": location,
+                    "event": props.get("event", "Unknown"),
+                    "headline": props.get("headline", ""),
+                    "description": props.get("description", ""),
+                    "severity": props.get("severity", "unknown").lower(),
+                    "urgency": props.get("urgency", "unknown").lower(),
+                    "onset": onset,
+                    "expires": expires,
+                    "is_active": True,
+                    "raw_data": props,
+                },
+            )
+
+        cache.set(
+            f"alerts:last_fetch:{location.id}",
+            timezone.now(),
+            timeout=AlertsService.CACHE_MINUTES * 60,
+        )
+
+        return WeatherAlert.objects.filter(
+            location=location, is_active=True, expires__gt=timezone.now()
+        ).order_by("-severity")

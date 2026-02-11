@@ -48,112 +48,12 @@ def fetch_current_conditions(location):
         return False
 
     try:
-        from datetime import datetime
+        from .services import CurrentConditionsService
 
-        import requests
-
-        headers = {"User-Agent": "(Weather App, contact@example.com)"}
-
-        # Get grid point data
-        grid_url = (
-            f"https://api.weather.gov/points/{location.latitude},{location.longitude}"
+        current_conditions = (
+            CurrentConditionsService.fetch_and_cache_current_conditions(location)
         )
-        grid_response = requests.get(grid_url, headers=headers, timeout=10)
-        grid_response.raise_for_status()
-        grid_data = grid_response.json()
-
-        properties = grid_data.get("properties", {})
-        observation_stations_url = properties.get("observationStations")
-
-        if not observation_stations_url:
-            return False
-
-        # Get observation stations
-        stations_response = requests.get(
-            observation_stations_url, headers=headers, timeout=10
-        )
-        stations_response.raise_for_status()
-        stations_data = stations_response.json()
-
-        stations = stations_data.get("features", [])
-        if not stations:
-            return False
-
-        station_id = stations[0].get("properties", {}).get("stationIdentifier")
-        if not station_id:
-            return False
-
-        # Get latest observation
-        obs_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
-        obs_response = requests.get(obs_url, headers=headers, timeout=10)
-        obs_response.raise_for_status()
-        obs_data = obs_response.json()
-
-        obs_props = obs_data.get("properties", {})
-
-        # Get or create CurrentConditions object for this location
-        cc, created = CurrentConditions.objects.get_or_create(location=location)
-
-        # Extract and update current conditions
-        temp_c = obs_props.get("temperature", {}).get("value")
-        if temp_c:
-            cc.temperature = int(temp_c * 9 / 5 + 32)
-
-        cc.condition = obs_props.get("textDescription", "")
-
-        humidity = obs_props.get("relativeHumidity", {}).get("value")
-        if humidity:
-            cc.humidity = int(humidity)
-
-        wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
-        if wind_speed_kmh is not None:
-            try:
-                cc.wind_speed = int(wind_speed_kmh * 0.621371)
-            except (ValueError, TypeError):
-                cc.wind_speed = 0
-        else:
-            cc.wind_speed = 0
-
-        # Wind gust
-        wind_gust_kmh = obs_props.get("windGust", {}).get("value")
-        if wind_gust_kmh is not None:
-            try:
-                cc.wind_gust = int(wind_gust_kmh * 0.621371)
-            except (ValueError, TypeError):
-                cc.wind_gust = None
-        else:
-            cc.wind_gust = None
-
-        wind_dir_deg = obs_props.get("windDirection", {}).get("value")
-        if wind_dir_deg is not None:
-            try:
-                deg = float(wind_dir_deg)
-                directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-                cc.wind_direction = directions[int((deg + 22.5) / 45) % 8]
-            except (ValueError, TypeError):
-                cc.wind_direction = ""
-        else:
-            cc.wind_direction = ""
-
-        # Calculate apparent temperature
-        if cc.temperature is not None:
-            dew_point_c = obs_props.get("dewpoint", {}).get("value")
-            cc.feels_like_temperature = calculate_apparent_temperature(
-                temp_f=cc.temperature,
-                humidity_pct=cc.humidity,
-                wind_speed_mph=cc.wind_speed or 0,
-                dew_point_c=dew_point_c,
-            )
-
-        timestamp = obs_props.get("timestamp")
-        if timestamp:
-            cc.last_observation_time = datetime.fromisoformat(
-                timestamp.replace("Z", "+00:00")
-            )
-
-        cc.save()
-        return True
-
+        return current_conditions is not None
     except Exception as e:
         logger.warning(
             f"Could not fetch current conditions for {location.name}: {str(e)}"
@@ -204,10 +104,16 @@ class LocationViewSet(viewsets.ModelViewSet):
 
                 # Try zip code first if available
                 if location.zip_code:
-                    geocode_url = f"https://nominatim.openstreetmap.org/search?postalcode={location.zip_code}&country=US&format=json&limit=1"
+                    geocode_url = (
+                        "https://nominatim.openstreetmap.org/search?"
+                        f"postalcode={location.zip_code}&country=US&format=json&limit=1"
+                    )
                 else:
                     # Otherwise geocode the name
-                    geocode_url = f"https://nominatim.openstreetmap.org/search?q={location.name}&format=json&limit=1"
+                    geocode_url = (
+                        "https://nominatim.openstreetmap.org/search?"
+                        f"q={location.name}&format=json&limit=1"
+                    )
 
                 geo_response = requests.get(geocode_url, headers=headers, timeout=10)
                 geo_response.raise_for_status()
@@ -221,179 +127,21 @@ class LocationViewSet(viewsets.ModelViewSet):
                 # Log error but don't fail the creation
                 logger.warning(f"Geocoding error: {str(e)}")
 
-        # Automatically fetch current conditions after creating location
+        # Kick off background refreshes (best-effort)
         if location.latitude and location.longitude:
             try:
-                fetch_current_conditions(location)
-            except Exception as e:
-                logger.warning(
-                    f"Could not fetch initial conditions for {location.name}: {str(e)}"
+                from .tasks import (
+                    update_alerts_for_location,
+                    update_current_conditions_for_location,
+                    update_forecasts_for_location,
                 )
 
-    @action(detail=True, methods=["get", "post"])
-    def forecasts(self, request, pk=None):
-        """Get forecasts for a specific location or create a custom forecast."""
-        location = self.get_object()
-
-        if request.method == "POST":
-            # Create a custom forecast
-            data = request.data.copy()
-            data["location"] = location.id
-
-            # Check if this is the first forecast in a batch (indicated by a special header or parameter)
-            # If so, clear all existing forecasts to start fresh
-            is_batch_start = request.data.get("_batch_start", False)
-            if is_batch_start:
-                DailyForecast.objects.filter(location=location).delete()
-
-            # Parse the date and period
-            forecast_date = data.get("date")
-            is_daytime = data.get("is_daytime", True)
-
-            if forecast_date:
-                data["forecast_date"] = forecast_date
-
-                # Calculate period_start and period_end
-                forecast_date_obj = datetime.strptime(forecast_date, "%Y-%m-%d").date()
-                if is_daytime:
-                    # Day period: 6 AM to 6 PM
-                    period_start = datetime.combine(forecast_date_obj, time(6, 0))
-                    period_end = datetime.combine(forecast_date_obj, time(18, 0))
-                else:
-                    # Night period: 6 PM to 6 AM next day
-                    period_start = datetime.combine(forecast_date_obj, time(18, 0))
-                    period_end = datetime.combine(
-                        forecast_date_obj + timedelta(days=1), time(6, 0)
-                    )
-
-                data["period_start"] = period_start.isoformat()
-                data["period_end"] = period_end.isoformat()
-
-                # Set default values for required fields if not provided
-                if "wind_speed" not in data:
-                    data["wind_speed"] = 0
-                if "wind_direction" not in data:
-                    data["wind_direction"] = ""
-
-                # Check if forecast already exists and update it
-                existing_forecast = DailyForecast.objects.filter(
-                    location=location,
-                    forecast_date=forecast_date_obj,
-                    is_daytime=is_daytime,
-                ).first()
-
-                if existing_forecast:
-                    # Update existing forecast
-                    serializer = DailyForecastSerializer(
-                        existing_forecast, data=data, partial=True
-                    )
-                else:
-                    # Create new forecast
-                    serializer = DailyForecastSerializer(data=data)
-
-                if serializer.is_valid():
-                    serializer.save(location=location)
-                    return Response(
-                        serializer.data,
-                        status=status.HTTP_200_OK
-                        if existing_forecast
-                        else status.HTTP_201_CREATED,
-                    )
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-            return Response(
-                {"error": "forecast_date is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # GET request - return forecasts
-        forecast_type = request.query_params.get("type", "daily")
-        days = int(request.query_params.get("days", 5))
-
-        end_date = timezone.now().date() + timedelta(days=days)
-
-        if forecast_type == "hourly":
-            forecasts = HourlyForecast.objects.filter(
-                location=location, forecast_date__lte=end_date
-            ).order_by("period_start")
-            serializer = HourlyForecastSerializer(forecasts, many=True)
-        else:
-            forecasts = DailyForecast.objects.filter(
-                location=location, forecast_date__lte=end_date
-            ).order_by("forecast_date")
-            serializer = DailyForecastSerializer(forecasts, many=True)
-
-        return Response(serializer.data)
-
-    @action(detail=True, methods=["get"])
-    def alerts(self, request, pk=None):
-        """Get active alerts for a specific location."""
-        location = self.get_object()
-        alerts = WeatherAlert.objects.filter(
-            location=location, is_active=True, expires__gt=timezone.now()
-        ).order_by("-severity", "-onset")
-
-        serializer = WeatherAlertSerializer(alerts, many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=["post"], url_path="hourly-forecasts")
-    def hourly_forecasts(self, request, pk=None):
-        """Create custom hourly forecast for a location."""
-        location = self.get_object()
-        data = request.data.copy()
-        data["location"] = location.id
-
-        # Check if this is the first forecast in a batch
-        is_batch_start = request.data.get("_batch_start", False)
-        if is_batch_start:
-            HourlyForecast.objects.filter(location=location).delete()
-
-        # Parse forecast_time
-        forecast_time = data.get("forecast_time")
-        if not forecast_time:
-            return Response(
-                {"error": "forecast_time is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Convert to datetime
-        from dateutil import parser as date_parser
-
-        forecast_time_obj = date_parser.isoparse(forecast_time)
-
-        # Set period_start and period_end (1-hour window)
-        data["period_start"] = forecast_time_obj.isoformat()
-        period_end = forecast_time_obj + timedelta(hours=1)
-        data["period_end"] = period_end.isoformat()
-        data["forecast_date"] = forecast_time_obj.date().isoformat()
-
-        # Set default values
-        if "wind_speed" not in data:
-            data["wind_speed"] = 0
-        if "wind_direction" not in data:
-            data["wind_direction"] = ""
-
-        # Check if forecast already exists and update it
-        existing_forecast = HourlyForecast.objects.filter(
-            location=location, period_start=forecast_time_obj
-        ).first()
-
-        if existing_forecast:
-            serializer = HourlyForecastSerializer(
-                existing_forecast, data=data, partial=True
-            )
-        else:
-            serializer = HourlyForecastSerializer(data=data)
-
-        if serializer.is_valid():
-            serializer.save(location=location)
-            return Response(
-                serializer.data,
-                status=status.HTTP_200_OK
-                if existing_forecast
-                else status.HTTP_201_CREATED,
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                update_current_conditions_for_location.delay(str(location.id))
+                update_forecasts_for_location.delay(str(location.id))
+                update_alerts_for_location.delay(str(location.id))
+            except Exception:
+                fetch_current_conditions(location)
+                _refresh_forecasts_for_location(location)
 
     @action(detail=False, methods=["post"])
     def ensure_browser_location(self, request):
@@ -454,11 +202,17 @@ class LocationViewSet(viewsets.ModelViewSet):
                 request.session["location_ids"] = session_ids_str
                 request.session.modified = True
 
-            # Kick off a forecast refresh (best-effort)
+            # Kick off background refreshes (best-effort)
             try:
-                from .services import SyncWeatherService
+                from .tasks import (
+                    update_alerts_for_location,
+                    update_current_conditions_for_location,
+                    update_forecasts_for_location,
+                )
 
-                SyncWeatherService.update_forecasts_for_location(location)
+                update_current_conditions_for_location.delay(str(location.id))
+                update_forecasts_for_location.delay(str(location.id))
+                update_alerts_for_location.delay(str(location.id))
             except Exception:
                 _refresh_forecasts_for_location(location)
 
@@ -522,18 +276,14 @@ class LocationViewSet(viewsets.ModelViewSet):
                 )
 
         try:
-            # Fetch forecast data from NWS API
             import requests
 
-            # Get grid point data
-            grid_url = f"https://api.weather.gov/points/{location.latitude},{location.longitude}"
             headers = {"User-Agent": "(Weather App, contact@example.com)"}
-
+            grid_url = f"https://api.weather.gov/points/{location.latitude},{location.longitude}"
             grid_response = requests.get(grid_url, headers=headers, timeout=10)
             grid_response.raise_for_status()
             grid_data = grid_response.json()
 
-            # Update NWS grid info
             properties = grid_data.get("properties", {})
             location.nws_office = properties.get("gridId", "")
             location.grid_x = properties.get("gridX")
@@ -549,15 +299,16 @@ class LocationViewSet(viewsets.ModelViewSet):
                     stations_response.raise_for_status()
                     stations_data = stations_response.json()
 
-                    # Get first station
                     stations = stations_data.get("features", [])
                     if stations:
                         station_id = (
                             stations[0].get("properties", {}).get("stationIdentifier")
                         )
                         if station_id:
-                            # Get latest observation
-                            obs_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
+                            obs_url = (
+                                "https://api.weather.gov/stations/"
+                                f"{station_id}/observations/latest"
+                            )
                             obs_response = requests.get(
                                 obs_url, headers=headers, timeout=10
                             )
@@ -565,14 +316,11 @@ class LocationViewSet(viewsets.ModelViewSet):
                             obs_data = obs_response.json()
 
                             obs_props = obs_data.get("properties", {})
-
-                            # Extract temperature FIRST before creating object
                             temp_c = obs_props.get("temperature", {}).get("value")
                             temp_f = (
                                 int(temp_c * 9 / 5 + 32) if temp_c is not None else 32
                             )
 
-                            # Primary location observation station: get/create with defaults
                             cc, created = CurrentConditions.objects.get_or_create(
                                 location=location,
                                 defaults={
@@ -587,7 +335,6 @@ class LocationViewSet(viewsets.ModelViewSet):
                                 },
                             )
 
-                            # Always update fields (whether new or existing)
                             cc.temperature = temp_f
                             cc.condition = obs_props.get("textDescription", "Unknown")
 
@@ -597,19 +344,17 @@ class LocationViewSet(viewsets.ModelViewSet):
                             if humidity is not None:
                                 cc.humidity = int(humidity)
                             elif cc.humidity is None:
-                                cc.humidity = 50  # Default humidity
+                                cc.humidity = 50
 
                             wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
                             if wind_speed_kmh is not None:
                                 try:
-                                    # Wind speed from NWS is in km/h, convert to mph
                                     cc.wind_speed = int(wind_speed_kmh * 0.621371)
                                 except (ValueError, TypeError):
                                     cc.wind_speed = 0
                             else:
                                 cc.wind_speed = 0
 
-                            # Wind gust
                             wind_gust_kmh = obs_props.get("windGust", {}).get("value")
                             if wind_gust_kmh is not None:
                                 try:
@@ -623,7 +368,6 @@ class LocationViewSet(viewsets.ModelViewSet):
                                 "value"
                             )
                             if wind_dir_deg is not None:
-                                # Convert degrees to cardinal direction
                                 try:
                                     deg = float(wind_dir_deg)
                                     directions = [
@@ -644,7 +388,6 @@ class LocationViewSet(viewsets.ModelViewSet):
                             else:
                                 cc.wind_direction = ""
 
-                            # Calculate apparent temperature
                             if cc.temperature is not None:
                                 dew_point_c = obs_props.get("dewpoint", {}).get("value")
                                 cc.feels_like_temperature = (
@@ -662,130 +405,119 @@ class LocationViewSet(viewsets.ModelViewSet):
                                     timestamp.replace("Z", "+00:00")
                                 )
                             elif cc.last_observation_time is None:
-                                # Set to now if not provided
                                 cc.last_observation_time = timezone.now()
 
-                            # Save current conditions including apparent temperature
                             cc.save()
             except Exception as e:
-                import traceback
+                logger.warning(
+                    "Could not fetch current conditions for %s: %s",
+                    location.name,
+                    e,
+                )
 
-                print(f"Warning: Could not fetch current conditions: {str(e)}")
-                print(f"Traceback: {traceback.format_exc()}")
-
-            # Get forecast URL
-            forecast_url = properties.get("forecast")
-            if not forecast_url:
-                raise Exception("No forecast URL available")
-
-            # Fetch forecast data
-            forecast_response = requests.get(forecast_url, headers=headers, timeout=10)
-            forecast_response.raise_for_status()
-            forecast_data = forecast_response.json()
-
-            # Parse and save forecast periods
-            periods = forecast_data.get("properties", {}).get("periods", [])
-
-            # Clear old forecasts (both daily and hourly, including custom)
-            DailyForecast.objects.filter(location=location).delete()
-            HourlyForecast.objects.filter(
-                location=location
-            ).delete()  # Clear all hourly including custom
-
-            # Helper function to parse wind speed
-            def parse_wind_speed(wind_speed_str):
-                """Extract numeric wind speed from string like '10 to 15 mph' or '10 mph'."""
-                if not wind_speed_str:
+            def parse_wind_speed(value):
+                if not value:
                     return 0
                 import re
 
-                # Extract all numbers from the string
-                numbers = re.findall(r"\d+", str(wind_speed_str))
+                numbers = re.findall(r"\d+", str(value))
                 if numbers:
-                    # If range like "10 to 15", take the average
                     if len(numbers) > 1:
                         return int((int(numbers[0]) + int(numbers[1])) / 2)
                     return int(numbers[0])
                 return 0
 
-            # Create new forecasts
-            for period in periods[:14]:  # Get up to 14 periods (7 days)
+            forecast_url = properties.get("forecast")
+            if not forecast_url:
+                return Response(
+                    {"status": "error", "message": "Forecast URL not found."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            forecast_response = requests.get(forecast_url, headers=headers, timeout=10)
+            forecast_response.raise_for_status()
+            forecast_data = forecast_response.json()
+
+            periods = forecast_data.get("properties", {}).get("periods", [])
+            DailyForecast.objects.filter(location=location).delete()
+            now = timezone.now()
+
+            for period in periods[:14]:
                 raw_start = datetime.fromisoformat(
                     period["startTime"].replace("Z", "+00:00")
                 )
-                local_start = raw_start.astimezone(timezone.get_current_timezone())
                 raw_end = datetime.fromisoformat(
                     period["endTime"].replace("Z", "+00:00")
                 )
+                local_start = raw_start.astimezone(timezone.get_current_timezone())
                 local_end = raw_end.astimezone(timezone.get_current_timezone())
 
-                # For night periods, associate with the same day (not the next day)
-                # E.g., "Friday Night" should be associated with Friday, not Saturday
                 is_daytime = period.get("isDaytime", True)
                 if is_daytime:
                     forecast_date = local_start.date()
                 else:
-                    # Night period: if it starts late in the day (e.g., 6 PM), use that date
-                    # Otherwise if it starts after midnight, subtract one day
-                    if local_start.hour >= 18:  # Starts at or after 6 PM
+                    if local_start.hour >= 18:
                         forecast_date = local_start.date()
                     else:
                         forecast_date = (local_start - timedelta(days=1)).date()
+
+                precip_value = period.get("probabilityOfPrecipitation", {}).get("value")
+                if precip_value is not None:
+                    try:
+                        precip_value = int(precip_value)
+                    except (TypeError, ValueError):
+                        precip_value = None
 
                 DailyForecast.objects.create(
                     location=location,
                     forecast_date=forecast_date,
                     period_start=local_start,
                     period_end=local_end,
-                    is_daytime=period.get("isDaytime", True),
-                    temperature=period.get("temperature"),
+                    is_daytime=is_daytime,
+                    temperature=period.get("temperature") or 0,
                     temperature_unit=period.get("temperatureUnit", "F"),
-                    wind_speed=parse_wind_speed(period.get("windSpeed", "")),
-                    wind_direction=period.get("windDirection", ""),
                     short_forecast=period.get("shortForecast", ""),
                     detailed_forecast=period.get("detailedForecast", ""),
-                    precipitation_probability=period.get(
-                        "probabilityOfPrecipitation", {}
-                    ).get("value"),
-                    nws_data_url=forecast_url,  # Mark as NWS forecast
+                    wind_speed=parse_wind_speed(period.get("windSpeed", "")),
+                    wind_direction=period.get("windDirection", ""),
+                    precipitation_probability=precip_value,
+                    nws_data_url=forecast_url,
+                    raw_data=period,
+                    last_api_update=now,
                 )
 
-            # Fetch weather alerts
+            location.last_forecast_update = now
+            location.save(
+                update_fields=["nws_office", "grid_x", "grid_y", "last_forecast_update"]
+            )
+
             alerts_created = 0
             alerts_updated = 0
             try:
-                # Get active alerts for this location
-                alerts_url = f"https://api.weather.gov/alerts/active?point={location.latitude},{location.longitude}"
+                alerts_url = (
+                    "https://api.weather.gov/alerts/active?"
+                    f"point={location.latitude},{location.longitude}"
+                )
                 alerts_response = requests.get(alerts_url, headers=headers, timeout=10)
                 alerts_response.raise_for_status()
                 alerts_data = alerts_response.json()
 
-                # Deactivate old alerts for this location
-                from weather.models import WeatherAlert
-
-                WeatherAlert.objects.filter(location=location).update(is_active=False)
-
-                # Process each alert
-                features = alerts_data.get("features", [])
-                for feature in features:
+                active_alert_ids = []
+                for feature in alerts_data.get("features", []):
                     props = feature.get("properties", {})
-                    nws_id = props.get("id")
-
-                    if not nws_id:
+                    alert_id = props.get("id")
+                    if not alert_id:
                         continue
 
-                    # Parse dates
                     onset = props.get("onset")
                     expires = props.get("expires")
-
                     if onset:
                         onset = datetime.fromisoformat(onset.replace("Z", "+00:00"))
                     if expires:
                         expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
 
-                    # Create or update alert
                     alert, created = WeatherAlert.objects.update_or_create(
-                        nws_alert_id=nws_id,
+                        nws_alert_id=alert_id,
                         defaults={
                             "location": location,
                             "event": props.get("event", "Unknown"),
@@ -799,75 +531,44 @@ class LocationViewSet(viewsets.ModelViewSet):
                             "raw_data": props,
                         },
                     )
-
+                    active_alert_ids.append(alert.nws_alert_id)
                     if created:
                         alerts_created += 1
                     else:
                         alerts_updated += 1
 
-            except requests.exceptions.RequestException as e:
-                # Don't fail the entire update if alerts fail
-                print(f"Warning: Failed to fetch alerts: {str(e)}")
+                if active_alert_ids:
+                    WeatherAlert.objects.filter(
+                        location=location, is_active=True
+                    ).exclude(nws_alert_id__in=active_alert_ids).update(is_active=False)
             except Exception as e:
-                print(f"Warning: Error processing alerts: {str(e)}")
-
-            # Update location
-            location.last_forecast_update = timezone.now()
-            location.save()
+                logger.warning(
+                    "Could not fetch alerts for %s: %s",
+                    location.name,
+                    e,
+                )
 
             return Response(
                 {
                     "status": "success",
-                    "message": f"Forecast updated for {location.name}",
-                    "last_update": location.last_forecast_update,
-                    "forecasts_created": len(periods[:14]),
+                    "periods_created": min(len(periods), 14),
                     "alerts_created": alerts_created,
                     "alerts_updated": alerts_updated,
                 }
             )
-
         except requests.exceptions.RequestException as e:
+            logger.error("Error fetching data from external service: %s", e)
             return Response(
                 {
                     "status": "error",
-                    "message": f"Failed to fetch forecast data: {str(e)}",
+                    "message": "An internal error occurred while fetching data.",
                 },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-        except Exception as e:
-            return Response(
-                {"status": "error", "message": f"Error updating forecast: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    @action(detail=False, methods=["post"])
-    def reorder(self, request):
-        """Reorder locations based on provided order."""
-        location_order = request.data.get("location_order", [])
-
-        if not location_order:
-            return Response(
-                {"status": "error", "message": "No location order provided"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            # Update display_order for each location
-            for index, location_id in enumerate(location_order):
-                Location.objects.filter(id=location_id).update(display_order=index)
-
-            return Response({"status": "success", "message": "Location order updated"})
-        except Exception as e:
-            return Response(
-                {"status": "error", "message": f"Error updating order: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=False, methods=["post"])
     def clear_all(self, request):
-        """Delete all saved locations and their related data.
-        Only affects persisted locations; the browser 'current location' card is not stored.
-        """
+        """Clear all locations."""
         try:
             count = Location.objects.filter(is_active=True).count()
             Location.objects.filter(is_active=True).delete()
@@ -947,6 +648,114 @@ class LocationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response(
                 {"status": "error", "message": f"Error toggling location: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(detail=True, methods=["get", "post"])
+    def forecasts(self, request, pk=None):
+        """Return or create forecasts for a location."""
+        location = self.get_object()
+
+        if request.method.lower() == "post":
+            data = request.data or {}
+            date_str = data.get("date")
+            if not date_str:
+                return Response(
+                    {"status": "error", "message": "date is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                forecast_date = datetime.fromisoformat(date_str).date()
+            except ValueError:
+                return Response(
+                    {"status": "error", "message": "invalid date format"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            is_daytime = bool(data.get("is_daytime", True))
+            temp = data.get("temperature")
+            short_forecast = data.get("short_forecast") or ""
+            if temp is None:
+                return Response(
+                    {"status": "error", "message": "temperature is required"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if is_daytime:
+                start_time = datetime.combine(forecast_date, time(6, 0))
+                end_time = datetime.combine(forecast_date, time(18, 0))
+            else:
+                start_time = datetime.combine(forecast_date, time(18, 0))
+                end_time = datetime.combine(
+                    forecast_date + timedelta(days=1), time(6, 0)
+                )
+
+            DailyForecast.objects.create(
+                location=location,
+                forecast_date=forecast_date,
+                period_start=timezone.make_aware(start_time),
+                period_end=timezone.make_aware(end_time),
+                is_daytime=is_daytime,
+                temperature=int(temp),
+                short_forecast=short_forecast,
+                wind_speed=0,
+                last_api_update=timezone.now(),
+            )
+
+            return Response({"status": "success"}, status=status.HTTP_201_CREATED)
+
+        forecast_type = request.query_params.get("type", "daily")
+        days = int(request.query_params.get("days", "3"))
+        start_date = timezone.now().date()
+        end_date = start_date + timedelta(days=days)
+
+        if forecast_type == "hourly":
+            qs = HourlyForecast.objects.filter(
+                location=location,
+                forecast_date__gte=start_date,
+                forecast_date__lte=end_date,
+            ).order_by("period_start")
+            serializer = HourlyForecastSerializer(qs, many=True)
+        else:
+            qs = DailyForecast.objects.filter(
+                location=location,
+                forecast_date__gte=start_date,
+                forecast_date__lte=end_date,
+            ).order_by("forecast_date", "-is_daytime")
+            serializer = DailyForecastSerializer(qs, many=True)
+
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"])
+    def alerts(self, request, pk=None):
+        """Return alerts for a location."""
+        location = self.get_object()
+        alerts = WeatherAlert.objects.filter(location=location).order_by("-onset")
+        serializer = WeatherAlertSerializer(alerts, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["post"])
+    def reorder(self, request):
+        """Reorder locations by provided list of ids."""
+        location_order = request.data.get("location_order")
+        if not location_order:
+            return Response(
+                {"status": "error", "message": "location_order is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            for index, location_id in enumerate(location_order):
+                Location.objects.filter(id=location_id).update(display_order=index)
+            return Response({"status": "success"})
+        except Exception as e:
+            logger.error("Error reordering locations: %s", e)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "Internal server error while reordering locations.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -1592,32 +1401,38 @@ class DashboardView(TemplateView):
 
         # Ensure forecasts and current conditions for displayed locations
         for location in locations:
-            # Check if we need to refresh data (older than 1 hour or no data)
+            # Check if we need to refresh data (older than 15 minutes or no data)
             try:
                 cc = location.current_conditions_cache
-                current_stale = timezone.now() - cc.last_observation_time > timedelta(hours=1)
+                current_stale = timezone.now() - cc.last_observation_time > timedelta(
+                    minutes=15
+                )
             except (AttributeError, CurrentConditions.DoesNotExist):
                 current_stale = True
 
             needs_refresh = (
                 location.last_forecast_update is None
-                or (timezone.now() - location.last_forecast_update > timedelta(hours=1))
+                or (
+                    timezone.now() - location.last_forecast_update
+                    > timedelta(minutes=15)
+                )
                 or current_stale
             )
             if needs_refresh:
                 try:
-                    # Fetch current conditions
-                    fetch_current_conditions(location)
-                    # Fetch forecasts
-                    _refresh_forecasts_for_location(location)
-                    location.refresh_from_db()  # Reload to get updated data
+                    from .tasks import (
+                        update_current_conditions_for_location,
+                        update_forecasts_for_location,
+                    )
+
+                    update_current_conditions_for_location.delay(str(location.id))
+                    update_forecasts_for_location.delay(str(location.id))
                 except Exception as e:
                     logger.warning(f"Failed to refresh data for {location.name}: {e}")
 
         # Get locations with current conditions
         locations_with_current = (
             Location.objects.filter(location_filter)
-            .filter(current_conditions_cache__isnull=False)
             .annotate(type_priority=type_priority)
             .order_by("-is_current_location", "type_priority", "display_order", "name")
         )
@@ -1646,7 +1461,7 @@ class DashboardView(TemplateView):
                     grouped[date]["day"] = forecast
                 else:
                     grouped[date]["night"] = forecast
-            daily_forecasts = [grouped[date] for date in sorted(grouped.keys())[:3]]
+                daily_forecasts = [grouped[date] for date in sorted(grouped.keys())[:3]]
 
         # Get active alerts ordered by location order
         active_alerts = (
@@ -3521,18 +3336,23 @@ class LocationListView(ListView):
 
         locations_data = []
         for location in context["locations"]:
-            # Check if current conditions need updating (older than 30 minutes or don't exist)
+            # Check if current conditions need updating (older than 15 minutes or don't exist)
             try:
                 cc = location.current_conditions_cache
                 needs_update = timezone.now() - cc.last_observation_time > timedelta(
-                    minutes=30
+                    minutes=15
                 )
             except (AttributeError, CurrentConditions.DoesNotExist):
-                # CurrentConditions doesn't exist, need to fetch
+                # CurrentConditions doesn't exist, fetch immediately
                 needs_update = True
 
             if needs_update:
-                fetch_current_conditions(location)
+                try:
+                    from .tasks import update_current_conditions_for_location
+
+                    update_current_conditions_for_location.delay(str(location.id))
+                except Exception:
+                    fetch_current_conditions(location)
 
             # Get today's daytime forecast (NWS only)
             today_forecast = (
@@ -3543,8 +3363,13 @@ class LocationListView(ListView):
                 .first()
             )  # Only show NWS forecasts on location list
 
-            # Get active alerts
-            active_alerts = location.alerts.filter(is_active=True)
+            # Get active alerts (cache-aware)
+            try:
+                from .services import AlertsService
+
+                active_alerts = AlertsService.get_or_fetch_alerts(location)
+            except Exception:
+                active_alerts = location.alerts.filter(is_active=True)
 
             locations_data.append(
                 {
@@ -3580,158 +3405,29 @@ class LocationDetailView(DetailView):
         """Override get to trigger forecast update on page load."""
         self.object = self.get_object()
 
-        # Check if forecast needs updating (older than 1 hour or doesn't exist)
+        # Check if forecast needs updating (older than 15 minutes or doesn't exist)
         from datetime import timedelta
 
         needs_update = (
             not self.object.last_forecast_update
-            or timezone.now() - self.object.last_forecast_update > timedelta(hours=1)
+            or timezone.now() - self.object.last_forecast_update > timedelta(minutes=15)
         )
 
         if needs_update and self.object.latitude and self.object.longitude:
-            # Fetch current conditions first
-            fetch_current_conditions(self.object)
-
-            # Update forecast data
             try:
-                from datetime import datetime
+                from .tasks import (
+                    update_alerts_for_location,
+                    update_current_conditions_for_location,
+                    update_forecasts_for_location,
+                )
 
-                import requests
-
-                headers = {"User-Agent": "(Weather App, contact@example.com)"}
-
-                # Get grid point data
-                grid_url = f"https://api.weather.gov/points/{self.object.latitude},{self.object.longitude}"
-                grid_response = requests.get(grid_url, headers=headers, timeout=10)
-                grid_response.raise_for_status()
-                grid_data = grid_response.json()
-
-                # Update NWS grid info
-                properties = grid_data.get("properties", {})
-                self.object.nws_office = properties.get("gridId", "")
-                self.object.grid_x = properties.get("gridX")
-                self.object.grid_y = properties.get("gridY")
-
-                # Get forecast URL
-                forecast_url = properties.get("forecast")
-                if forecast_url:
-                    # Fetch forecast data
-                    forecast_response = requests.get(
-                        forecast_url, headers=headers, timeout=10
-                    )
-                    forecast_response.raise_for_status()
-                    forecast_data = forecast_response.json()
-
-                    # Parse and save forecast periods
-                    periods = forecast_data.get("properties", {}).get("periods", [])
-
-                    # Clear old forecasts
-                    DailyForecast.objects.filter(location=self.object).delete()
-
-                    # Helper function to parse wind speed
-                    def parse_wind_speed(wind_speed_str):
-                        if not wind_speed_str:
-                            return 0
-                        import re
-
-                        numbers = re.findall(r"\d+", str(wind_speed_str))
-                        if numbers:
-                            if len(numbers) > 1:
-                                return int((int(numbers[0]) + int(numbers[1])) / 2)
-                            return int(numbers[0])
-                        return 0
-
-                    # Create new forecasts
-                    for period in periods[:14]:
-                        DailyForecast.objects.create(
-                            location=self.object,
-                            forecast_date=datetime.fromisoformat(
-                                period["startTime"].replace("Z", "+00:00")
-                            ).date(),
-                            period_start=datetime.fromisoformat(
-                                period["startTime"].replace("Z", "+00:00")
-                            ),
-                            period_end=datetime.fromisoformat(
-                                period["endTime"].replace("Z", "+00:00")
-                            ),
-                            is_daytime=period.get("isDaytime", True),
-                            temperature=period.get("temperature"),
-                            temperature_unit=period.get("temperatureUnit", "F"),
-                            wind_speed=parse_wind_speed(period.get("windSpeed", "")),
-                            wind_direction=period.get("windDirection", ""),
-                            short_forecast=period.get("shortForecast", ""),
-                            detailed_forecast=period.get("detailedForecast", ""),
-                            precipitation_probability=period.get(
-                                "probabilityOfPrecipitation", {}
-                            ).get("value"),
-                            nws_data_url=forecast_url,  # Mark as NWS forecast
-                        )
-
-                    # Fetch weather alerts
-                    try:
-                        from weather.models import WeatherAlert
-
-                        alerts_url = f"https://api.weather.gov/alerts/active?point={self.object.latitude},{self.object.longitude}"
-                        alerts_response = requests.get(
-                            alerts_url, headers=headers, timeout=10
-                        )
-                        alerts_response.raise_for_status()
-                        alerts_data = alerts_response.json()
-
-                        # Deactivate old alerts
-                        WeatherAlert.objects.filter(location=self.object).update(
-                            is_active=False
-                        )
-
-                        # Process each alert
-                        features = alerts_data.get("features", [])
-                        for feature in features:
-                            props = feature.get("properties", {})
-                            nws_id = props.get("id")
-
-                            if not nws_id:
-                                continue
-
-                            # Parse dates
-                            onset = props.get("onset")
-                            expires = props.get("expires")
-
-                            if onset:
-                                onset = datetime.fromisoformat(
-                                    onset.replace("Z", "+00:00")
-                                )
-                            if expires:
-                                expires = datetime.fromisoformat(
-                                    expires.replace("Z", "+00:00")
-                                )
-
-                            # Create or update alert
-                            WeatherAlert.objects.update_or_create(
-                                nws_alert_id=nws_id,
-                                defaults={
-                                    "location": self.object,
-                                    "event": props.get("event", "Unknown"),
-                                    "headline": props.get("headline", ""),
-                                    "description": props.get("description", ""),
-                                    "severity": props.get(
-                                        "severity", "unknown"
-                                    ).lower(),
-                                    "urgency": props.get("urgency", "unknown").lower(),
-                                    "onset": onset,
-                                    "expires": expires,
-                                    "is_active": True,
-                                    "raw_data": props,
-                                },
-                            )
-                    except Exception as e:
-                        print(f"Warning: Failed to fetch alerts: {str(e)}")
-
-                    # Update location
-                    self.object.last_forecast_update = timezone.now()
-                    self.object.save()
-
+                update_current_conditions_for_location.delay(str(self.object.id))
+                update_forecasts_for_location.delay(str(self.object.id))
+                update_alerts_for_location.delay(str(self.object.id))
             except Exception as e:
-                print(f"Warning: Failed to update forecast: {str(e)}")
+                logger.warning(f"Failed to enqueue refresh for {self.object.name}: {e}")
+                fetch_current_conditions(self.object)
+                _refresh_forecasts_for_location(self.object)
 
         context = self.get_context_data(object=self.object)
         return self.render_to_response(context)
@@ -3964,6 +3660,7 @@ def _refresh_forecasts_for_location(location: Location):
                     "value"
                 ),
                 nws_data_url=fcst_url,  # Mark as NWS forecast
+                last_api_update=timezone.now(),
             )
         location.last_forecast_update = timezone.now()
         location.save(
@@ -3986,7 +3683,7 @@ class ForecastListView(ListView):
     def get_queryset(self):
         """Get forecasts for active locations."""
         # Ensure forecasts are available/up-to-date on page load
-        threshold = timezone.now() - timedelta(minutes=30)
+        threshold = timezone.now() - timedelta(minutes=15)
 
         # Filter locations by session - only show enabled locations
         location_ids = self.request.session.get("location_ids", [])
@@ -4002,21 +3699,12 @@ class ForecastListView(ListView):
                 or not loc.last_forecast_update
                 or loc.last_forecast_update < threshold
             ):
-                # Try backend service first
                 try:
-                    from .services import SyncWeatherService
+                    from .tasks import update_forecasts_for_location
 
-                    SyncWeatherService.update_forecasts_for_location(loc)
+                    update_forecasts_for_location.delay(str(loc.id))
                 except Exception:
-                    # Service failed, fallback to direct NWS
                     _refresh_forecasts_for_location(loc)
-                else:
-                    # If service didn't create forecasts, fallback
-                    has_after = DailyForecast.objects.filter(
-                        location=loc, forecast_date__gte=timezone.now().date()
-                    ).exists()
-                    if not has_after:
-                        _refresh_forecasts_for_location(loc)
 
         # Filter forecasts by session location_ids to match location list
         # Also include current location even if not in session
