@@ -160,12 +160,13 @@
           <ul class="navbar-nav ms-auto align-items-center">
             {% if user.is_authenticated %}
             <li class="nav-item">
-              <span
-                class="navbar-text me-2 d-flex align-items-center"
-                style="line-height: 1"
+              <a
+                href="{% url 'profile-edit' %}"
+                class="nav-link d-flex align-items-center"
+                title="Edit Profile"
               >
                 <i class="fas fa-user"></i> {{ user.username }}
-              </span>
+              </a>
             </li>
             <li class="nav-item">
               <form method="post" action="{% url 'logout' %}">

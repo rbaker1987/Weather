@@ -8,19 +8,27 @@ from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db.models import Avg, Case, Count, IntegerField, Q, When
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DetailView, ListView, TemplateView
+from django.utils.decorators import method_decorator
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .forms import UniqueUsernameCreationForm
+from .forms import ProfileEditForm, UniqueUsernameCreationForm
 from .models import (
     CurrentConditions,
     DailyForecast,
@@ -1366,6 +1374,23 @@ class SignUpView(CreateView):
             self.request.session.modified = True
 
         return redirect(self.get_success_url())
+
+
+@method_decorator(login_required, name="dispatch")
+class ProfileEditView(UpdateView):
+    """Edit user profile information (name, email, password)."""
+
+    template_name = "registration/profile_edit.html"
+    form_class = ProfileEditForm
+    success_url = reverse_lazy("weather:dashboard")
+
+    def get_object(self, queryset=None):
+        return self.request.user
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Edit Profile"
+        return context
 
 
 class DashboardView(TemplateView):

@@ -59,6 +59,7 @@ urlpatterns = [
     ),
     # Web interface
     path("", views.DashboardView.as_view(), name="dashboard"),
+    path("profile/", views.ProfileEditView.as_view(), name="profile-edit"),
     path("locations/", views.LocationListView.as_view(), name="location-list"),
     path(
         "locations/<uuid:pk>/",

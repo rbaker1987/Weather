@@ -19,3 +19,41 @@ class UniqueUsernameCreationForm(UserCreationForm):
                 "That username is already taken. Please choose another."
             )
         return normalized
+
+
+class ProfileEditForm(forms.ModelForm):
+    """Form for editing user profile information."""
+
+    password = forms.CharField(
+        label="New Password (leave blank to keep current)",
+        required=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+    )
+    password_confirm = forms.CharField(
+        label="Confirm New Password",
+        required=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+    )
+
+    class Meta:
+        model = get_user_model()
+        fields = ["first_name", "last_name", "email"]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get("password")
+        password_confirm = cleaned_data.get("password_confirm")
+
+        if password and password != password_confirm:
+            raise forms.ValidationError("Passwords do not match.")
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        password = self.cleaned_data.get("password")
+        if password:
+            user.set_password(password)
+        if commit:
+            user.save()
+        return user
