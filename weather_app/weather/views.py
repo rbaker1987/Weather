@@ -557,8 +557,12 @@ class LocationViewSet(viewsets.ModelViewSet):
                 }
             )
         except requests.exceptions.RequestException as e:
+            logger.error("Error fetching data from external service: %s", e)
             return Response(
-                {"status": "error", "message": f"Error fetching data: {str(e)}"},
+                {
+                    "status": "error",
+                    "message": "An internal error occurred while fetching data.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -746,8 +750,12 @@ class LocationViewSet(viewsets.ModelViewSet):
                 Location.objects.filter(id=location_id).update(display_order=index)
             return Response({"status": "success"})
         except Exception as e:
+            logger.error("Error reordering locations: %s", e)
             return Response(
-                {"status": "error", "message": f"Error reordering: {str(e)}"},
+                {
+                    "status": "error",
+                    "message": "Internal server error while reordering locations.",
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
