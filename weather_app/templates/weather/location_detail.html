@@ -709,7 +709,21 @@
           return;
       }
 
-      next24Body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-3 text-muted">Loading hourly forecast...</p></div>';
+      const loadingWrap = document.createElement('div');
+      loadingWrap.className = 'text-center py-4';
+      const loadingSpinner = document.createElement('div');
+      loadingSpinner.className = 'spinner-border text-primary';
+      loadingSpinner.setAttribute('role', 'status');
+      const loadingText = document.createElement('span');
+      loadingText.className = 'visually-hidden';
+      loadingText.textContent = 'Loading...';
+      loadingSpinner.appendChild(loadingText);
+      const loadingLabel = document.createElement('p');
+      loadingLabel.className = 'mt-3 text-muted';
+      loadingLabel.textContent = 'Loading hourly forecast...';
+      loadingWrap.appendChild(loadingSpinner);
+      loadingWrap.appendChild(loadingLabel);
+      next24Body.replaceChildren(loadingWrap);
 
       try {
           const lat = {{ location.latitude }};
@@ -793,13 +807,14 @@
               updateCurrentConditionsIcon();
           }
 
-          if (resp && resp.hours && resp.hours.length > 0) {
-              let html = '<div class="row g-2">';
-              resp.hours.forEach((hour, idx) => {
-                  const tempClass = `temp-bg-${hour.temp}`;
-                  const startDate = hour.start ? new Date(hour.start) : null;
-                  // Prefer API-provided isDay flag first
-                  let isDay = typeof hour.isDay === 'boolean' ? hour.isDay : false;
+            if (resp && resp.hours && resp.hours.length > 0) {
+              const row = document.createElement('div');
+              row.className = 'row g-2';
+              resp.hours.forEach((hour) => {
+                const tempClass = `temp-bg-${hour.temp}`;
+                const startDate = hour.start ? new Date(hour.start) : null;
+                // Prefer API-provided isDay flag first
+                let isDay = typeof hour.isDay === 'boolean' ? hour.isDay : false;
 
                   // Use per-date sunrise/sunset if available
                   if (startDate && window.locationSunEvents) {
@@ -861,32 +876,91 @@
                       }
                       apparentTemp = calculateApparentTemperature(hour.temp, humidity, windSpeed);
                   }
-                  html += `
-                      <div class="col-6 col-md-4 col-lg-3 col-xl-2">
-                          <div class="card h-100 border-0">
-                              <div class="card-body p-2 text-center ${tempClass} d-flex flex-column justify-content-between">
-                                  <div>
-                                      <div class="fw-bold mb-1">${hour.time}</div>
-                                      <i class=\"${iconClassList}\"></i>
-                                      <div class="h5 mb-1">${hour.temp}&deg;F</div>
-                                      ${apparentTemp !== null && apparentTemp !== undefined && Math.abs(apparentTemp - hour.temp) >= 5 ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-temperature-high"></i> Feels like ${apparentTemp}&deg;F</small>` : ''}
-                                      ${hour.wind ? `<small class="d-block" style="opacity: 0.85;"><i class="fas fa-wind"></i> ${hour.wind}${hour.windGust ? ` (gust ${hour.windGust} mph)` : ''}</small>` : ''}
-                                      ${hour.pop !== null && hour.pop !== undefined ? `<small class="d-block mb-2" style="opacity: 0.85;"><i class="fas fa-${popIcon}"></i> ${roundPop(hour.pop)}%</small>` : ''}
-                                  </div>
-                                  <p class="mb-0 mt-2" style="opacity: 0.9; font-size: 0.95rem;">${hour.condition}</p>
-                              </div>
-                          </div>
-                      </div>
-                  `;
-              });
-              html += '</div>';
-              next24Body.innerHTML = html;
+                    const col = document.createElement('div');
+                    col.className = 'col-6 col-md-4 col-lg-3 col-xl-2';
+
+                    const card = document.createElement('div');
+                    card.className = 'card h-100 border-0';
+
+                    const cardBody = document.createElement('div');
+                    cardBody.className = `card-body p-2 text-center ${tempClass} d-flex flex-column justify-content-between`;
+
+                    const bodyTop = document.createElement('div');
+
+                    const timeLabel = document.createElement('div');
+                    timeLabel.className = 'fw-bold mb-1';
+                    timeLabel.textContent = hour.time ?? '';
+
+                    const iconEl = document.createElement('i');
+                    iconEl.className = iconClassList;
+
+                    const tempLabel = document.createElement('div');
+                    tempLabel.className = 'h5 mb-1';
+                    tempLabel.textContent = hour.temp !== null && hour.temp !== undefined ? `${hour.temp}\u00b0F` : '';
+
+                    bodyTop.appendChild(timeLabel);
+                    bodyTop.appendChild(iconEl);
+                    bodyTop.appendChild(tempLabel);
+
+                    if (apparentTemp !== null && apparentTemp !== undefined && Math.abs(apparentTemp - hour.temp) >= 5) {
+                      const feelsLike = document.createElement('small');
+                      feelsLike.className = 'd-block';
+                      feelsLike.style.opacity = '0.85';
+                      const feelsIcon = document.createElement('i');
+                      feelsIcon.className = 'fas fa-temperature-high';
+                      feelsLike.appendChild(feelsIcon);
+                      feelsLike.appendChild(document.createTextNode(` Feels like ${apparentTemp}\u00b0F`));
+                      bodyTop.appendChild(feelsLike);
+                    }
+
+                    if (hour.wind) {
+                      const wind = document.createElement('small');
+                      wind.className = 'd-block';
+                      wind.style.opacity = '0.85';
+                      const windIcon = document.createElement('i');
+                      windIcon.className = 'fas fa-wind';
+                      wind.appendChild(windIcon);
+                      const gustText = hour.windGust ? ` (gust ${hour.windGust} mph)` : '';
+                      wind.appendChild(document.createTextNode(` ${hour.wind}${gustText}`));
+                      bodyTop.appendChild(wind);
+                    }
+
+                    if (hour.pop !== null && hour.pop !== undefined) {
+                      const pop = document.createElement('small');
+                      pop.className = 'd-block mb-2';
+                      pop.style.opacity = '0.85';
+                      const popIconEl = document.createElement('i');
+                      popIconEl.className = `fas fa-${popIcon}`;
+                      pop.appendChild(popIconEl);
+                      pop.appendChild(document.createTextNode(` ${roundPop(hour.pop)}%`));
+                      bodyTop.appendChild(pop);
+                    }
+
+                    const condition = document.createElement('p');
+                    condition.className = 'mb-0 mt-2';
+                    condition.style.opacity = '0.9';
+                    condition.style.fontSize = '0.95rem';
+                    condition.textContent = hour.condition ?? '';
+
+                    cardBody.appendChild(bodyTop);
+                    cardBody.appendChild(condition);
+                    card.appendChild(cardBody);
+                    col.appendChild(card);
+                    row.appendChild(col);
+                  });
+                  next24Body.replaceChildren(row);
           } else {
-              next24Body.innerHTML = '<p class="text-center text-muted">No hourly data available.</p>';
+                  const empty = document.createElement('p');
+                  empty.className = 'text-center text-muted';
+                  empty.textContent = 'No hourly data available.';
+                  next24Body.replaceChildren(empty);
           }
       } catch (err) {
           console.error('Error loading next 24 hours:', err);
-          next24Body.innerHTML = '<p class="text-danger text-center">Unable to load hourly forecast.</p>';
+                const error = document.createElement('p');
+                error.className = 'text-danger text-center';
+                error.textContent = 'Unable to load hourly forecast.';
+                next24Body.replaceChildren(error);
       }
   }
 
