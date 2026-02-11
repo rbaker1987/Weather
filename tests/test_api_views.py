@@ -408,8 +408,9 @@ class TestUpdateForecastAction:
 
         assert response.status_code == 200
         location.refresh_from_db()
-        assert location.current_temp == 68  # 20.5C = 68.9F ≈ 68F
-        assert location.current_conditions == "Partly Cloudy"
+        cc = location.current_conditions_cache
+        assert cc.temperature == 68  # 20.5C = 68.9F ≈ 68F
+        assert cc.condition == "Partly Cloudy"
 
     def test_update_forecast_processes_alerts(self, api_client):
         """Test update_forecast processes alert features and updates counts."""

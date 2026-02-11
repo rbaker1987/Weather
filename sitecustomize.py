@@ -1,12 +1,18 @@
 """Site customization to ensure Django settings package is importable during pytest-django early initialization.
 
 Adds `weather_app` directory to `sys.path` so `config.settings` can be imported before `conftest.py` runs.
+Also mocks gssapi to handle Kerberos dependency issues in test environments.
 """
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest import mock
+
+# Mock gssapi before any imports to avoid Kerberos dependency issues in test environments
+sys.modules["gssapi"] = mock.MagicMock()
+sys.modules["gssapi._win_config"] = mock.MagicMock()
 
 _PROJECT_ROOT = Path(__file__).parent
 _WEATHER_APP = _PROJECT_ROOT / "weather_app"

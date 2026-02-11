@@ -7,7 +7,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from weather.models import DailyForecast, Location, WeatherAlert
+from weather.models import CurrentConditions, DailyForecast, Location, WeatherAlert
 
 
 @pytest.mark.django_db
@@ -239,10 +239,22 @@ class TestForecastListView:
                     wind_speed=3,
                 )
         # Ensure current conditions exist to populate locations_with_current
-        l1.current_temp = 70
-        l2.current_temp = 65
-        l1.save(update_fields=["current_temp"])
-        l2.save(update_fields=["current_temp"])
+        CurrentConditions.objects.create(
+            location=l1,
+            temperature=70,
+            condition="Sunny",
+            wind_speed=5,
+            humidity=60,
+            last_observation_time=timezone.now(),
+        )
+        CurrentConditions.objects.create(
+            location=l2,
+            temperature=65,
+            condition="Cloudy",
+            wind_speed=3,
+            humidity=55,
+            last_observation_time=timezone.now(),
+        )
 
         resp = client.get(reverse("weather:forecast-list"))
         assert resp.status_code == 200
@@ -288,14 +300,21 @@ class TestLocationListView:
         )
         session["location_ids"] = [str(loc.id)]
         session.save()
-        # Make observation stale (> 30 min old)
-        loc.last_observation_time = timezone.now() - timedelta(minutes=35)
-        loc.save(update_fields=["last_observation_time"])
+        # Create stale current conditions (> 30 min old)
+        CurrentConditions.objects.create(
+            location=loc,
+            temperature=65,
+            condition="Rainy",
+            wind_speed=10,
+            humidity=75,
+            last_observation_time=timezone.now() - timedelta(minutes=35),
+        )
 
         # Mock fetch to update temp
         def fake_fetch(location):
-            location.current_temp = 72
-            location.save(update_fields=["current_temp"])
+            cc = location.current_conditions_cache
+            cc.temperature = 72
+            cc.save()
             return True
 
         monkeypatch.setattr("weather.views.fetch_current_conditions", fake_fetch)
@@ -303,7 +322,7 @@ class TestLocationListView:
         r = client.get(reverse("weather:location-list"))
         assert r.status_code == 200
         loc.refresh_from_db()
-        assert loc.current_temp == 72
+        assert loc.current_conditions_cache.temperature == 72
 
 
 @pytest.mark.django_db

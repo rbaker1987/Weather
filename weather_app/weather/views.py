@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime, time, timedelta
+from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.contrib.auth import login
@@ -90,64 +91,67 @@ def fetch_current_conditions(location):
 
         obs_props = obs_data.get("properties", {})
 
+        # Get or create CurrentConditions object for this location
+        cc, created = CurrentConditions.objects.get_or_create(location=location)
+
         # Extract and update current conditions
         temp_c = obs_props.get("temperature", {}).get("value")
         if temp_c:
-            location.current_temp = int(temp_c * 9 / 5 + 32)
+            cc.temperature = int(temp_c * 9 / 5 + 32)
 
-        location.current_conditions = obs_props.get("textDescription", "")
+        cc.condition = obs_props.get("textDescription", "")
 
         humidity = obs_props.get("relativeHumidity", {}).get("value")
         if humidity:
-            location.current_humidity = int(humidity)
+            cc.humidity = int(humidity)
 
         wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
         if wind_speed_kmh is not None:
             try:
-                location.current_wind_speed = int(wind_speed_kmh * 0.621371)
+                cc.wind_speed = int(wind_speed_kmh * 0.621371)
             except (ValueError, TypeError):
-                location.current_wind_speed = 0
+                cc.wind_speed = 0
         else:
-            location.current_wind_speed = 0
+            cc.wind_speed = 0
 
         # Wind gust
         wind_gust_kmh = obs_props.get("windGust", {}).get("value")
         if wind_gust_kmh is not None:
             try:
-                location.current_wind_gust = int(wind_gust_kmh * 0.621371)
+                cc.wind_gust = int(wind_gust_kmh * 0.621371)
             except (ValueError, TypeError):
-                location.current_wind_gust = None
+                cc.wind_gust = None
         else:
-            location.current_wind_gust = None
+            cc.wind_gust = None
 
         wind_dir_deg = obs_props.get("windDirection", {}).get("value")
         if wind_dir_deg is not None:
             try:
                 deg = float(wind_dir_deg)
                 directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-                location.current_wind_direction = directions[int((deg + 22.5) / 45) % 8]
+                cc.wind_direction = directions[int((deg + 22.5) / 45) % 8]
             except (ValueError, TypeError):
-                location.current_wind_direction = ""
+                cc.wind_direction = ""
         else:
-            location.current_wind_direction = ""
+            cc.wind_direction = ""
 
         # Calculate apparent temperature
-        if location.current_temp is not None:
+        if cc.temperature is not None:
             dew_point_c = obs_props.get("dewpoint", {}).get("value")
-            location.current_apparent_temp = calculate_apparent_temperature(
-                temp_f=location.current_temp,
-                humidity_pct=location.current_humidity,
-                wind_speed_mph=location.current_wind_speed or 0,
+            cc.feels_like_temperature = calculate_apparent_temperature(
+                temp_f=cc.temperature,
+                humidity_pct=cc.humidity,
+                wind_speed_mph=cc.wind_speed or 0,
                 dew_point_c=dew_point_c,
             )
 
         timestamp = obs_props.get("timestamp")
         if timestamp:
-            location.last_observation_time = datetime.fromisoformat(
+            cc.last_observation_time = datetime.fromisoformat(
                 timestamp.replace("Z", "+00:00")
             )
 
-        location.save()
+        cc.save()
         return True
 
     except Exception as e:
@@ -562,45 +566,58 @@ class LocationViewSet(viewsets.ModelViewSet):
 
                             obs_props = obs_data.get("properties", {})
 
-                            # Extract current conditions
+                            # Extract temperature FIRST before creating object
                             temp_c = obs_props.get("temperature", {}).get("value")
-                            if temp_c:
-                                # Convert Celsius to Fahrenheit
-                                location.current_temp = int(temp_c * 9 / 5 + 32)
-
-                            location.current_conditions = obs_props.get(
-                                "textDescription", ""
+                            temp_f = (
+                                int(temp_c * 9 / 5 + 32) if temp_c is not None else 32
                             )
+
+                            # Primary location observation station: get/create with defaults
+                            cc, created = CurrentConditions.objects.get_or_create(
+                                location=location,
+                                defaults={
+                                    "temperature": temp_f,
+                                    "condition": obs_props.get(
+                                        "textDescription", "Unknown"
+                                    ),
+                                    "humidity": 50,
+                                    "wind_speed": 0,
+                                    "wind_direction": "",
+                                    "last_observation_time": timezone.now(),
+                                },
+                            )
+
+                            # Always update fields (whether new or existing)
+                            cc.temperature = temp_f
+                            cc.condition = obs_props.get("textDescription", "Unknown")
 
                             humidity = obs_props.get("relativeHumidity", {}).get(
                                 "value"
                             )
-                            if humidity:
-                                location.current_humidity = int(humidity)
+                            if humidity is not None:
+                                cc.humidity = int(humidity)
+                            elif cc.humidity is None:
+                                cc.humidity = 50  # Default humidity
 
                             wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
                             if wind_speed_kmh is not None:
                                 try:
                                     # Wind speed from NWS is in km/h, convert to mph
-                                    location.current_wind_speed = int(
-                                        wind_speed_kmh * 0.621371
-                                    )
+                                    cc.wind_speed = int(wind_speed_kmh * 0.621371)
                                 except (ValueError, TypeError):
-                                    location.current_wind_speed = 0
+                                    cc.wind_speed = 0
                             else:
-                                location.current_wind_speed = 0
+                                cc.wind_speed = 0
 
                             # Wind gust
                             wind_gust_kmh = obs_props.get("windGust", {}).get("value")
                             if wind_gust_kmh is not None:
                                 try:
-                                    location.current_wind_gust = int(
-                                        wind_gust_kmh * 0.621371
-                                    )
+                                    cc.wind_gust = int(wind_gust_kmh * 0.621371)
                                 except (ValueError, TypeError):
-                                    location.current_wind_gust = None
+                                    cc.wind_gust = None
                             else:
-                                location.current_wind_gust = None
+                                cc.wind_gust = None
 
                             wind_dir_deg = obs_props.get("windDirection", {}).get(
                                 "value"
@@ -619,36 +636,42 @@ class LocationViewSet(viewsets.ModelViewSet):
                                         "W",
                                         "NW",
                                     ]
-                                    location.current_wind_direction = directions[
+                                    cc.wind_direction = directions[
                                         int((deg + 22.5) / 45) % 8
                                     ]
                                 except (ValueError, TypeError):
-                                    location.current_wind_direction = ""
+                                    cc.wind_direction = ""
                             else:
-                                location.current_wind_direction = ""
+                                cc.wind_direction = ""
 
                             # Calculate apparent temperature
-                            if location.current_temp is not None:
+                            if cc.temperature is not None:
                                 dew_point_c = obs_props.get("dewpoint", {}).get("value")
-                                location.current_apparent_temp = (
+                                cc.feels_like_temperature = (
                                     calculate_apparent_temperature(
-                                        temp_f=location.current_temp,
-                                        humidity_pct=location.current_humidity,
-                                        wind_speed_mph=location.current_wind_speed or 0,
+                                        temp_f=cc.temperature,
+                                        humidity_pct=cc.humidity or 50,
+                                        wind_speed_mph=cc.wind_speed or 0,
                                         dew_point_c=dew_point_c,
                                     )
                                 )
 
                             timestamp = obs_props.get("timestamp")
                             if timestamp:
-                                location.last_observation_time = datetime.fromisoformat(
+                                cc.last_observation_time = datetime.fromisoformat(
                                     timestamp.replace("Z", "+00:00")
                                 )
+                            elif cc.last_observation_time is None:
+                                # Set to now if not provided
+                                cc.last_observation_time = timezone.now()
 
                             # Save current conditions including apparent temperature
-                            location.save()
+                            cc.save()
             except Exception as e:
+                import traceback
+
                 print(f"Warning: Could not fetch current conditions: {str(e)}")
+                print(f"Traceback: {traceback.format_exc()}")
 
             # Get forecast URL
             forecast_url = properties.get("forecast")
@@ -1591,7 +1614,7 @@ class DashboardView(TemplateView):
         # Get locations with current conditions
         locations_with_current = (
             Location.objects.filter(location_filter)
-            .exclude(current_temp__isnull=True)
+            .filter(current_conditions_cache__isnull=False)
             .annotate(type_priority=type_priority)
             .order_by("-is_current_location", "type_priority", "display_order", "name")
         )
@@ -1789,31 +1812,51 @@ class TempLocationView(TemplateView):
                             obs_data = obs_response.json()
 
                             obs_props = obs_data.get("properties", {})
-                            temp_c = obs_props.get("temperature", {}).get("value")
-                            if temp_c:
-                                location.current_temp = int(temp_c * 9 / 5 + 32)
 
-                            location.current_conditions = obs_props.get(
-                                "textDescription", ""
+                            # Extract temperature FIRST before creating object
+                            temp_c = obs_props.get("temperature", {}).get("value")
+                            temp_f = (
+                                int(temp_c * 9 / 5 + 32) if temp_c is not None else 32
                             )
+
+                            # Get or create CurrentConditions with temperature in defaults
+                            cc, created = CurrentConditions.objects.get_or_create(
+                                location=location,
+                                defaults={
+                                    "temperature": temp_f,
+                                    "condition": obs_props.get(
+                                        "textDescription", "Unknown"
+                                    ),
+                                    "humidity": 50,
+                                    "wind_speed": 0,
+                                    "wind_direction": "",
+                                    "last_observation_time": timezone.now(),
+                                },
+                            )
+
+                            # Always update fields (whether new or existing)
+                            cc.temperature = temp_f
+                            cc.condition = obs_props.get("textDescription", "Unknown")
 
                             humidity = obs_props.get("relativeHumidity", {}).get(
                                 "value"
                             )
-                            if humidity:
-                                location.current_humidity = int(humidity)
+                            if humidity is not None:
+                                cc.humidity = int(humidity)
+                            elif cc.humidity is None:
+                                cc.humidity = 50  # Default humidity
 
                             wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
                             if wind_speed_kmh is not None:
-                                location.current_wind_speed = int(
-                                    wind_speed_kmh * 0.621371
-                                )
+                                cc.wind_speed = int(wind_speed_kmh * 0.621371)
+                            else:
+                                cc.wind_speed = 0
 
                             wind_gust_kmh = obs_props.get("windGust", {}).get("value")
                             if wind_gust_kmh is not None:
-                                location.current_wind_gust = int(
-                                    wind_gust_kmh * 0.621371
-                                )
+                                cc.wind_gust = int(wind_gust_kmh * 0.621371)
+                            else:
+                                cc.wind_gust = None
 
                             wind_dir_deg = obs_props.get("windDirection", {}).get(
                                 "value"
@@ -1830,15 +1873,21 @@ class TempLocationView(TemplateView):
                                     "W",
                                     "NW",
                                 ]
-                                location.current_wind_direction = directions[
+                                cc.wind_direction = directions[
                                     int((deg + 22.5) / 45) % 8
                                 ]
+                            else:
+                                cc.wind_direction = ""
 
                             timestamp = obs_props.get("timestamp")
                             if timestamp:
-                                location.last_observation_time = datetime.fromisoformat(
+                                cc.last_observation_time = datetime.fromisoformat(
                                     timestamp.replace("Z", "+00:00")
                                 )
+                            elif cc.last_observation_time is None:
+                                cc.last_observation_time = timezone.now()
+
+                            cc.save()
             except Exception as e:
                 print(f"Warning: Could not fetch current conditions: {str(e)}")
 
@@ -2822,8 +2871,6 @@ class ModelDetailView(TemplateView):
                 # Extract model run time from first forecast hour (hour 0 = initialization)
                 # Times from API are in local timezone, convert to UTC to get model cycle
                 if data.get("hourly", {}).get("time"):
-                    from datetime import timezone
-
                     import pytz
 
                     first_time = data["hourly"]["time"][0]
@@ -2837,7 +2884,7 @@ class ModelDetailView(TemplateView):
                         first_dt_local = local_tz.localize(first_dt)
                     else:
                         first_dt_local = first_dt
-                    run_time = first_dt_local.astimezone(timezone.utc)
+                    run_time = first_dt_local.astimezone(dt_timezone.utc)
                 logger.info(
                     f"ModelDetailView cache hit for {cache_key} (source={model_source}, cycle={cycle})"
                 )
@@ -2918,8 +2965,6 @@ class ModelDetailView(TemplateView):
                     # Extract model run time from first forecast hour (hour 0 = initialization)
                     # Times from API are in local timezone, convert to UTC to get model cycle
                     if data.get("hourly", {}).get("time"):
-                        from datetime import timezone
-
                         import pytz
 
                         first_time = data["hourly"]["time"][0]
@@ -2933,7 +2978,7 @@ class ModelDetailView(TemplateView):
                             first_dt_local = local_tz.localize(first_dt)
                         else:
                             first_dt_local = first_dt
-                        run_time = first_dt_local.astimezone(timezone.utc)
+                        run_time = first_dt_local.astimezone(dt_timezone.utc)
                     om_elapsed = time.time() - om_start
                     logger.info(f"Open-Meteo fetched in {om_elapsed:.2f}s")
                     # Cache will be set after precipitation classification
@@ -3001,8 +3046,6 @@ class ModelDetailView(TemplateView):
                     data["cycle"] = cycle
                     # Extract model run time from first forecast hour - convert local to UTC
                     if data.get("hourly", {}).get("time"):
-                        from datetime import timezone
-
                         import pytz
 
                         first_time = data["hourly"]["time"][0]
@@ -3013,7 +3056,7 @@ class ModelDetailView(TemplateView):
                             first_dt_local = local_tz.localize(first_dt)
                         else:
                             first_dt_local = first_dt
-                        run_time = first_dt_local.astimezone(timezone.utc)
+                        run_time = first_dt_local.astimezone(dt_timezone.utc)
                     om_elapsed = time.time() - om_start
                     logger.info(f"Open-Meteo {model_name} fetched in {om_elapsed:.2f}s")
                     # Cache will be set after precipitation classification
@@ -3476,11 +3519,14 @@ class LocationListView(ListView):
         locations_data = []
         for location in context["locations"]:
             # Check if current conditions need updating (older than 30 minutes or don't exist)
-            needs_update = (
-                not location.last_observation_time
-                or timezone.now() - location.last_observation_time
-                > timedelta(minutes=30)
-            )
+            try:
+                cc = location.current_conditions_cache
+                needs_update = timezone.now() - cc.last_observation_time > timedelta(
+                    minutes=30
+                )
+            except (AttributeError, CurrentConditions.DoesNotExist):
+                # CurrentConditions doesn't exist, need to fetch
+                needs_update = True
 
             if needs_update:
                 fetch_current_conditions(location)
@@ -4011,7 +4057,7 @@ class ForecastListView(ListView):
 
         locations = (
             Location.objects.filter(location_filter)
-            .exclude(current_temp__isnull=True)
+            .filter(current_conditions_cache__isnull=False)
             .annotate(type_priority=type_priority)
             .order_by("-is_current_location", "type_priority", "display_order", "name")
         )
