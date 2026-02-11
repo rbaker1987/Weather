@@ -4,14 +4,14 @@
 {% block title %}Weather Locations{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="page-header mb-4">
     <div>
         <h1 class="display-5 mb-0">
             <i class="fas fa-map-marker-alt text-primary"></i> Weather Locations
         </h1>
-        <p class="text-muted">Manage your tracked weather locations</p>
+        <p class="page-subtitle">Manage your tracked weather locations</p>
     </div>
-    <div>
+    <div class="page-actions">
         <button class="btn btn-outline-danger me-2" onclick="clearAllLocations()">
             <i class="fas fa-trash"></i> Clear All
         </button>
@@ -27,12 +27,12 @@
 <!-- Location Cards -->
 <div class="row" id="locationCards">
     <!-- Browser Location Card (Always First) -->
-    <div class="col-lg-4 col-md-6 mb-4">
+    <div class="col-12 col-md-6 col-lg-4 mb-4">
         {% include "weather/components/browser_location_card.html" %}
     </div>
     {% for item in locations_data %}
     {% with location=item.location today_forecast=item.today_forecast active_alerts=item.active_alerts alert_count=item.alert_count %}
-    <div class="col-lg-4 col-md-6 mb-4" data-location-id="{{ location.id }}" data-draggable="{% if not location.location_type and not location.is_current_location %}true{% else %}false{% endif %}">
+    <div class="col-12 col-md-6 col-lg-4 mb-4" data-location-id="{{ location.id }}" data-draggable="{% if not location.location_type and not location.is_current_location %}true{% else %}false{% endif %}">
         <div class="card weather-card h-100 {% if location.current_temp %}temp-bg-{{ location.current_temp }}{% endif %} {% if not location.is_enabled %}opacity-50{% endif %}">
             <div class="card-body">
                 <div class="drag-handle text-center py-2" style="cursor: move; display: none;">

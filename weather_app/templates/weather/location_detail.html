@@ -53,7 +53,7 @@
             </ol>
         </nav>
 
-        <div class="d-flex justify-content-between align-items-start">
+                <div class="page-header align-items-start">
             <div>
                 <h1 class="display-5 mb-0">
                     <i class="fas fa-map-marker-alt text-primary"></i> {{ location.display_name }}
@@ -66,16 +66,16 @@
                 <p class="text-muted">{% if is_temp_location %}Temporary location - not saved{% else %}Weather details and forecasts{% endif %}</p>
             </div>
             <div>
-              <div class="row g-2 align-items-end">
-                {% include "weather/components/location_selector.html" with locations=locations current_location_id=location.id latitude=location.latitude longitude=location.longitude location_col_class='col-auto' map_btn_col_class='col-auto' %}
+                            <div class="row g-2 align-items-end page-actions">
+                                {% include "weather/components/location_selector.html" with locations=locations current_location_id=location.id latitude=location.latitude longitude=location.longitude location_col_class='col-12 col-md-auto' map_btn_col_class='col-12 col-md-auto' %}
                 {% if not is_temp_location %}
-                <div class="col-auto">
+                                <div class="col-12 col-md-auto">
                   <button class="btn btn-outline-primary" onclick="updateForecast('{{ location.id }}')">
                       <i class="fas fa-sync-alt"></i> Update Data
                   </button>
                 </div>
                 {% endif %}
-                <div class="col-auto">
+                                <div class="col-12 col-md-auto">
                   <a href="{% if is_temp_location %}{% url 'weather:dashboard' %}{% else %}{% url 'weather:location-list' %}{% endif %}" class="btn btn-secondary">
                       <i class="fas fa-arrow-left"></i> {% if is_temp_location %}Back to Home{% else %}Back to Locations{% endif %}
                   </a>
