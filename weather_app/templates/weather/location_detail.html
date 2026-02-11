@@ -1588,17 +1588,27 @@
   document.addEventListener('DOMContentLoaded', function() {
       loadLocationModelData();
       const locSel = document.getElementById('detailLocationSelect');
-      if(locSel){
-          locSel.addEventListener('change', function(){
-              const opt = locSel.options[locSel.selectedIndex];
-              if(!opt) return;
-              if(opt.value === 'custom' && opt.dataset.lat){
-                  window.location.href = `/temp-location/?latitude=${opt.dataset.lat}&longitude=${opt.dataset.lon}`;
-              } else {
-                  window.location.href = `/locations/${opt.value}/`;
-              }
+        if (locSel) {
+          locSel.addEventListener('change', function () {
+            const opt = locSel.options[locSel.selectedIndex];
+            if (!opt) return;
+            if (opt.value === 'custom' && opt.dataset.lat) {
+              const lat = encodeURIComponent(opt.dataset.lat);
+              const lon = encodeURIComponent(opt.dataset.lon);
+              window.location.href = `/temp-location/?latitude=${lat}&longitude=${lon}`;
+              return;
+            }
+
+            const locationId = opt.value;
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!uuidPattern.test(locationId)) {
+              console.warn('Invalid location id selected', locationId);
+              return;
+            }
+
+            window.location.href = `/locations/${encodeURIComponent(locationId)}/`;
           });
-      }
+        }
   });
 </script>
 
