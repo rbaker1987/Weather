@@ -34,7 +34,8 @@ class CustomForecastAPIView(APIView):
         return Response({"location_id": str(location.id), "days": days})
 
     def post(self, request):
-        location_id = request.data.get("location_id")
+        # Get location_id from query params or request body
+        location_id = request.GET.get("location_id") or request.data.get("location_id")
         days = request.data.get("days", [])
 
         if not location_id:
@@ -85,7 +86,7 @@ class CustomForecastAPIView(APIView):
                 day.get("afternoon_weather"),
             )
 
-        return Response({"status": "saved", "updated": updated})
+        return Response({"status": "saved", "count": updated})
 
     def delete(self, request):
         location_id = request.GET.get("location_id")
@@ -105,7 +106,7 @@ class CustomForecastAPIView(APIView):
         deleted, _ = CustomDailyForecast.objects.filter(
             owner=request.user, location=location
         ).delete()
-        return Response({"status": "cleared", "deleted": deleted})
+        return Response({"status": "cleared", "count": deleted})
 
 
 def _build_days_payload(queryset):
@@ -163,10 +164,7 @@ def _upsert_period(owner, location, forecast_date, is_daytime, temp, weather):
         ).delete()
         return deleted
 
-    if is_daytime:
-        start_time = time(15, 0)
-    else:
-        start_time = time(6, 0)
+    start_time = time(15, 0) if is_daytime else time(6, 0)
 
     period_start = timezone.make_aware(datetime.combine(forecast_date, start_time))
     period_end = period_start + timedelta(hours=12)

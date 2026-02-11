@@ -81,10 +81,33 @@
         white-space: nowrap;
     }
 
+    @media (max-width: 768px) {
+        /* Model table responsive sizing */
+        .model-data-table {
+            font-size: 0.7rem;
+        }
+        .model-data-table th,
+        .model-data-table td {
+            padding: 0.3rem;
+        }
+        .model-data-table td:first-child {
+            white-space: nowrap;
+        }
+    }
+
     @media (max-width: 576px) {
         .builder-section,
         .day-builder-card {
             padding: 1rem;
+        }
+
+        /* Model table extra small device sizing */
+        .model-data-table {
+            font-size: 0.65rem;
+        }
+        .model-data-table th,
+        .model-data-table td {
+            padding: 0.2rem;
         }
 
         .forecast-period-card {
@@ -94,6 +117,18 @@
 
         .forecast-period-card .period-temp {
             font-size: 1.6rem;
+        }
+
+        /* Better spacing for reference data on small screens */
+        .reference-data {
+            padding: 0.75rem !important;
+            font-size: 0.9rem;
+        }
+        .reference-data strong {
+            font-size: 0.85rem;
+        }
+        .reference-data small {
+            font-size: 0.75rem;
         }
     }
 </style>
@@ -646,7 +681,7 @@ function createModelDataTable(dayId, chartData, times) {
     const models = Object.keys(chartData);
 
     // Build table HTML
-    let html = `<table class="model-data-table">
+    let html = `<div style="overflow-x: auto; width: 100%;"><table class="model-data-table">
         <thead>
             <tr>
                 <th>Model</th>
@@ -681,9 +716,10 @@ function createModelDataTable(dayId, chartData, times) {
         html += `</tr>`;
     }
 
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
     container.innerHTML = html;
 }
+
 
 function updateForecastDisplay() {
     const container = document.getElementById('forecastCards');
@@ -1011,7 +1047,8 @@ async function saveForecasts() {
 
             // Reload customForecasts
             const reloadResp = await fetch(`/api/custom-forecast/?location_id=${locationId}`);
-            customForecasts = await reloadResp.json();
+            const reloadData = await reloadResp.json();
+            customForecasts = reloadData.days || [];
 
             setTimeout(() => {
                 statusEl.style.display = 'none';
