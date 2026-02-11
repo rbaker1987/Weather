@@ -31,6 +31,7 @@ from rest_framework.views import APIView
 from .forms import ProfileEditForm, UniqueUsernameCreationForm
 from .models import (
     CurrentConditions,
+    CustomDailyForecast,
     DailyForecast,
     ForecastRequest,
     HourlyForecast,
@@ -3466,16 +3467,19 @@ class LocationDetailView(DetailView):
             "period_start"
         )
 
-        # Check if we have custom forecasts (those without nws_data_url)
-        custom_daily = all_daily.filter(nws_data_url="")
-        nws_daily = all_daily.exclude(nws_data_url="")
+        # Prefer per-user custom forecasts when available
+        if self.request.user.is_authenticated:
+            custom_daily = CustomDailyForecast.objects.filter(
+                location=location, owner=self.request.user
+            ).order_by("period_start")
+        else:
+            custom_daily = CustomDailyForecast.objects.none()
 
-        # For detail page, prefer custom forecasts if they exist, otherwise show NWS
         if custom_daily.exists():
             daily_to_show = custom_daily
             has_custom_daily = True
         else:
-            daily_to_show = nws_daily
+            daily_to_show = all_daily
             has_custom_daily = False
 
         # Group forecasts by date (day and night together)
@@ -3784,6 +3788,27 @@ class ForecastListView(ListView):
 
         dates_forecasts = defaultdict(dict)
 
+        # Seed with custom forecasts for this user when available
+        if self.request.user.is_authenticated:
+            custom_daily_qs = CustomDailyForecast.objects.filter(
+                owner=self.request.user,
+                location__id__in=location_ids,
+                forecast_date__gte=timezone.now().date(),
+            )
+            for custom in custom_daily_qs:
+                date = custom.forecast_date
+                location_id = custom.location.id
+                if location_id not in dates_forecasts[date]:
+                    dates_forecasts[date][location_id] = {
+                        "location": custom.location,
+                        "day": None,
+                        "night": None,
+                    }
+                if custom.is_daytime:
+                    dates_forecasts[date][location_id]["day"] = custom
+                else:
+                    dates_forecasts[date][location_id]["night"] = custom
+
         for forecast in context["forecasts"]:
             date = forecast.forecast_date
             location_id = forecast.location.id
@@ -3794,9 +3819,11 @@ class ForecastListView(ListView):
                     "night": None,
                 }
             if forecast.is_daytime:
-                dates_forecasts[date][location_id]["day"] = forecast
+                if not dates_forecasts[date][location_id]["day"]:
+                    dates_forecasts[date][location_id]["day"] = forecast
             else:
-                dates_forecasts[date][location_id]["night"] = forecast
+                if not dates_forecasts[date][location_id]["night"]:
+                    dates_forecasts[date][location_id]["night"] = forecast
 
         # Convert to list format grouped by date with sorted locations
         grouped_by_date = []
@@ -3828,13 +3855,12 @@ class ForecastListView(ListView):
         return context
 
 
+@method_decorator(login_required, name="dispatch")
 class CustomForecastView(TemplateView):
     template_name = "weather/custom_forecast.html"
 
     def get_context_data(self, **kwargs):
         import requests
-
-        from weather.models import Location
 
         context = super().get_context_data(**kwargs)
         request = self.request
@@ -3843,17 +3869,23 @@ class CustomForecastView(TemplateView):
         longitude = request.GET.get("longitude")
         location_id = request.GET.get("location_id")
 
-        locations = Location.objects.filter(is_active=True).order_by(
-            "-is_current_location", "display_order", "name"
-        )
+        location_ids = request.session.get("location_ids", [])
+        locations = Location.objects.filter(
+            is_active=True, id__in=location_ids, owner=request.user
+        ).order_by("-is_current_location", "display_order", "name")
 
         nws_forecast_periods = []
         climate_normals = {}
+        custom_forecasts = []
 
         # If location_id provided, fetch reference data
         if location_id:
             try:
-                location = Location.objects.get(id=location_id)
+                location = Location.objects.get(id=location_id, owner=request.user)
+            except Location.DoesNotExist:
+                location = None
+
+            if location:
                 latitude = location.latitude
                 longitude = location.longitude
 
@@ -3865,29 +3897,36 @@ class CustomForecastView(TemplateView):
                     }
 
                 # Fetch NWS forecast for reference
-                points_url = f"https://api.weather.gov/points/{latitude},{longitude}"
-                points_resp = requests.get(
-                    points_url,
-                    headers={"User-Agent": "WeatherApp/1.0"},
-                    timeout=10,
-                )
-                if points_resp.status_code == 200:
-                    points_data = points_resp.json()
-                    forecast_url = points_data.get("properties", {}).get("forecast")
-                    if forecast_url:
-                        forecast_resp = requests.get(
-                            forecast_url,
-                            headers={"User-Agent": "WeatherApp/1.0"},
-                            timeout=10,
-                        )
-                        if forecast_resp.status_code == 200:
-                            forecast_data = forecast_resp.json()
-                            nws_forecast_periods = forecast_data.get(
-                                "properties", {}
-                            ).get("periods", [])[:14]  # Get 7 days (14 periods)
-            except (Location.DoesNotExist, requests.RequestException):
-                # Log error but continue
-                pass
+                try:
+                    points_url = (
+                        f"https://api.weather.gov/points/{latitude},{longitude}"
+                    )
+                    points_resp = requests.get(
+                        points_url,
+                        headers={"User-Agent": "WeatherApp/1.0"},
+                        timeout=10,
+                    )
+                    if points_resp.status_code == 200:
+                        points_data = points_resp.json()
+                        forecast_url = points_data.get("properties", {}).get("forecast")
+                        if forecast_url:
+                            forecast_resp = requests.get(
+                                forecast_url,
+                                headers={"User-Agent": "WeatherApp/1.0"},
+                                timeout=10,
+                            )
+                            if forecast_resp.status_code == 200:
+                                forecast_data = forecast_resp.json()
+                                nws_forecast_periods = forecast_data.get(
+                                    "properties", {}
+                                ).get("periods", [])[:14]
+                except requests.RequestException:
+                    pass
+
+                custom_qs = CustomDailyForecast.objects.filter(
+                    owner=request.user, location=location
+                ).order_by("forecast_date", "-is_daytime")
+                custom_forecasts = _build_custom_daily_payload(custom_qs)
 
         context.update(
             {
@@ -3897,9 +3936,34 @@ class CustomForecastView(TemplateView):
                 "location_id": location_id,
                 "nws_forecast_periods": nws_forecast_periods,
                 "climate_normals": climate_normals,
+                "custom_forecasts": custom_forecasts,
             }
         )
         return context
+
+
+def _build_custom_daily_payload(queryset):
+    days_by_date = {}
+    for forecast in queryset:
+        date_key = forecast.forecast_date.isoformat()
+        day = days_by_date.setdefault(
+            date_key,
+            {
+                "date": date_key,
+                "morning_temp": None,
+                "morning_weather": "",
+                "afternoon_temp": None,
+                "afternoon_weather": "",
+            },
+        )
+        if forecast.is_daytime:
+            day["afternoon_temp"] = forecast.temperature
+            day["afternoon_weather"] = forecast.short_forecast
+        else:
+            day["morning_temp"] = forecast.temperature
+            day["morning_weather"] = forecast.short_forecast
+
+    return [days_by_date[key] for key in sorted(days_by_date.keys())]
 
 
 # Duplicate AlertListView removed to avoid F811 redefinition; earlier definition retained.

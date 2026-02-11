@@ -470,6 +470,79 @@ class DailyForecast(ForecastPeriod):
         ordering = ["location", "forecast_date"]
 
 
+class CustomDailyForecast(TimeStampedModel):
+    """User-authored daily forecast for a specific location."""
+
+    class TemperatureUnit(models.TextChoices):
+        FAHRENHEIT = "F", "Fahrenheit"
+        CELSIUS = "C", "Celsius"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="custom_daily_forecasts",
+    )
+    location = models.ForeignKey(
+        Location,
+        on_delete=models.CASCADE,
+        related_name="custom_daily_forecasts",
+    )
+
+    forecast_date = models.DateField(help_text="Date this forecast is for")
+    period_start = models.DateTimeField(help_text="Start of forecast period")
+    period_end = models.DateTimeField(help_text="End of forecast period")
+    is_daytime = models.BooleanField(default=True)
+
+    temperature = models.IntegerField(
+        validators=[MinValueValidator(-50), MaxValueValidator(150)],
+        help_text="Temperature value",
+    )
+    temperature_unit = models.CharField(
+        max_length=1,
+        choices=TemperatureUnit.choices,
+        default=TemperatureUnit.FAHRENHEIT,
+    )
+    apparent_temperature = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(-50), MaxValueValidator(150)],
+        help_text="Feels-like temperature",
+    )
+
+    short_forecast = models.CharField(max_length=200)
+    detailed_forecast = models.TextField(blank=True)
+
+    wind_speed = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(200)],
+    )
+    wind_direction = models.CharField(max_length=2, blank=True)
+    wind_gust = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(200)],
+    )
+
+    precipitation_probability = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+
+    class Meta:
+        verbose_name = "Custom Daily Forecast"
+        verbose_name_plural = "Custom Daily Forecasts"
+        ordering = ["location", "forecast_date", "-is_daytime"]
+        unique_together = ["owner", "location", "forecast_date", "is_daytime"]
+        indexes = [
+            models.Index(fields=["owner", "location", "forecast_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.location.name} - {self.forecast_date} (custom)"
+
+
 class WeatherAlert(TimeStampedModel):
     """Weather alerts and warnings."""
 
