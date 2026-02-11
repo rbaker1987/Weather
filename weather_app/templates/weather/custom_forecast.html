@@ -352,6 +352,18 @@ async function addDay() {
         defaultMorning = '';
     }
 
+    const safeDateStr = escapeHtml(dateStr);
+    const safeMorningTemp = defaultMorning !== '' ? escapeAttr(defaultMorning) : '';
+    const safeAfternoonTemp = defaultAfternoon !== '' ? escapeAttr(defaultAfternoon) : '';
+    const safePrevNwsTemp = previousNwsNight.temperature !== undefined && previousNwsNight.temperature !== null
+        ? escapeHtml(previousNwsNight.temperature)
+        : '';
+    const safeNwsTemp = nwsDay.temperature !== undefined && nwsDay.temperature !== null
+        ? escapeHtml(nwsDay.temperature)
+        : '';
+    const safeRecordedLow = recordedLow !== undefined && recordedLow !== null
+        ? escapeHtml(recordedLow)
+        : '';
     const safeMorningWeather = defaultMorningWeather ? escapeAttr(defaultMorningWeather) : '';
     const safeAfternoonWeather = defaultAfternoonWeather ? escapeAttr(defaultAfternoonWeather) : '';
     const safePrevNwsForecast = previousNwsNight.shortForecast
@@ -365,7 +377,7 @@ async function addDay() {
     card.className = 'day-builder-card';
     card.id = `day-${dayCounter}`;
     card.innerHTML = `
-        <h4>${dateStr}</h4>
+        <h4>${safeDateStr}</h4>
 
         <!-- Reference Data -->
         <div class="reference-data">
@@ -378,11 +390,11 @@ async function addDay() {
                 </div>
                 <div class="col-md-4">
                     <strong>NWS Forecast:</strong><br>
-                    ${previousNwsNight.temperature ? `Morning: ${previousNwsNight.temperature}°F` : 'N/A'}<br>
+                    ${previousNwsNight.temperature ? `Morning: ${safePrevNwsTemp}°F` : 'N/A'}<br>
                     ${safePrevNwsForecast ? `<small class="text-muted">${safePrevNwsForecast}</small><br>` : ''}
-                    ${nwsDay.temperature ? `Afternoon: ${nwsDay.temperature}°F` : 'N/A'}<br>
+                    ${nwsDay.temperature ? `Afternoon: ${safeNwsTemp}°F` : 'N/A'}<br>
                     ${safeNwsForecast ? `<small class="text-muted">${safeNwsForecast}</small><br>` : ''}
-                    ${recordedLow ? `<strong class="text-success">Recorded Low: ${recordedLow}°F</strong>` : ''}
+                    ${recordedLow ? `<strong class="text-success">Recorded Low: ${safeRecordedLow}°F</strong>` : ''}
                 </div>
                 <div class="col-md-5">
                     <strong>Model Forecasts (Models × Times):</strong><br>
@@ -397,7 +409,7 @@ async function addDay() {
             <div class="row g-3">
                 <div class="col-md-2">
                     <label class="form-label">Morning Temp (°F)</label>
-                    <input type="number" class="form-control" id="morning-${dayCounter}" placeholder="e.g., 45" ${defaultMorning ? `value="${defaultMorning}"` : ''}>
+                    <input type="number" class="form-control" id="morning-${dayCounter}" placeholder="e.g., 45" ${safeMorningTemp ? `value="${safeMorningTemp}"` : ''}>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Morning Weather</label>
@@ -405,7 +417,7 @@ async function addDay() {
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Afternoon Temp (°F)</label>
-                    <input type="number" class="form-control" id="afternoon-${dayCounter}" placeholder="e.g., 62" ${defaultAfternoon ? `value="${defaultAfternoon}"` : ''}>
+                    <input type="number" class="form-control" id="afternoon-${dayCounter}" placeholder="e.g., 62" ${safeAfternoonTemp ? `value="${safeAfternoonTemp}"` : ''}>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Afternoon Weather</label>

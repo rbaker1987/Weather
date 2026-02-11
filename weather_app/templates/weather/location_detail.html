@@ -1109,10 +1109,8 @@
   }
 </script>
 
-<!-- Leaflet JS Library -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- HTML2Canvas for image export -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous"></script>
 <script>
   // Generic export function for any section
   function exportSectionAsImage(sectionId) {
@@ -1343,95 +1341,144 @@
       const gemMinTemp = gemData?.daily?.temperature_2m_min || [];
       const gemPrecip = gemData?.daily?.precipitation_sum || [];
 
-      let html = `
-          <div class="table-responsive">
-              <table class="table table-sm table-bordered">
-                  <thead class="table-light">
-                      <tr>
-                          <th rowspan="2">Date</th>
-                          <th colspan="2" class="text-center bg-primary text-white">GFS</th>
-                          <th colspan="2" class="text-center bg-info text-dark">NAM</th>
-                          <th colspan="2" class="text-center bg-success text-white">ECMWF</th>
-                          <th colspan="2" class="text-center bg-danger text-white">GEM</th>
-                      </tr>
-                      <tr>
-                          <th class="text-center">High/Low</th>
-                          <th class="text-center">Precip</th>
-                          <th class="text-center">High/Low</th>
-                          <th class="text-center">Precip</th>
-                          <th class="text-center">High/Low</th>
-                          <th class="text-center">Precip</th>
-                          <th class="text-center">High/Low</th>
-                          <th class="text-center">Precip</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-      `;
+      const tableWrapper = document.createElement('div');
+      tableWrapper.className = 'table-responsive';
 
-        for (let i = 0; i < Math.min(3, dates.length); i++) {
-          // Parse date as local time to avoid timezone issues
+      const table = document.createElement('table');
+      table.className = 'table table-sm table-bordered';
+
+      const thead = document.createElement('thead');
+      thead.className = 'table-light';
+
+      const headerRow1 = document.createElement('tr');
+      const headerRow2 = document.createElement('tr');
+
+      const dateTh = document.createElement('th');
+      dateTh.rowSpan = 2;
+      dateTh.textContent = 'Date';
+      headerRow1.appendChild(dateTh);
+
+      const modelHeaders = [
+          { label: 'GFS', className: 'text-center bg-primary text-white' },
+          { label: 'NAM', className: 'text-center bg-info text-dark' },
+          { label: 'ECMWF', className: 'text-center bg-success text-white' },
+          { label: 'GEM', className: 'text-center bg-danger text-white' },
+      ];
+
+      modelHeaders.forEach((model) => {
+          const th = document.createElement('th');
+          th.colSpan = 2;
+          th.className = model.className;
+          th.textContent = model.label;
+          headerRow1.appendChild(th);
+      });
+
+      ['High/Low', 'Precip', 'High/Low', 'Precip', 'High/Low', 'Precip', 'High/Low', 'Precip'].forEach((label) => {
+          const th = document.createElement('th');
+          th.className = 'text-center';
+          th.textContent = label;
+          headerRow2.appendChild(th);
+      });
+
+      thead.appendChild(headerRow1);
+      thead.appendChild(headerRow2);
+
+      const tbody = document.createElement('tbody');
+
+      const formatPrecip = (value) => (value !== undefined && value !== null ? `${value.toFixed(2)}"` : 'N/A');
+      const formatTemp = (value) => (value !== undefined && value !== null ? `${value.toFixed(0)}°` : null);
+
+      const buildTempCell = (maxValue, minValue) => {
+          const td = document.createElement('td');
+          td.className = 'text-center';
+          if (maxValue === null || minValue === null) {
+              td.textContent = 'N/A';
+              return td;
+          }
+
+          const maxSpan = document.createElement('span');
+          maxSpan.className = 'text-danger fw-bold';
+          maxSpan.textContent = maxValue;
+
+          const minSpan = document.createElement('span');
+          minSpan.className = 'text-primary fw-bold';
+          minSpan.textContent = minValue;
+
+          td.appendChild(maxSpan);
+          td.appendChild(document.createTextNode(' / '));
+          td.appendChild(minSpan);
+          return td;
+      };
+
+      for (let i = 0; i < Math.min(3, dates.length); i++) {
           const [year, month, day] = dates[i].split('-').map(Number);
           const date = new Date(year, month - 1, day);
           const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-          const safeDateStr = escapeHtml(dateStr);
 
           const namDateKey = dates[i];
           const namMax = namDailyMax[i] ?? namDerived[namDateKey]?.tmax;
           const namMin = namDailyMin[i] ?? namDerived[namDateKey]?.tmin;
           const namPcp = namDailyPrecip[i] ?? namDerived[namDateKey]?.psum;
 
-            const gfsMax = gfsMaxTemp[i] !== undefined && gfsMaxTemp[i] !== null ? escapeHtml(gfsMaxTemp[i].toFixed(0)) : null;
-            const gfsMin = gfsMinTemp[i] !== undefined && gfsMinTemp[i] !== null ? escapeHtml(gfsMinTemp[i].toFixed(0)) : null;
-            const gfsPcp = gfsPrecip[i] !== undefined && gfsPrecip[i] !== null ? escapeHtml(gfsPrecip[i].toFixed(2)) + '&quot;' : 'N/A';
+          const row = document.createElement('tr');
 
-            const namMaxSafe = namMax !== undefined && namMax !== null ? escapeHtml(namMax.toFixed(0)) : null;
-            const namMinSafe = namMin !== undefined && namMin !== null ? escapeHtml(namMin.toFixed(0)) : null;
-            const namPcpSafe = namPcp !== undefined && namPcp !== null ? escapeHtml(namPcp.toFixed(2)) + '&quot;' : 'N/A';
+          const dateTd = document.createElement('td');
+          const dateStrong = document.createElement('strong');
+          dateStrong.textContent = dateStr;
+          dateTd.appendChild(dateStrong);
+          row.appendChild(dateTd);
 
-            const ecmwfMaxSafe = ecmwfMaxTemp[i] ? escapeHtml(ecmwfMaxTemp[i].toFixed(0)) : null;
-            const ecmwfMinSafe = ecmwfMinTemp[i] ? escapeHtml(ecmwfMinTemp[i].toFixed(0)) : null;
-            const ecmwfPcpSafe = ecmwfPrecip[i] !== undefined && ecmwfPrecip[i] !== null ? escapeHtml(ecmwfPrecip[i].toFixed(2)) + '&quot;' : 'N/A';
+          const gfsMax = formatTemp(gfsMaxTemp[i]);
+          const gfsMin = formatTemp(gfsMinTemp[i]);
+          row.appendChild(buildTempCell(gfsMax, gfsMin));
 
-            const gemMaxSafe = gemMaxTemp[i] ? escapeHtml(gemMaxTemp[i].toFixed(0)) : null;
-            const gemMinSafe = gemMinTemp[i] ? escapeHtml(gemMinTemp[i].toFixed(0)) : null;
-            const gemPcpSafe = gemPrecip[i] !== undefined && gemPrecip[i] !== null ? escapeHtml(gemPrecip[i].toFixed(2)) + '&quot;' : 'N/A';
+          const gfsPcpTd = document.createElement('td');
+          gfsPcpTd.className = 'text-center';
+          gfsPcpTd.textContent = formatPrecip(gfsPrecip[i]);
+          row.appendChild(gfsPcpTd);
 
-            html += `
-              <tr>
-                <td><strong>${safeDateStr}</strong></td>
-                <td class="text-center">
-                  ${gfsMax ? `<span class="text-danger fw-bold">${gfsMax}°</span>` : 'N/A'} /
-                  ${gfsMin ? `<span class="text-primary fw-bold">${gfsMin}°</span>` : 'N/A'}
-                </td>
-                <td class="text-center">${gfsPcp}</td>
-                <td class="text-center">
-                  ${namMaxSafe ? `<span class="text-danger fw-bold">${namMaxSafe}°</span> / <span class="text-primary fw-bold">${namMinSafe || 'N/A'}°</span>` : 'N/A'}
-                </td>
-                <td class="text-center">${namPcpSafe}</td>
-                <td class="text-center">
-                  ${ecmwfMaxSafe ? `<span class="text-danger fw-bold">${ecmwfMaxSafe}°</span> / <span class="text-primary fw-bold">${ecmwfMinSafe || 'N/A'}°</span>` : 'N/A'}
-                </td>
-                <td class="text-center">${ecmwfPcpSafe}</td>
-                <td class="text-center">
-                  ${gemMaxSafe ? `<span class="text-danger fw-bold">${gemMaxSafe}°</span> / <span class="text-primary fw-bold">${gemMinSafe || 'N/A'}°</span>` : 'N/A'}
-                </td>
-                <td class="text-center">${gemPcpSafe}</td>
-              </tr>
-            `;
+          const namMaxFmt = formatTemp(namMax);
+          const namMinFmt = formatTemp(namMin);
+          row.appendChild(buildTempCell(namMaxFmt, namMinFmt));
+
+          const namPcpTd = document.createElement('td');
+          namPcpTd.className = 'text-center';
+          namPcpTd.textContent = formatPrecip(namPcp);
+          row.appendChild(namPcpTd);
+
+          const ecmwfMaxFmt = formatTemp(ecmwfMaxTemp[i]);
+          const ecmwfMinFmt = formatTemp(ecmwfMinTemp[i]);
+          row.appendChild(buildTempCell(ecmwfMaxFmt, ecmwfMinFmt));
+
+          const ecmwfPcpTd = document.createElement('td');
+          ecmwfPcpTd.className = 'text-center';
+          ecmwfPcpTd.textContent = formatPrecip(ecmwfPrecip[i]);
+          row.appendChild(ecmwfPcpTd);
+
+          const gemMaxFmt = formatTemp(gemMaxTemp[i]);
+          const gemMinFmt = formatTemp(gemMinTemp[i]);
+          row.appendChild(buildTempCell(gemMaxFmt, gemMinFmt));
+
+          const gemPcpTd = document.createElement('td');
+          gemPcpTd.className = 'text-center';
+          gemPcpTd.textContent = formatPrecip(gemPrecip[i]);
+          row.appendChild(gemPcpTd);
+
+          tbody.appendChild(row);
       }
 
-      html += `
-                  </tbody>
-              </table>
-          </div>
-          <p class="text-muted small mb-0">
-              <i class="fas fa-info-circle"></i>
-              Data from Open-Meteo API. GFS (NOAA), NAM (NOAA), ECMWF (European Centre), GEM (Canadian).
-          </p>
-      `;
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      tableWrapper.appendChild(table);
 
-      container.innerHTML = html;
+      const info = document.createElement('p');
+      info.className = 'text-muted small mb-0';
+      const infoIcon = document.createElement('i');
+      infoIcon.className = 'fas fa-info-circle';
+      info.appendChild(infoIcon);
+      info.appendChild(document.createTextNode(' Data from Open-Meteo API. GFS (NOAA), NAM (NOAA), ECMWF (European Centre), GEM (Canadian).'));
+
+      container.replaceChildren(tableWrapper, info);
   }
 
   // Auto-load model comparison on page load
