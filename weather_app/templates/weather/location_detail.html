@@ -1203,7 +1203,12 @@
       // Show processing indicator
       const processingDiv = document.createElement('div');
       processingDiv.className = 'export-processing';
-      processingDiv.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Generating image...';
+      const processingIcon = document.createElement('i');
+      processingIcon.className = 'fas fa-spinner fa-spin fa-2x mb-2';
+      const processingLabel = document.createElement('div');
+      processingLabel.textContent = 'Generating image...';
+      processingDiv.appendChild(processingIcon);
+      processingDiv.appendChild(processingLabel);
       document.body.appendChild(processingDiv);
 
       // Capture the section
@@ -1315,15 +1320,22 @@
       const lon = {{ location.longitude }};
       const container = document.getElementById('modelComparisonContainer');
 
-      // Show loading state
-      container.innerHTML = `
-          <div class="text-center py-4">
-              <div class="spinner-border text-primary" role="status">
-                  <span class="visually-hidden">Loading...</span>
-              </div>
-              <p class="mt-3 text-muted">Loading model data...</p>
-          </div>
-      `;
+        // Show loading state
+        const loadingWrap = document.createElement('div');
+        loadingWrap.className = 'text-center py-4';
+        const loadingSpinner = document.createElement('div');
+        loadingSpinner.className = 'spinner-border text-primary';
+        loadingSpinner.setAttribute('role', 'status');
+        const loadingText = document.createElement('span');
+        loadingText.className = 'visually-hidden';
+        loadingText.textContent = 'Loading...';
+        loadingSpinner.appendChild(loadingText);
+        const loadingLabel = document.createElement('p');
+        loadingLabel.className = 'mt-3 text-muted';
+        loadingLabel.textContent = 'Loading model data...';
+        loadingWrap.appendChild(loadingSpinner);
+        loadingWrap.appendChild(loadingLabel);
+        container.replaceChildren(loadingWrap);
 
       try {
           // Fetch 3-day forecast from GFS, NAM, ECMWF, and Canadian GEM
@@ -1358,11 +1370,13 @@
 
       } catch (error) {
           console.error('Error loading model data:', error);
-          container.innerHTML = `
-              <div class="alert alert-danger">
-                  <i class="fas fa-exclamation-triangle"></i> Error loading model data. Please try again.
-              </div>
-          `;
+            const errorWrap = document.createElement('div');
+            errorWrap.className = 'alert alert-danger';
+            const errorIcon = document.createElement('i');
+            errorIcon.className = 'fas fa-exclamation-triangle';
+            errorWrap.appendChild(errorIcon);
+            errorWrap.appendChild(document.createTextNode(' Error loading model data. Please try again.'));
+            container.replaceChildren(errorWrap);
       }
   }
 
@@ -1372,14 +1386,16 @@
       const ecmwfData = modelData.ECMWF;
       const gemData = modelData.GEM;
 
-      if (!gfsData || !gfsData.daily) {
-          container.innerHTML = `
-              <div class="alert alert-warning">
-                  <i class="fas fa-exclamation-circle"></i> No model data available for this location.
-              </div>
-          `;
+        if (!gfsData || !gfsData.daily) {
+          const warningWrap = document.createElement('div');
+          warningWrap.className = 'alert alert-warning';
+          const warningIcon = document.createElement('i');
+          warningIcon.className = 'fas fa-exclamation-circle';
+          warningWrap.appendChild(warningIcon);
+          warningWrap.appendChild(document.createTextNode(' No model data available for this location.'));
+          container.replaceChildren(warningWrap);
           return;
-      }
+        }
 
       const dates = gfsData.daily.time;
       const gfsMaxTemp = gfsData.daily.temperature_2m_max;
