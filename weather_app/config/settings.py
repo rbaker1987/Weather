@@ -224,6 +224,7 @@ MODEL_DETAIL_CACHE_SECONDS = int(
 
 # Caching configuration: prefer Redis via REDIS_URL, fallback to local memory
 REDIS_URL = os.getenv("REDIS_URL")
+CELERY_ENABLED = bool(os.getenv("CELERY_BROKER_URL") or REDIS_URL)
 if REDIS_URL:
     CACHES = {
         "default": {
@@ -244,11 +245,14 @@ else:
         }
     }
 
-CELERY_BROKER_URL = os.getenv(
-    "CELERY_BROKER_URL",
-    REDIS_URL or "redis://localhost:6379/0",
-)
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL") or REDIS_URL
+if not CELERY_BROKER_URL:
+    CELERY_BROKER_URL = "redis://localhost:6379/0"
+
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND") or REDIS_URL
+if not CELERY_RESULT_BACKEND:
+    CELERY_RESULT_BACKEND = "cache+memory://"
+    CELERY_TASK_IGNORE_RESULT = True
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

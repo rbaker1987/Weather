@@ -4,6 +4,7 @@ import logging
 from datetime import timedelta
 
 from celery import shared_task
+from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
@@ -19,6 +20,47 @@ from .models import (
 from .services import SyncWeatherService
 
 logger = logging.getLogger("weather")
+
+
+def _celery_enabled() -> bool:
+    return bool(getattr(settings, "CELERY_ENABLED", False))
+
+
+def enqueue_current_conditions(location_id: str) -> str:
+    if _celery_enabled():
+        update_current_conditions_for_location.delay(str(location_id))
+        return "queued"
+
+    from .services import CurrentConditionsService
+
+    location = Location.objects.get(id=location_id)
+    CurrentConditionsService.fetch_and_cache_current_conditions(location)
+    return "direct"
+
+
+def enqueue_forecasts(location_id: str) -> str:
+    if _celery_enabled():
+        update_forecasts_for_location.delay(str(location_id))
+        return "queued"
+
+    from .services import ForecastService
+
+    location = Location.objects.get(id=location_id)
+    ForecastService.get_or_fetch_hourly_forecasts(location, force_refresh=True)
+    ForecastService.get_or_fetch_daily_forecasts(location, force_refresh=True)
+    return "direct"
+
+
+def enqueue_alerts(location_id: str) -> str:
+    if _celery_enabled():
+        update_alerts_for_location.delay(str(location_id))
+        return "queued"
+
+    from .services import AlertsService
+
+    location = Location.objects.get(id=location_id)
+    AlertsService.fetch_and_cache_alerts(location)
+    return "direct"
 
 
 @shared_task(bind=True, max_retries=3)

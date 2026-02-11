@@ -280,9 +280,9 @@ class TestLocationActions:
     def test_ensure_browser_location_success(self, api_client):
         payload = {"name": "Here", "latitude": 10.0, "longitude": 20.0}
         with (
-            patch("weather.tasks.update_current_conditions_for_location.delay"),
-            patch("weather.tasks.update_forecasts_for_location.delay"),
-            patch("weather.tasks.update_alerts_for_location.delay"),
+            patch("weather.tasks.enqueue_current_conditions"),
+            patch("weather.tasks.enqueue_forecasts"),
+            patch("weather.tasks.enqueue_alerts"),
         ):
             r = api_client.post(
                 "/api/locations/ensure_browser_location/", payload, format="json"
@@ -300,9 +300,9 @@ class TestLocationActions:
         )
         payload = {"name": "Updated", "latitude": 35.0, "longitude": -90.0}
         with (
-            patch("weather.tasks.update_current_conditions_for_location.delay"),
-            patch("weather.tasks.update_forecasts_for_location.delay"),
-            patch("weather.tasks.update_alerts_for_location.delay"),
+            patch("weather.tasks.enqueue_current_conditions"),
+            patch("weather.tasks.enqueue_forecasts"),
+            patch("weather.tasks.enqueue_alerts"),
         ):
             r = api_client.post(
                 "/api/locations/ensure_browser_location/", payload, format="json"
