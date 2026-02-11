@@ -240,12 +240,20 @@ class TestForecastListView:
                 )
         # Ensure current conditions exist to populate locations_with_current
         CurrentConditions.objects.create(
-            location=l1, temperature=70, condition="Sunny",
-            wind_speed=5, humidity=60, last_observation_time=timezone.now()
+            location=l1,
+            temperature=70,
+            condition="Sunny",
+            wind_speed=5,
+            humidity=60,
+            last_observation_time=timezone.now(),
         )
         CurrentConditions.objects.create(
-            location=l2, temperature=65, condition="Cloudy",
-            wind_speed=3, humidity=55, last_observation_time=timezone.now()
+            location=l2,
+            temperature=65,
+            condition="Cloudy",
+            wind_speed=3,
+            humidity=55,
+            last_observation_time=timezone.now(),
         )
 
         resp = client.get(reverse("weather:forecast-list"))
@@ -292,13 +300,15 @@ class TestLocationListView:
         )
         session["location_ids"] = [str(loc.id)]
         session.save()
-        # Create stale current conditions (> 15 min old)
-        cc = CurrentConditions.objects.create(
-            location=loc, temperature=65, condition="Rainy",
-            wind_speed=10, humidity=75, last_observation_time=timezone.now()
+        # Create stale current conditions (> 30 min old)
+        CurrentConditions.objects.create(
+            location=loc,
+            temperature=65,
+            condition="Rainy",
+            wind_speed=10,
+            humidity=75,
+            last_observation_time=timezone.now() - timedelta(minutes=35),
         )
-        cc.updated_at = timezone.now() - timedelta(minutes=20)
-        cc.save()
 
         # Mock fetch to update temp
         def fake_fetch(location):

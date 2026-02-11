@@ -9,7 +9,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from weather.models import CurrentConditions, DailyForecast, Location, WeatherAlert
+from weather.models import DailyForecast, Location, WeatherAlert
 
 
 def add_location_to_session(client, location):
