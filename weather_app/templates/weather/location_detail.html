@@ -549,12 +549,18 @@
                 </td>
                 <td>{{ forecast.short_forecast }}</td>
                 <td>
-                  {% if forecast.wind_speed %} {{ forecast.wind_speed }} {{
-                  forecast.wind_direction }} {% else %} - {% endif %}
+                  {% if forecast.wind_speed %}
+                    {{ forecast.wind_speed }} {{ forecast.wind_direction }}
+                  {% else %}
+                    -
+                  {% endif %}
                 </td>
                 <td>
-                  {% if forecast.humidity %} {{ forecast.humidity }}% {% else %} - {%
-                  endif %}
+                  {% if forecast.humidity %}
+                    {{ forecast.humidity }}%
+                  {% else %}
+                    -
+                  {% endif %}
                 </td>
               </tr>
               {% endfor %}
