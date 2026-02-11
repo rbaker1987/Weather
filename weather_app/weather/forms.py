@@ -20,6 +20,16 @@ class UniqueUsernameCreationForm(UserCreationForm):
             )
         return normalized
 
+    def clean(self):
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get("password1")
+        password2 = cleaned_data.get("password2")
+
+        if password1 and password2 and password1 != password2:
+            self.add_error("password2", "Passwords do not match.")
+
+        return cleaned_data
+
 
 class ProfileEditForm(forms.ModelForm):
     """Form for editing user profile information."""
@@ -45,7 +55,7 @@ class ProfileEditForm(forms.ModelForm):
         password_confirm = cleaned_data.get("password_confirm")
 
         if password and password != password_confirm:
-            raise forms.ValidationError("Passwords do not match.")
+            self.add_error("password_confirm", "Passwords do not match.")
 
         return cleaned_data
 
