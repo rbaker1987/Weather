@@ -1593,13 +1593,16 @@ class DashboardView(TemplateView):
         # Ensure forecasts and current conditions for displayed locations
         for location in locations:
             # Check if we need to refresh data (older than 1 hour or no data)
+            try:
+                cc = location.current_conditions_cache
+                current_stale = timezone.now() - cc.last_observation_time > timedelta(hours=1)
+            except (AttributeError, CurrentConditions.DoesNotExist):
+                current_stale = True
+
             needs_refresh = (
                 location.last_forecast_update is None
                 or (timezone.now() - location.last_forecast_update > timedelta(hours=1))
-                or location.last_observation_time is None
-                or (
-                    timezone.now() - location.last_observation_time > timedelta(hours=1)
-                )
+                or current_stale
             )
             if needs_refresh:
                 try:
