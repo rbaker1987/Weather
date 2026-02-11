@@ -308,14 +308,13 @@ async function addDay() {
     // Get NWS night from previous day (which is morning for this day)
     const previousNwsNight = dayIndex > 0 ? nwsForecast[dayPeriodIndex - 1] || {} : {};
 
-    // Check for saved custom forecasts for this date
-    const savedMorning = customForecasts.find(cf => cf.date === dateKey && !cf.is_daytime);
-    const savedAfternoon = customForecasts.find(cf => cf.date === dateKey && cf.is_daytime);
+    // Check for saved custom forecasts for this date (GET endpoint returns combined format)
+    const savedDay = customForecasts.find(cf => cf.date === dateKey);
 
     // Priority: Saved custom > NWS > Model average
-    if (savedMorning) {
-        defaultMorning = savedMorning.temperature;
-        defaultMorningWeather = savedMorning.short_forecast || '';
+    if (savedDay && (savedDay.morning_temp || savedDay.morning_weather)) {
+        defaultMorning = savedDay.morning_temp || '';
+        defaultMorningWeather = savedDay.morning_weather || '';
     } else if (previousNwsNight.temperature) {
         // Use previous day's night as this day's morning low
         defaultMorning = previousNwsNight.temperature;
@@ -324,9 +323,9 @@ async function addDay() {
         defaultMorning = modelData.modelAverages.avgLow;
     }
 
-    if (savedAfternoon) {
-        defaultAfternoon = savedAfternoon.temperature;
-        defaultAfternoonWeather = savedAfternoon.short_forecast || '';
+    if (savedDay && (savedDay.afternoon_temp || savedDay.afternoon_weather)) {
+        defaultAfternoon = savedDay.afternoon_temp || '';
+        defaultAfternoonWeather = savedDay.afternoon_weather || '';
     } else if (nwsDay.temperature) {
         // Use this day's forecast
         defaultAfternoon = nwsDay.temperature;
@@ -983,19 +982,21 @@ function buildForecastPayload() {
         forecastDate.setDate(baseDate.getDate() + i);
         const dateStr = forecastDate.toISOString().split('T')[0];
 
-        // Add morning period if has data
+        // Add morning period only if it has data
         if (morning_temp || morning_weather) {
             days.push({
                 date: dateStr,
+                is_daytime: false,
                 morning_temp: morning_temp ? parseInt(morning_temp) : null,
                 morning_weather: morning_weather || ''
             });
         }
 
-        // Add afternoon period if has data
+        // Add afternoon period only if it has data
         if (afternoon_temp || afternoon_weather) {
             days.push({
                 date: dateStr,
+                is_daytime: true,
                 afternoon_temp: afternoon_temp ? parseInt(afternoon_temp) : null,
                 afternoon_weather: afternoon_weather || ''
             });

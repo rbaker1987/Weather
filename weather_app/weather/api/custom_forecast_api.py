@@ -69,22 +69,46 @@ class CustomForecastAPIView(APIView):
             if not date_value:
                 continue
 
-            updated += _upsert_period(
-                request.user,
-                location,
-                date_value,
-                False,
-                day.get("morning_temp"),
-                day.get("morning_weather"),
-            )
-            updated += _upsert_period(
-                request.user,
-                location,
-                date_value,
-                True,
-                day.get("afternoon_temp"),
-                day.get("afternoon_weather"),
-            )
+            # Check if is_daytime flag is specified
+            is_daytime = day.get("is_daytime")
+            if is_daytime is None:
+                # Legacy format: both morning and afternoon in one object
+                updated += _upsert_period(
+                    request.user,
+                    location,
+                    date_value,
+                    False,
+                    day.get("morning_temp"),
+                    day.get("morning_weather"),
+                )
+                updated += _upsert_period(
+                    request.user,
+                    location,
+                    date_value,
+                    True,
+                    day.get("afternoon_temp"),
+                    day.get("afternoon_weather"),
+                )
+            else:
+                # New format: separate morning/afternoon objects
+                if is_daytime:
+                    updated += _upsert_period(
+                        request.user,
+                        location,
+                        date_value,
+                        True,
+                        day.get("afternoon_temp"),
+                        day.get("afternoon_weather"),
+                    )
+                else:
+                    updated += _upsert_period(
+                        request.user,
+                        location,
+                        date_value,
+                        False,
+                        day.get("morning_temp"),
+                        day.get("morning_weather"),
+                    )
 
         return Response({"status": "saved", "count": updated})
 
