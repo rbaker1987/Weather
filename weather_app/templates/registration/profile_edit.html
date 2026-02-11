@@ -17,51 +17,57 @@
           {% csrf_token %}
           <div class="mb-3">
             <label for="id_first_name" class="form-label">First Name</label>
+            {% with field=form.first_name %}
             <input
               type="text"
               class="form-control"
               id="id_first_name"
               name="first_name"
-              value="{{ form.first_name.value|default:'' }}"
+              value="{{ field.value|default:'' }}"
               autocomplete="given-name"
             />
-            {% if form.first_name.errors %}
+            {% if field.errors %}
             <div class="text-danger small mt-1">
-              {{ form.first_name.errors|striptags }}
+              {{ field.errors|striptags }}
             </div>
             {% endif %}
+            {% endwith %}
           </div>
           <div class="mb-3">
             <label for="id_last_name" class="form-label">Last Name</label>
+            {% with field=form.last_name %}
             <input
               type="text"
               class="form-control"
               id="id_last_name"
               name="last_name"
-              value="{{ form.last_name.value|default:'' }}"
+              value="{{ field.value|default:'' }}"
               autocomplete="family-name"
             />
-            {% if form.last_name.errors %}
+            {% if field.errors %}
             <div class="text-danger small mt-1">
-              {{ form.last_name.errors|striptags }}
+              {{ field.errors|striptags }}
             </div>
             {% endif %}
+            {% endwith %}
           </div>
           <div class="mb-3">
             <label for="id_email" class="form-label">Email</label>
+            {% with field=form.email %}
             <input
               type="email"
               class="form-control"
               id="id_email"
               name="email"
-              value="{{ form.email.value|default:'' }}"
+              value="{{ field.value|default:'' }}"
               autocomplete="email"
             />
-            {% if form.email.errors %}
+            {% if field.errors %}
             <div class="text-danger small mt-1">
-              {{ form.email.errors|striptags }}
+              {{ field.errors|striptags }}
             </div>
             {% endif %}
+            {% endwith %}
           </div>
           <div class="mb-3">
             <label for="id_password" class="form-label">New Password</label>
