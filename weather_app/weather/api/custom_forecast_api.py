@@ -188,10 +188,19 @@ def _upsert_period(owner, location, forecast_date, is_daytime, temp, weather):
         ).delete()
         return deleted
 
-    start_time = time(15, 0) if is_daytime else time(6, 0)
+    if is_daytime:
+        start_date = forecast_date
+        start_time = time(10, 0)
+        end_date = forecast_date
+        end_time = time(22, 0)
+    else:
+        start_date = forecast_date - timedelta(days=1)
+        start_time = time(22, 0)
+        end_date = forecast_date
+        end_time = time(10, 0)
 
-    period_start = timezone.make_aware(datetime.combine(forecast_date, start_time))
-    period_end = period_start + timedelta(hours=12)
+    period_start = timezone.make_aware(datetime.combine(start_date, start_time))
+    period_end = timezone.make_aware(datetime.combine(end_date, end_time))
 
     CustomDailyForecast.objects.update_or_create(
         owner=owner,
