@@ -172,7 +172,7 @@ class TestForecastListView:
 
         # Make background task raise to force fallback
         monkeypatch.setattr(
-            "weather.tasks.update_forecasts_for_location.delay",
+            "weather.tasks.enqueue_forecasts",
             lambda *_: (_ for _ in ()).throw(Exception("fail")),
         )
 
@@ -317,9 +317,7 @@ class TestLocationListView:
             cc.save()
             return True
 
-        monkeypatch.setattr(
-            "weather.tasks.update_current_conditions_for_location.delay", fake_delay
-        )
+        monkeypatch.setattr("weather.tasks.enqueue_current_conditions", fake_delay)
 
         r = client.get(reverse("weather:location-list"))
         assert r.status_code == 200
@@ -340,15 +338,15 @@ class TestLocationDetailView:
         flags = {"conditions": False, "forecasts": False, "alerts": False}
 
         monkeypatch.setattr(
-            "weather.tasks.update_current_conditions_for_location.delay",
+            "weather.tasks.enqueue_current_conditions",
             lambda *_: flags.__setitem__("conditions", True),
         )
         monkeypatch.setattr(
-            "weather.tasks.update_forecasts_for_location.delay",
+            "weather.tasks.enqueue_forecasts",
             lambda *_: flags.__setitem__("forecasts", True),
         )
         monkeypatch.setattr(
-            "weather.tasks.update_alerts_for_location.delay",
+            "weather.tasks.enqueue_alerts",
             lambda *_: flags.__setitem__("alerts", True),
         )
 

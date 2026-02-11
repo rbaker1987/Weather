@@ -8,19 +8,27 @@ from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db.models import Avg, Case, Count, IntegerField, Q, When
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DetailView, ListView, TemplateView
+from django.utils.decorators import method_decorator
+from django.views.generic import (
+    CreateView,
+    DetailView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .forms import UniqueUsernameCreationForm
+from .forms import ProfileEditForm, UniqueUsernameCreationForm
 from .models import (
     CurrentConditions,
     DailyForecast,
@@ -131,14 +139,14 @@ class LocationViewSet(viewsets.ModelViewSet):
         if location.latitude and location.longitude:
             try:
                 from .tasks import (
-                    update_alerts_for_location,
-                    update_current_conditions_for_location,
-                    update_forecasts_for_location,
+                    enqueue_alerts,
+                    enqueue_current_conditions,
+                    enqueue_forecasts,
                 )
 
-                update_current_conditions_for_location.delay(str(location.id))
-                update_forecasts_for_location.delay(str(location.id))
-                update_alerts_for_location.delay(str(location.id))
+                enqueue_current_conditions(str(location.id))
+                enqueue_forecasts(str(location.id))
+                enqueue_alerts(str(location.id))
             except Exception:
                 fetch_current_conditions(location)
                 _refresh_forecasts_for_location(location)
@@ -205,14 +213,14 @@ class LocationViewSet(viewsets.ModelViewSet):
             # Kick off background refreshes (best-effort)
             try:
                 from .tasks import (
-                    update_alerts_for_location,
-                    update_current_conditions_for_location,
-                    update_forecasts_for_location,
+                    enqueue_alerts,
+                    enqueue_current_conditions,
+                    enqueue_forecasts,
                 )
 
-                update_current_conditions_for_location.delay(str(location.id))
-                update_forecasts_for_location.delay(str(location.id))
-                update_alerts_for_location.delay(str(location.id))
+                enqueue_current_conditions(str(location.id))
+                enqueue_forecasts(str(location.id))
+                enqueue_alerts(str(location.id))
             except Exception:
                 _refresh_forecasts_for_location(location)
 
@@ -1368,6 +1376,23 @@ class SignUpView(CreateView):
         return redirect(self.get_success_url())
 
 
+@method_decorator(login_required, name="dispatch")
+class ProfileEditView(UpdateView):
+    """Edit user profile information (name, email, password)."""
+
+    template_name = "registration/profile_edit.html"
+    form_class = ProfileEditForm
+    success_url = reverse_lazy("weather:dashboard")
+
+    def get_object(self, queryset=None):
+        return self.request.user
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["page_title"] = "Edit Profile"
+        return context
+
+
 class DashboardView(TemplateView):
     """Main dashboard view with weather overview."""
 
@@ -1421,12 +1446,12 @@ class DashboardView(TemplateView):
             if needs_refresh:
                 try:
                     from .tasks import (
-                        update_current_conditions_for_location,
-                        update_forecasts_for_location,
+                        enqueue_current_conditions,
+                        enqueue_forecasts,
                     )
 
-                    update_current_conditions_for_location.delay(str(location.id))
-                    update_forecasts_for_location.delay(str(location.id))
+                    enqueue_current_conditions(str(location.id))
+                    enqueue_forecasts(str(location.id))
                 except Exception as e:
                     logger.warning(f"Failed to refresh data for {location.name}: {e}")
 
@@ -3348,9 +3373,9 @@ class LocationListView(ListView):
 
             if needs_update:
                 try:
-                    from .tasks import update_current_conditions_for_location
+                    from .tasks import enqueue_current_conditions
 
-                    update_current_conditions_for_location.delay(str(location.id))
+                    enqueue_current_conditions(str(location.id))
                 except Exception:
                     fetch_current_conditions(location)
 
@@ -3416,14 +3441,14 @@ class LocationDetailView(DetailView):
         if needs_update and self.object.latitude and self.object.longitude:
             try:
                 from .tasks import (
-                    update_alerts_for_location,
-                    update_current_conditions_for_location,
-                    update_forecasts_for_location,
+                    enqueue_alerts,
+                    enqueue_current_conditions,
+                    enqueue_forecasts,
                 )
 
-                update_current_conditions_for_location.delay(str(self.object.id))
-                update_forecasts_for_location.delay(str(self.object.id))
-                update_alerts_for_location.delay(str(self.object.id))
+                enqueue_current_conditions(str(self.object.id))
+                enqueue_forecasts(str(self.object.id))
+                enqueue_alerts(str(self.object.id))
             except Exception as e:
                 logger.warning(f"Failed to enqueue refresh for {self.object.name}: {e}")
                 fetch_current_conditions(self.object)
@@ -3700,9 +3725,9 @@ class ForecastListView(ListView):
                 or loc.last_forecast_update < threshold
             ):
                 try:
-                    from .tasks import update_forecasts_for_location
+                    from .tasks import enqueue_forecasts
 
-                    update_forecasts_for_location.delay(str(loc.id))
+                    enqueue_forecasts(str(loc.id))
                 except Exception:
                     _refresh_forecasts_for_location(loc)
 
