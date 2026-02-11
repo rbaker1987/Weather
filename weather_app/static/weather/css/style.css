@@ -867,3 +867,107 @@ a:hover {
   background: linear-gradient(135deg, #0f0f3d 0%, #000000 100%) !important;
   color: white !important;
 }
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  /* Responsive navbar logo sizing */
+  .navbar-logo-img {
+    height: 45px !important;
+  }
+
+  .navbar {
+    padding: 0.5rem 0 !important;
+  }
+
+  /* Model data table responsiveness */
+  .model-data-table {
+    font-size: 0.7rem !important;
+  }
+
+  .model-data-table th,
+  .model-data-table td {
+    padding: 0.3rem !important;
+  }
+
+  .model-data-table td:first-child {
+    white-space: nowrap;
+  }
+
+  /* Model chart container horizontal scroll on mobile */
+  #modelChart-1,
+  #modelChart-2,
+  #modelChart-3,
+  #modelChart-4,
+  #modelChart-5,
+  #modelChart-6,
+  #modelChart-7 {
+    overflow-x: auto;
+    display: block;
+  }
+
+  /* Reference data layout stacking */
+  .reference-data {
+    padding: 0.75rem !important;
+  }
+
+  .reference-data .col-md-3,
+  .reference-data .col-md-4,
+  .reference-data .col-md-5 {
+    margin-bottom: 1rem;
+  }
+
+  /* Input section sizing */
+  .input-section {
+    padding: 0.75rem !important;
+  }
+
+  .input-section .col-md-2,
+  .input-section .col-md-3 {
+    margin-bottom: 0.75rem;
+  }
+}
+
+@media (max-width: 576px) {
+  /* Extra small devices */
+  .navbar-logo-img {
+    height: 40px !important;
+  }
+
+  .navbar-brand {
+    font-size: 0.9rem;
+  }
+
+  /* Tighter mobile layout */
+  .model-data-table {
+    font-size: 0.65rem !important;
+  }
+
+  .model-data-table th,
+  .model-data-table td {
+    padding: 0.2rem !important;
+  }
+
+  /* Stack the reference data better on very small screens */
+  .reference-data {
+    padding: 0.5rem !important;
+    font-size: 0.9rem;
+  }
+
+  .reference-data strong {
+    font-size: 0.85rem;
+  }
+
+  .reference-data small {
+    font-size: 0.75rem;
+  }
+
+  /* Day builder card padding */
+  .day-builder-card {
+    padding: 1rem !important;
+  }
+
+  .day-builder-card h4 {
+    font-size: 1.1rem;
+    margin-bottom: 0.75rem;
+  }
+}

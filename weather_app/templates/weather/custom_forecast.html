@@ -81,10 +81,33 @@
         white-space: nowrap;
     }
 
+    @media (max-width: 768px) {
+        /* Model table responsive sizing */
+        .model-data-table {
+            font-size: 0.7rem;
+        }
+        .model-data-table th,
+        .model-data-table td {
+            padding: 0.3rem;
+        }
+        .model-data-table td:first-child {
+            white-space: nowrap;
+        }
+    }
+
     @media (max-width: 576px) {
         .builder-section,
         .day-builder-card {
             padding: 1rem;
+        }
+
+        /* Model table extra small device sizing */
+        .model-data-table {
+            font-size: 0.65rem;
+        }
+        .model-data-table th,
+        .model-data-table td {
+            padding: 0.2rem;
         }
 
         .forecast-period-card {
@@ -94,6 +117,18 @@
 
         .forecast-period-card .period-temp {
             font-size: 1.6rem;
+        }
+
+        /* Better spacing for reference data on small screens */
+        .reference-data {
+            padding: 0.75rem !important;
+            font-size: 0.9rem;
+        }
+        .reference-data strong {
+            font-size: 0.85rem;
+        }
+        .reference-data small {
+            font-size: 0.75rem;
         }
     }
 </style>
@@ -123,6 +158,25 @@
     <button class="btn btn-primary" onclick="addDay()">
         <i class="fas fa-plus"></i> Add Day
     </button>
+</div>
+
+<!-- Save/Load/Clear Actions -->
+<div class="builder-section" id="actionsSection" style="display: none;">
+    <div class="row gap-3">
+        <div class="col-auto">
+            <button class="btn btn-success" id="saveButton" onclick="saveForecasts()">
+                <i class="fas fa-save"></i> Save Forecast
+            </button>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-danger" id="clearButton" onclick="clearForecasts()">
+                <i class="fas fa-trash"></i> Clear All
+            </button>
+        </div>
+        <div class="col-auto">
+            <span id="saveStatus" class="alert alert-info" style="display: none; margin-bottom: 0;"></span>
+        </div>
+    </div>
 </div>
 
 <!-- Forecast Display -->
@@ -155,6 +209,7 @@
 <!-- Reference Data (hidden, passed from server) -->
 {{ nws_forecast_periods|json_script:"nwsForecastData" }}
 {{ climate_normals|json_script:"climateNormalsData" }}
+{{ custom_forecasts|json_script:"customForecastsData" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -164,8 +219,22 @@
 let forecastDays = [];
 let nwsForecast = [];
 let climateNormals = {};
+let customForecasts = [];
 let currentLocation = { latitude: "{{ latitude|default:'' }}", longitude: "{{ longitude|default:'' }}", location_id: "{{ location_id|default:'' }}" };
 let dayCounter = 0;
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -173,9 +242,13 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
         const nwsElement = document.getElementById('nwsForecastData');
         const climateElement = document.getElementById('climateNormalsData');
+        const customElement = document.getElementById('customForecastsData');
 
         nwsForecast = nwsElement ? JSON.parse(nwsElement.textContent) : [];
         climateNormals = climateElement ? JSON.parse(climateElement.textContent) : {};
+        customForecasts = customElement ? JSON.parse(customElement.textContent) : [];
+
+        console.log('Loaded custom forecasts:', customForecasts);
 
         // Auto-load 7 days if location selected
         if (currentLocation.location_id) {
@@ -210,6 +283,8 @@ async function addDay() {
     const today = new Date(baseDate);
     today.setDate(baseDate.getDate() + dayIndex);
     const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const dateKey = today.toISOString().split('T')[0]; // YYYY-MM-DD format for matching
+
     console.log(`Day ${dayIndex}: baseDate=${baseDate.toISOString()}, today=${today.toISOString()}, dateStr=${dateStr}`);
 
     // Get NWS reference for this day (if available)
@@ -231,7 +306,7 @@ async function addDay() {
     // Fetch model data for this date
     let modelData = await fetchModelDataForDate(dayIndex, today);
 
-    // Determine default values: use NWS if available, otherwise model average
+    // Determine default values: use saved custom forecast first, then NWS, then model average
     let defaultMorning = '';
     let defaultAfternoon = '';
     let defaultMorningWeather = '';
@@ -246,8 +321,14 @@ async function addDay() {
     // Get NWS night from previous day (which is morning for this day)
     const previousNwsNight = dayIndex > 0 ? nwsForecast[dayPeriodIndex - 1] || {} : {};
 
-    // Set defaults based on NWS or model data
-    if (previousNwsNight.temperature) {
+    // Check for saved custom forecasts for this date (GET endpoint returns combined format)
+    const savedDay = customForecasts.find(cf => cf.date === dateKey);
+
+    // Priority: Saved custom > NWS > Model average
+    if (savedDay && (savedDay.morning_temp || savedDay.morning_weather)) {
+        defaultMorning = savedDay.morning_temp || '';
+        defaultMorningWeather = savedDay.morning_weather || '';
+    } else if (previousNwsNight.temperature) {
         // Use previous day's night as this day's morning low
         defaultMorning = previousNwsNight.temperature;
         defaultMorningWeather = previousNwsNight.shortForecast || '';
@@ -255,7 +336,10 @@ async function addDay() {
         defaultMorning = modelData.modelAverages.avgLow;
     }
 
-    if (nwsDay.temperature) {
+    if (savedDay && (savedDay.afternoon_temp || savedDay.afternoon_weather)) {
+        defaultAfternoon = savedDay.afternoon_temp || '';
+        defaultAfternoonWeather = savedDay.afternoon_weather || '';
+    } else if (nwsDay.temperature) {
         // Use this day's forecast
         defaultAfternoon = nwsDay.temperature;
         defaultAfternoonWeather = nwsDay.shortForecast || '';
@@ -268,13 +352,32 @@ async function addDay() {
         defaultMorning = '';
     }
 
+    const safeDateStr = escapeHtml(dateStr);
+    const safeMorningTemp = defaultMorning !== '' ? escapeAttr(defaultMorning) : '';
+    const safeAfternoonTemp = defaultAfternoon !== '' ? escapeAttr(defaultAfternoon) : '';
+    const safePrevNwsTemp = previousNwsNight.temperature !== undefined && previousNwsNight.temperature !== null
+        ? escapeHtml(previousNwsNight.temperature)
+        : '';
+    const safeNwsTemp = nwsDay.temperature !== undefined && nwsDay.temperature !== null
+        ? escapeHtml(nwsDay.temperature)
+        : '';
+    const safeRecordedLow = recordedLow !== undefined && recordedLow !== null
+        ? escapeHtml(recordedLow)
+        : '';
+    const safeMorningWeather = defaultMorningWeather ? escapeAttr(defaultMorningWeather) : '';
+    const safeAfternoonWeather = defaultAfternoonWeather ? escapeAttr(defaultAfternoonWeather) : '';
+    const safePrevNwsForecast = previousNwsNight.shortForecast
+        ? escapeHtml(previousNwsNight.shortForecast)
+        : '';
+    const safeNwsForecast = nwsDay.shortForecast ? escapeHtml(nwsDay.shortForecast) : '';
+
     // Override morning with recorded low if available
     // (now handled in the isToday check above)
     const card = document.createElement('div');
     card.className = 'day-builder-card';
     card.id = `day-${dayCounter}`;
     card.innerHTML = `
-        <h4>${dateStr}</h4>
+        <h4>${safeDateStr}</h4>
 
         <!-- Reference Data -->
         <div class="reference-data">
@@ -287,11 +390,11 @@ async function addDay() {
                 </div>
                 <div class="col-md-4">
                     <strong>NWS Forecast:</strong><br>
-                    ${previousNwsNight.temperature ? `Morning: ${previousNwsNight.temperature}°F` : 'N/A'}<br>
-                    ${previousNwsNight.shortForecast ? `<small class="text-muted">${previousNwsNight.shortForecast}</small><br>` : ''}
-                    ${nwsDay.temperature ? `Afternoon: ${nwsDay.temperature}°F` : 'N/A'}<br>
-                    ${nwsDay.shortForecast ? `<small class="text-muted">${nwsDay.shortForecast}</small><br>` : ''}
-                    ${recordedLow ? `<strong class="text-success">Recorded Low: ${recordedLow}°F</strong>` : ''}
+                    ${previousNwsNight.temperature ? `Morning: ${safePrevNwsTemp}°F` : 'N/A'}<br>
+                    ${safePrevNwsForecast ? `<small class="text-muted">${safePrevNwsForecast}</small><br>` : ''}
+                    ${nwsDay.temperature ? `Afternoon: ${safeNwsTemp}°F` : 'N/A'}<br>
+                    ${safeNwsForecast ? `<small class="text-muted">${safeNwsForecast}</small><br>` : ''}
+                    ${recordedLow ? `<strong class="text-success">Recorded Low: ${safeRecordedLow}°F</strong>` : ''}
                 </div>
                 <div class="col-md-5">
                     <strong>Model Forecasts (Models × Times):</strong><br>
@@ -306,19 +409,19 @@ async function addDay() {
             <div class="row g-3">
                 <div class="col-md-2">
                     <label class="form-label">Morning Temp (°F)</label>
-                    <input type="number" class="form-control" id="morning-${dayCounter}" placeholder="e.g., 45" ${defaultMorning ? `value="${defaultMorning}"` : ''}>
+                    <input type="number" class="form-control" id="morning-${dayCounter}" placeholder="e.g., 45" ${safeMorningTemp ? `value="${safeMorningTemp}"` : ''}>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Morning Weather</label>
-                    <input type="text" class="form-control" id="morning-weather-${dayCounter}" placeholder="e.g., Partly Cloudy" ${defaultMorningWeather ? `value="${defaultMorningWeather}"` : ''}>
+                    <input type="text" class="form-control" id="morning-weather-${dayCounter}" placeholder="e.g., Partly Cloudy" ${safeMorningWeather ? `value="${safeMorningWeather}"` : ''}>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Afternoon Temp (°F)</label>
-                    <input type="number" class="form-control" id="afternoon-${dayCounter}" placeholder="e.g., 62" ${defaultAfternoon ? `value="${defaultAfternoon}"` : ''}>
+                    <input type="number" class="form-control" id="afternoon-${dayCounter}" placeholder="e.g., 62" ${safeAfternoonTemp ? `value="${safeAfternoonTemp}"` : ''}>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Afternoon Weather</label>
-                    <input type="text" class="form-control" id="afternoon-weather-${dayCounter}" placeholder="e.g., Mostly Sunny" ${defaultAfternoonWeather ? `value="${defaultAfternoonWeather}"` : ''}>
+                    <input type="text" class="form-control" id="afternoon-weather-${dayCounter}" placeholder="e.g., Mostly Sunny" ${safeAfternoonWeather ? `value="${safeAfternoonWeather}"` : ''}>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">&nbsp;</label>
@@ -342,6 +445,10 @@ async function addDay() {
         date: today,
         dateStr: dateStr
     });
+
+    // Show action buttons if we have any data
+    updateActionButtonsVisibility();
+
 
     updateForecastDisplay();
 }
@@ -605,7 +712,7 @@ function createModelDataTable(dayId, chartData, times) {
     const models = Object.keys(chartData);
 
     // Build table HTML
-    let html = `<table class="model-data-table">
+    let html = `<div style="overflow-x: auto; width: 100%;"><table class="model-data-table">
         <thead>
             <tr>
                 <th>Model</th>
@@ -640,9 +747,10 @@ function createModelDataTable(dayId, chartData, times) {
         html += `</tr>`;
     }
 
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
     container.innerHTML = html;
 }
+
 
 function updateForecastDisplay() {
     const container = document.getElementById('forecastCards');
@@ -792,6 +900,8 @@ function updateForecastDisplay() {
         const dayOfWeek = day.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
         const afternoonLayout = needsChanceLayout(afternoonWeather);
         const morningLayout = needsChanceLayout(morningWeather);
+        const safeMorningText = morningWeather ? escapeHtml(morningWeather) : '';
+        const safeAfternoonText = afternoonWeather ? escapeHtml(afternoonWeather) : '';
 
         wrapper.innerHTML = `
             <div class="card border-0 h-100">
@@ -810,7 +920,7 @@ function updateForecastDisplay() {
                             </div>
                             <div class="period-temp">${morningTemp}°F</div>
                         </div>
-                        ${morningWeather ? `<p class="period-description mb-0">${morningWeather}</p>` : ''}
+                        ${safeMorningText ? `<p class="period-description mb-0">${safeMorningText}</p>` : ''}
                     </div>
                     ` : ''}
                     ${afternoonTemp ? `
@@ -824,7 +934,7 @@ function updateForecastDisplay() {
                             </div>
                             <div class="period-temp">${afternoonTemp}°F</div>
                         </div>
-                        ${afternoonWeather ? `<p class="period-description mb-0">${afternoonWeather}</p>` : ''}
+                        ${safeAfternoonText ? `<p class="period-description mb-0">${safeAfternoonText}</p>` : ''}
                     </div>
                     ` : ''}
                 </div>
@@ -832,12 +942,15 @@ function updateForecastDisplay() {
         `;
         container.appendChild(wrapper);
     });
+
+    updateActionButtonsVisibility();
 }
 
 // Update display on input changes
 document.addEventListener('input', function(e) {
     if (e.target.matches('[id^="morning-"], [id^="afternoon-"], [id^="weather-"]')) {
         updateForecastDisplay();
+        updateActionButtonsVisibility();
     }
 });
 
@@ -868,6 +981,197 @@ async function exportForecast() {
         alert('Error exporting forecast. Please try again.');
         button.disabled = false;
         button.innerHTML = '<i class="fas fa-download"></i> Export as JPG';
+    }
+}
+
+// --- API Integration Functions ---
+
+function updateActionButtonsVisibility() {
+    // Show save/clear buttons if location is selected and we have forecast days
+    const hasDays = forecastDays.length > 0;
+    const hasData = hasDays && forecastDays.some(day => {
+        const morning = document.getElementById(`morning-${day.id}`)?.value;
+        const afternoon = document.getElementById(`afternoon-${day.id}`)?.value;
+        const morningWeather = document.getElementById(`morning-weather-${day.id}`)?.value;
+        const afternoonWeather = document.getElementById(`afternoon-weather-${day.id}`)?.value;
+        return morning || afternoon || morningWeather || afternoonWeather;
+    });
+
+    document.getElementById('actionsSection').style.display = hasData ? 'block' : 'none';
+}
+
+function buildForecastPayload() {
+    const days = [];
+    const baseDate = new Date();
+
+    for (let i = 0; i < forecastDays.length; i++) {
+        const day = forecastDays[i];
+        const morning_temp = document.getElementById(`morning-${day.id}`)?.value;
+        const morning_weather = document.getElementById(`morning-weather-${day.id}`)?.value;
+        const afternoon_temp = document.getElementById(`afternoon-${day.id}`)?.value;
+        const afternoon_weather = document.getElementById(`afternoon-weather-${day.id}`)?.value;
+
+        // Get the date in YYYY-MM-DD format
+        const forecastDate = new Date(baseDate);
+        forecastDate.setDate(baseDate.getDate() + i);
+        const dateStr = forecastDate.toISOString().split('T')[0];
+
+        // Add morning period only if it has data
+        if (morning_temp || morning_weather) {
+            days.push({
+                date: dateStr,
+                is_daytime: false,
+                morning_temp: morning_temp ? parseInt(morning_temp) : null,
+                morning_weather: morning_weather || ''
+            });
+        }
+
+        // Add afternoon period only if it has data
+        if (afternoon_temp || afternoon_weather) {
+            days.push({
+                date: dateStr,
+                is_daytime: true,
+                afternoon_temp: afternoon_temp ? parseInt(afternoon_temp) : null,
+                afternoon_weather: afternoon_weather || ''
+            });
+        }
+    }
+
+    return days;
+}
+
+async function saveForecasts() {
+    const locationSelect = document.getElementById('locationSelect');
+    const locationId = locationSelect.value;
+
+    if (!locationId) {
+        alert('Please select a location first');
+        return;
+    }
+
+    const button = document.getElementById('saveButton');
+    const statusEl = document.getElementById('saveStatus');
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    try {
+        const days = buildForecastPayload();
+
+        if (days.length === 0) {
+            alert('Please enter at least one forecast value');
+            button.disabled = false;
+            button.innerHTML = '<i class="fas fa-save"></i> Save Forecast';
+            return;
+        }
+
+        const response = await fetch(`/api/custom-forecast/?location_id=${locationId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+            },
+            body: JSON.stringify({ days: days })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            statusEl.textContent = `✓ Saved ${result.count} forecast periods`;
+            statusEl.style.display = 'block';
+            statusEl.className = 'alert alert-success';
+
+            // Reload customForecasts
+            const reloadResp = await fetch(`/api/custom-forecast/?location_id=${locationId}`);
+            const reloadData = await reloadResp.json();
+            customForecasts = reloadData.days || [];
+
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 3000);
+        } else {
+            statusEl.textContent = `✗ Error: ${result.error || 'Failed to save'}`;
+            statusEl.style.display = 'block';
+            statusEl.className = 'alert alert-danger';
+        }
+    } catch (e) {
+        console.error('Save error:', e);
+        statusEl.textContent = `✗ Error: ${e.message}`;
+        statusEl.style.display = 'block';
+        statusEl.className = 'alert alert-danger';
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-save"></i> Save Forecast';
+    }
+}
+
+async function clearForecasts() {
+    const locationSelect = document.getElementById('locationSelect');
+    const locationId = locationSelect.value;
+
+    if (!locationId) {
+        alert('Please select a location first');
+        return;
+    }
+
+    if (!confirm('Are you sure you want to clear all saved forecasts for this location?')) {
+        return;
+    }
+
+    const button = document.getElementById('clearButton');
+    const statusEl = document.getElementById('saveStatus');
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
+
+    try {
+        const response = await fetch(`/api/custom-forecast/?location_id=${locationId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+            }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            statusEl.textContent = `✓ Cleared ${result.count} forecast periods`;
+            statusEl.style.display = 'block';
+            statusEl.className = 'alert alert-info';
+
+            // Clear local data
+            customForecasts = [];
+
+            // Clear input fields
+            forecastDays.forEach(day => {
+                const morningInput = document.getElementById(`morning-${day.id}`);
+                const afternoonInput = document.getElementById(`afternoon-${day.id}`);
+                const morningWeatherInput = document.getElementById(`morning-weather-${day.id}`);
+                const afternoonWeatherInput = document.getElementById(`afternoon-weather-${day.id}`);
+
+                if (morningInput) morningInput.value = '';
+                if (afternoonInput) afternoonInput.value = '';
+                if (morningWeatherInput) morningWeatherInput.value = '';
+                if (afternoonWeatherInput) afternoonWeatherInput.value = '';
+            });
+
+            updateForecastDisplay();
+            updateActionButtonsVisibility();
+
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 3000);
+        } else {
+            statusEl.textContent = `✗ Error: ${result.error || 'Failed to clear'}`;
+            statusEl.style.display = 'block';
+            statusEl.className = 'alert alert-danger';
+        }
+    } catch (e) {
+        console.error('Clear error:', e);
+        statusEl.textContent = `✗ Error: ${e.message}`;
+        statusEl.style.display = 'block';
+        statusEl.className = 'alert alert-danger';
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-trash"></i> Clear All';
     }
 }
 </script>
