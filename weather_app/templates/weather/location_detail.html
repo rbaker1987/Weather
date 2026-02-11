@@ -348,8 +348,7 @@
     <div class="card weather-card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <div>
-          {% include "weather/components/section_header.html" with
-          icon="thermometer-half" title="Current Conditions" %}
+          {% include "weather/components/section_header.html" with icon="thermometer-half" title="Current Conditions" %}
         </div>
         <button
           onclick="exportSectionAsImage('currentConditionsSection')"
@@ -366,12 +365,9 @@
             <div class="row align-items-center">
               <div class="col-md-6">
                 <h1 class="display-2 mb-3">{{ location.current_temp }}°F</h1>
-                {% if
-                location.current_temp|should_show_feels_like:location.current_apparent_temp
-                %}
+                {% if location.current_temp|should_show_feels_like:location.current_apparent_temp %}
                 <h5 class="mb-3" style="opacity: 0.9">
-                  <i class="fas fa-temperature-high"></i> Feels like {{
-                  location.current_apparent_temp }}°F
+                  <i class="fas fa-temperature-high"></i> Feels like {{ location.current_apparent_temp }}°F
                 </h5>
                 {% endif %}
                 <h3 class="mb-4">{{ location.current_conditions }}</h3>
@@ -381,11 +377,11 @@
                     <i class="fas fa-tint text-primary"></i>
                     <strong>Humidity:</strong> {{ location.current_humidity }}%
                   </div>
-                  {% endif %} {% if location.current_wind_speed %}
+                  {% endif %}
+                  {% if location.current_wind_speed %}
                   <div style="font-size: 1.15rem">
                     <i class="fas fa-wind text-primary"></i>
-                    <strong>Wind:</strong> {{ location.current_wind_speed }} mph {{
-                    location.current_wind_direction }}
+                    <strong>Wind:</strong> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}
                   </div>
                   {% endif %}
                 </div>
@@ -399,14 +395,14 @@
                   style="font-size: 10rem; opacity: 0.3"
                 ></i>
                 <div class="mt-4">
-                  <span class="badge bg-dark me-2" style="font-size: 1.05rem"
-                    ><i class="fas fa-sun"></i> Sunrise:
-                    <span id="sunriseDisplay">--:--</span></span
-                  >
-                  <span class="badge bg-dark" style="font-size: 1.05rem"
-                    ><i class="fas fa-moon"></i> Sunset:
-                    <span id="sunsetDisplay">--:--</span></span
-                  >
+                  <span class="badge bg-dark me-2" style="font-size: 1.05rem">
+                    <i class="fas fa-sun"></i> Sunrise:
+                    <span id="sunriseDisplay">--:--</span>
+                  </span>
+                  <span class="badge bg-dark" style="font-size: 1.05rem">
+                    <i class="fas fa-moon"></i> Sunset:
+                    <span id="sunsetDisplay">--:--</span>
+                  </span>
                 </div>
               </div>
             </div>
@@ -414,10 +410,7 @@
           {% if location.last_observation_time %}
           <div class="card-footer text-muted" style="font-size: 1rem">
             <i class="fas fa-clock"></i> Observed
-            <span
-              class="js-localtime"
-              data-dt="{{ location.last_observation_time|date:'c' }}"
-            ></span>
+            <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
           </div>
           {% endif %}
         </div>
@@ -1237,6 +1230,15 @@
              document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
   }
 
+  function escapeHtml(value) {
+      return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+  }
+
   // Load weather model comparison data
   async function loadLocationModelData() {
       const lat = {{ location.latitude }};
@@ -1374,39 +1376,57 @@
                   <tbody>
       `;
 
-      for (let i = 0; i < Math.min(3, dates.length); i++) {
+        for (let i = 0; i < Math.min(3, dates.length); i++) {
           // Parse date as local time to avoid timezone issues
           const [year, month, day] = dates[i].split('-').map(Number);
           const date = new Date(year, month - 1, day);
           const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+          const safeDateStr = escapeHtml(dateStr);
 
           const namDateKey = dates[i];
           const namMax = namDailyMax[i] ?? namDerived[namDateKey]?.tmax;
           const namMin = namDailyMin[i] ?? namDerived[namDateKey]?.tmin;
           const namPcp = namDailyPrecip[i] ?? namDerived[namDateKey]?.psum;
 
-          html += `
+            const gfsMax = gfsMaxTemp[i] !== undefined && gfsMaxTemp[i] !== null ? escapeHtml(gfsMaxTemp[i].toFixed(0)) : null;
+            const gfsMin = gfsMinTemp[i] !== undefined && gfsMinTemp[i] !== null ? escapeHtml(gfsMinTemp[i].toFixed(0)) : null;
+            const gfsPcp = gfsPrecip[i] !== undefined && gfsPrecip[i] !== null ? escapeHtml(gfsPrecip[i].toFixed(2)) + '&quot;' : 'N/A';
+
+            const namMaxSafe = namMax !== undefined && namMax !== null ? escapeHtml(namMax.toFixed(0)) : null;
+            const namMinSafe = namMin !== undefined && namMin !== null ? escapeHtml(namMin.toFixed(0)) : null;
+            const namPcpSafe = namPcp !== undefined && namPcp !== null ? escapeHtml(namPcp.toFixed(2)) + '&quot;' : 'N/A';
+
+            const ecmwfMaxSafe = ecmwfMaxTemp[i] ? escapeHtml(ecmwfMaxTemp[i].toFixed(0)) : null;
+            const ecmwfMinSafe = ecmwfMinTemp[i] ? escapeHtml(ecmwfMinTemp[i].toFixed(0)) : null;
+            const ecmwfPcpSafe = ecmwfPrecip[i] !== undefined && ecmwfPrecip[i] !== null ? escapeHtml(ecmwfPrecip[i].toFixed(2)) + '&quot;' : 'N/A';
+
+            const gemMaxSafe = gemMaxTemp[i] ? escapeHtml(gemMaxTemp[i].toFixed(0)) : null;
+            const gemMinSafe = gemMinTemp[i] ? escapeHtml(gemMinTemp[i].toFixed(0)) : null;
+            const gemPcpSafe = gemPrecip[i] !== undefined && gemPrecip[i] !== null ? escapeHtml(gemPrecip[i].toFixed(2)) + '&quot;' : 'N/A';
+
+            html += `
               <tr>
-                  <td><strong>${dateStr}</strong></td>
-                  <td class="text-center">
-                      <span class="text-danger fw-bold">${gfsMaxTemp[i]?.toFixed(0)}°</span> /
-                      <span class="text-primary fw-bold">${gfsMinTemp[i]?.toFixed(0)}°</span>
-                  </td>
-                  <td class="text-center">${gfsPrecip[i] !== undefined && gfsPrecip[i] !== null ? gfsPrecip[i].toFixed(2) + '"' : 'N/A'}</td>
-                  <td class="text-center">
-                      ${(namMax !== undefined && namMax !== null) ? `<span class="text-danger fw-bold">${namMax.toFixed(0)}°</span> / <span class="text-primary fw-bold">${namMin?.toFixed(0)}°</span>` : 'N/A'}
-                  </td>
-                  <td class="text-center">${(namPcp !== undefined && namPcp !== null) ? namPcp.toFixed(2) + '"' : 'N/A'}</td>
-                  <td class="text-center">
-                      ${ecmwfMaxTemp[i] ? `<span class="text-danger fw-bold">${ecmwfMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${ecmwfMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
-                  </td>
-                  <td class="text-center">${(ecmwfPrecip[i] !== undefined && ecmwfPrecip[i] !== null) ? ecmwfPrecip[i].toFixed(2) + '"' : 'N/A'}</td>
-                  <td class="text-center">
-                      ${gemMaxTemp[i] ? `<span class="text-danger fw-bold">${gemMaxTemp[i].toFixed(0)}°</span> / <span class="text-primary fw-bold">${gemMinTemp[i].toFixed(0)}°</span>` : 'N/A'}
-                  </td>
-                  <td class="text-center">${(gemPrecip[i] !== undefined && gemPrecip[i] !== null) ? gemPrecip[i].toFixed(2) + '"' : 'N/A'}</td>
+                <td><strong>${safeDateStr}</strong></td>
+                <td class="text-center">
+                  ${gfsMax ? `<span class="text-danger fw-bold">${gfsMax}°</span>` : 'N/A'} /
+                  ${gfsMin ? `<span class="text-primary fw-bold">${gfsMin}°</span>` : 'N/A'}
+                </td>
+                <td class="text-center">${gfsPcp}</td>
+                <td class="text-center">
+                  ${namMaxSafe ? `<span class="text-danger fw-bold">${namMaxSafe}°</span> / <span class="text-primary fw-bold">${namMinSafe || 'N/A'}°</span>` : 'N/A'}
+                </td>
+                <td class="text-center">${namPcpSafe}</td>
+                <td class="text-center">
+                  ${ecmwfMaxSafe ? `<span class="text-danger fw-bold">${ecmwfMaxSafe}°</span> / <span class="text-primary fw-bold">${ecmwfMinSafe || 'N/A'}°</span>` : 'N/A'}
+                </td>
+                <td class="text-center">${ecmwfPcpSafe}</td>
+                <td class="text-center">
+                  ${gemMaxSafe ? `<span class="text-danger fw-bold">${gemMaxSafe}°</span> / <span class="text-primary fw-bold">${gemMinSafe || 'N/A'}°</span>` : 'N/A'}
+                </td>
+                <td class="text-center">${gemPcpSafe}</td>
               </tr>
-          `;
+            `;
       }
 
       html += `
@@ -1441,5 +1461,5 @@
 </script>
 
 <!-- Include location picker map component -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 {% include "weather/components/location_picker_map.html" %} {% endblock %}

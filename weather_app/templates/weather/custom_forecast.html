@@ -223,6 +223,19 @@ let customForecasts = [];
 let currentLocation = { latitude: "{{ latitude|default:'' }}", longitude: "{{ longitude|default:'' }}", location_id: "{{ location_id|default:'' }}" };
 let dayCounter = 0;
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     // Parse server data
@@ -339,6 +352,13 @@ async function addDay() {
         defaultMorning = '';
     }
 
+    const safeMorningWeather = defaultMorningWeather ? escapeAttr(defaultMorningWeather) : '';
+    const safeAfternoonWeather = defaultAfternoonWeather ? escapeAttr(defaultAfternoonWeather) : '';
+    const safePrevNwsForecast = previousNwsNight.shortForecast
+        ? escapeHtml(previousNwsNight.shortForecast)
+        : '';
+    const safeNwsForecast = nwsDay.shortForecast ? escapeHtml(nwsDay.shortForecast) : '';
+
     // Override morning with recorded low if available
     // (now handled in the isToday check above)
     const card = document.createElement('div');
@@ -359,9 +379,9 @@ async function addDay() {
                 <div class="col-md-4">
                     <strong>NWS Forecast:</strong><br>
                     ${previousNwsNight.temperature ? `Morning: ${previousNwsNight.temperature}°F` : 'N/A'}<br>
-                    ${previousNwsNight.shortForecast ? `<small class="text-muted">${previousNwsNight.shortForecast}</small><br>` : ''}
+                    ${safePrevNwsForecast ? `<small class="text-muted">${safePrevNwsForecast}</small><br>` : ''}
                     ${nwsDay.temperature ? `Afternoon: ${nwsDay.temperature}°F` : 'N/A'}<br>
-                    ${nwsDay.shortForecast ? `<small class="text-muted">${nwsDay.shortForecast}</small><br>` : ''}
+                    ${safeNwsForecast ? `<small class="text-muted">${safeNwsForecast}</small><br>` : ''}
                     ${recordedLow ? `<strong class="text-success">Recorded Low: ${recordedLow}°F</strong>` : ''}
                 </div>
                 <div class="col-md-5">
@@ -381,7 +401,7 @@ async function addDay() {
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Morning Weather</label>
-                    <input type="text" class="form-control" id="morning-weather-${dayCounter}" placeholder="e.g., Partly Cloudy" ${defaultMorningWeather ? `value="${defaultMorningWeather}"` : ''}>
+                    <input type="text" class="form-control" id="morning-weather-${dayCounter}" placeholder="e.g., Partly Cloudy" ${safeMorningWeather ? `value="${safeMorningWeather}"` : ''}>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Afternoon Temp (°F)</label>
@@ -389,7 +409,7 @@ async function addDay() {
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Afternoon Weather</label>
-                    <input type="text" class="form-control" id="afternoon-weather-${dayCounter}" placeholder="e.g., Mostly Sunny" ${defaultAfternoonWeather ? `value="${defaultAfternoonWeather}"` : ''}>
+                    <input type="text" class="form-control" id="afternoon-weather-${dayCounter}" placeholder="e.g., Mostly Sunny" ${safeAfternoonWeather ? `value="${safeAfternoonWeather}"` : ''}>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">&nbsp;</label>
@@ -868,6 +888,8 @@ function updateForecastDisplay() {
         const dayOfWeek = day.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
         const afternoonLayout = needsChanceLayout(afternoonWeather);
         const morningLayout = needsChanceLayout(morningWeather);
+        const safeMorningText = morningWeather ? escapeHtml(morningWeather) : '';
+        const safeAfternoonText = afternoonWeather ? escapeHtml(afternoonWeather) : '';
 
         wrapper.innerHTML = `
             <div class="card border-0 h-100">
@@ -886,7 +908,7 @@ function updateForecastDisplay() {
                             </div>
                             <div class="period-temp">${morningTemp}°F</div>
                         </div>
-                        ${morningWeather ? `<p class="period-description mb-0">${morningWeather}</p>` : ''}
+                        ${safeMorningText ? `<p class="period-description mb-0">${safeMorningText}</p>` : ''}
                     </div>
                     ` : ''}
                     ${afternoonTemp ? `
@@ -900,7 +922,7 @@ function updateForecastDisplay() {
                             </div>
                             <div class="period-temp">${afternoonTemp}°F</div>
                         </div>
-                        ${afternoonWeather ? `<p class="period-description mb-0">${afternoonWeather}</p>` : ''}
+                        ${safeAfternoonText ? `<p class="period-description mb-0">${safeAfternoonText}</p>` : ''}
                     </div>
                     ` : ''}
                 </div>
