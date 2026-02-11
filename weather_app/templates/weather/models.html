@@ -45,7 +45,7 @@
 {% block content %}
 <!-- Controls: Location, Forecast Range, Temperature Level -->
 <div class="row g-3 align-items-end mb-4">
-    <div class="col-md-5">
+    <div class="col-12 col-md-5">
         <label for="locationSelect" class="form-label">Location</label>
         <select id="locationSelect" class="form-select" onchange="loadModelData()">
             <option value="">Choose a location...</option>
@@ -54,12 +54,12 @@
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-1">
+    <div class="col-12 col-md-1">
         <button class="btn btn-outline-primary w-100" onclick="openLocationPicker()" title="Pick location on map">
             <i class="fas fa-map-marked-alt"></i>
         </button>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-md-3">
         <label for="forecastDays" class="form-label">Forecast Days</label>
         <select id="forecastDays" class="form-select" onchange="loadModelData()">
             <option value="3">3</option>
@@ -70,7 +70,7 @@
             <option value="16">16</option>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-md-3">
         <label for="tempLevelSelect" class="form-label">Temperature Level</label>
         <select id="tempLevelSelect" class="form-select" onchange="changeTempLevel()">
             <option value="surface" selected>Surface (2m)</option>
@@ -81,7 +81,7 @@
 </div>
 
 <div class="row mb-4" id="modelCardsRow">
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-gfs" data-model="GFS" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="GFS" onchange="onModelSelectionChange()" checked>
@@ -89,7 +89,7 @@
             </h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-icon" data-model="ICON" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="ICON" onchange="onModelSelectionChange()" checked>
@@ -97,7 +97,7 @@
             </h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-ecmwf" data-model="ECMWF" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="ECMWF" onchange="onModelSelectionChange()" checked>
@@ -105,7 +105,7 @@
             </h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-aifs" data-model="AIFS" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="AIFS" onchange="onModelSelectionChange()">
@@ -113,7 +113,7 @@
             </h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-gem" data-model="GEM" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="GEM" onchange="onModelSelectionChange()" checked>
@@ -121,7 +121,7 @@
             </h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-hrrr" data-model="HRRR" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="HRRR" onchange="onModelSelectionChange()">
@@ -129,7 +129,7 @@
             </h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-nam" data-model="NAM" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="NAM" onchange="onModelSelectionChange()">
@@ -137,7 +137,7 @@
             </h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-gem-regional" data-model="RGEM" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="RGEM" onchange="onModelSelectionChange()">
@@ -145,7 +145,7 @@
             </h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="model-card" id="model-nbm" data-model="NBM" onclick="cardClick(event)">
             <h6>
                 <input type="checkbox" class="form-check-input me-2 model-select-checkbox" data-model="NBM" onchange="onModelSelectionChange()">

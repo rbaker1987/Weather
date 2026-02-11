@@ -80,6 +80,22 @@
         gap: 0.15rem;
         white-space: nowrap;
     }
+
+    @media (max-width: 576px) {
+        .builder-section,
+        .day-builder-card {
+            padding: 1rem;
+        }
+
+        .forecast-period-card {
+            min-height: 160px;
+            padding: 1rem;
+        }
+
+        .forecast-period-card .period-temp {
+            font-size: 1.6rem;
+        }
+    }
 </style>
 {% endblock %}
 

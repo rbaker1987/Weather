@@ -12,20 +12,67 @@
   --weather-info: #17a2b8;
   --weather-light: #f8f9fa;
   --weather-dark: #343a40;
+  --weather-ink: #1f2a44;
+  --weather-surface: #ffffff;
+  --weather-surface-alt: #f3f6ff;
+  --weather-bg: #eef2ff;
+  --weather-bg-2: #f8f3ff;
+  --font-body: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --font-display: 'Space Grotesk', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 /* Global styles */
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f8f9fa;
+  font-family: var(--font-body);
+  color: var(--weather-ink);
+  background: radial-gradient(1200px 600px at -10% -20%, #dbe7ff 0%, transparent 60%),
+    radial-gradient(900px 500px at 110% -10%, #ffe7c2 0%, transparent 55%),
+    linear-gradient(180deg, var(--weather-bg) 0%, var(--weather-bg-2) 100%);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.navbar-brand,
+.card-header,
+.btn {
+  font-family: var(--font-display);
+}
+
+.main-content {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.page-subtitle {
+  color: var(--weather-secondary);
+  margin-bottom: 0;
 }
 
 .card-body {
-  font-size: 1.1rem;
+  font-size: clamp(0.95rem, 0.4vw + 0.9rem, 1.05rem);
 }
 
 .card-header {
-  font-size: 1.15rem;
+  font-size: clamp(1rem, 0.5vw + 0.9rem, 1.15rem);
 }
 
 /* Header and navigation */
@@ -40,6 +87,7 @@ body {
   border: none;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
+  background: var(--weather-surface);
 }
 
 .weather-card:hover {
@@ -306,6 +354,38 @@ a:hover {
 
   .weather-icon {
     font-size: 2rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .display-5 {
+    font-size: 2rem;
+  }
+
+  .main-content {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .page-actions {
+    width: 100%;
+  }
+
+  .page-actions .btn,
+  .page-actions .dropdown,
+  .page-actions .btn-group {
+    width: 100%;
+  }
+
+  .card-header {
+    padding: 0.75rem 1rem;
+  }
+}
+
+@media (hover: none) {
+  .weather-card:hover {
+    transform: none;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
   }
 }
 

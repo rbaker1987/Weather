@@ -43,7 +43,7 @@ Weather{% endblock %} {% block extra_css %}
   }
 </style>
 {% endblock %} {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="page-header mb-3">
   <div>
     <h3 class="mb-1">
       <i class="fas fa-chart-line"></i> {{ model_name }} Model Details
@@ -54,7 +54,7 @@ Weather{% endblock %} {% block extra_css %}
     </small>
     {% endif %}
   </div>
-  <div>
+  <div class="page-actions">
     <a href="{% url 'weather:models' %}" class="btn btn-outline-secondary btn-sm"
       ><i class="fas fa-arrow-left"></i> Back to Models</a
     >
@@ -69,8 +69,8 @@ Weather{% endblock %} {% block extra_css %}
 </div>
 <!-- Toggles replicated from main models page -->
 <div class="row g-3 align-items-end mb-4">
-  {% include "weather/components/location_selector.html" with locations=locations latitude=latitude longitude=longitude location_col_class='col-md-4' map_btn_col_class='col-md-1' %}
-  <div class="col-md-2">
+  {% include "weather/components/location_selector.html" with locations=locations latitude=latitude longitude=longitude location_col_class='col-12 col-md-4' map_btn_col_class='col-12 col-md-1' %}
+  <div class="col-12 col-md-2">
     <label for="detailForecastDays" class="form-label">Forecast Days</label>
     <select id="detailForecastDays" class="form-select">
       <option value="2" {% if forecast_days == "2" %}selected{% endif %}>2</option>
@@ -82,7 +82,7 @@ Weather{% endblock %} {% block extra_css %}
       <option value="16" {% if forecast_days == "16" %}selected{% endif %}>16</option>
     </select>
   </div>
-  <div class="col-md-5">
+  <div class="col-12 col-md-5">
     <label for="detailModelSelect" class="form-label">Model</label>
     <select id="detailModelSelect" class="form-select">
       {% for m in available_models %}

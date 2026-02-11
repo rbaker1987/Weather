@@ -108,12 +108,12 @@
       <div class="card-body" id="dashboardCurrentConditions">
         <div class="row">
           <!-- Browser Location Card (Always First) -->
-          <div class="col-xl-3 col-lg-4 col-md-6 mb-3">
+          <div class="col-12 col-md-6 col-lg-4 col-xl-3 mb-3">
             {% include "weather/components/browser_location_card.html" %}
           </div>
           {% if locations_with_current %}
           {% for location in locations_with_current|slice:':7' %}
-          <div class="col-xl-3 col-lg-4 col-md-6 mb-3">
+          <div class="col-12 col-md-6 col-lg-4 col-xl-3 mb-3">
             {% include "weather/components/location_current_card.html" with location=location colorize=True show_link=True show_footer=True %}
           </div>
           {% endfor %}
