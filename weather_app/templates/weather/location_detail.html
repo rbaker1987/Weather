@@ -531,17 +531,9 @@
           <table class="table table-hover" style="font-size: 1.1rem">
             <thead>
               <tr>
-                const lat = {{ location.latitude }}; const lon = {{ location.longitude
-                }};
+                <th>Time</th>
+                <th>Temp</th>
                 <th>Conditions</th>
-                const timeZone = resp?.timezone || 'UTC'; const dateFormatter = new
-                Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month:
-                '2-digit', day: '2-digit' }); const getDateKey = (d) => { const parts =
-                dateFormatter.formatToParts(d); const y = parts.find(p => p.type ===
-                'year').value; const m = parts.find(p => p.type === 'month').value;
-                const day = parts.find(p => p.type === 'day').value; return
-                `${y}-${m}-${day}`; }; if (resp && resp.hours && resp.hours.length > 0)
-                {
                 <th>Wind</th>
                 <th>Humidity</th>
               </tr>
