@@ -149,6 +149,62 @@ class Location(TimeStampedModel):
         self.is_favorite = True
         self.save()
 
+    @property
+    def current_temp(self):
+        try:
+            return self.current_conditions_cache.temperature
+        except CurrentConditions.DoesNotExist:
+            return None
+
+    @property
+    def current_apparent_temp(self):
+        try:
+            return self.current_conditions_cache.feels_like_temperature
+        except CurrentConditions.DoesNotExist:
+            return None
+
+    @property
+    def current_conditions(self):
+        try:
+            return self.current_conditions_cache.condition
+        except CurrentConditions.DoesNotExist:
+            return ""
+
+    @property
+    def current_humidity(self):
+        try:
+            return self.current_conditions_cache.humidity
+        except CurrentConditions.DoesNotExist:
+            return None
+
+    @property
+    def current_wind_speed(self):
+        try:
+            return self.current_conditions_cache.wind_speed
+        except CurrentConditions.DoesNotExist:
+            return None
+
+    @property
+    def current_wind_direction(self):
+        try:
+            return self.current_conditions_cache.wind_direction
+        except CurrentConditions.DoesNotExist:
+            return ""
+
+    @property
+    def current_wind_gust(self):
+        try:
+            return self.current_conditions_cache.wind_gust
+        except CurrentConditions.DoesNotExist:
+            return None
+
+    @property
+    def last_observation_time(self):
+        try:
+            return self.current_conditions_cache.last_observation_time
+        except CurrentConditions.DoesNotExist:
+            return None
+
 
 class CurrentConditions(TimeStampedModel):
     """Current weather conditions for a location (cached, 15-min TTL)."""

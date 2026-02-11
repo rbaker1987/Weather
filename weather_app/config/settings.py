@@ -257,9 +257,9 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Celery Beat periodic task schedule
 CELERY_BEAT_SCHEDULE = {
-    "update-current-conditions-every-10-min": {
+    "update-current-conditions-every-15-min": {
         "task": "weather.tasks.update_all_current_conditions",
-        "schedule": timedelta(minutes=10),
+        "schedule": timedelta(minutes=15),
         "options": {"queue": "default", "priority": 8},
     },
     "update-forecasts-every-15-min": {
@@ -267,8 +267,13 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": timedelta(minutes=15),
         "options": {"queue": "default", "priority": 7},
     },
-    "cleanup-old-forecasts-daily": {
-        "task": "weather.tasks.cleanup_stale_forecasts",
+    "update-alerts-every-15-min": {
+        "task": "weather.tasks.update_all_alerts",
+        "schedule": timedelta(minutes=15),
+        "options": {"queue": "default", "priority": 7},
+    },
+    "cleanup-cached-weather-data-daily": {
+        "task": "weather.tasks.cleanup_cached_weather_data",
         "schedule": crontab(hour=2, minute=0),  # 2 AM daily
         "options": {"queue": "default", "priority": 5},
     },

@@ -170,9 +170,9 @@ class TestForecastListView:
         loc.last_forecast_update = None
         loc.save(update_fields=["last_forecast_update"])
 
-        # Make service raise to force fallback
+        # Make background task raise to force fallback
         monkeypatch.setattr(
-            "weather.services.SyncWeatherService.update_forecasts_for_location",
+            "weather.tasks.update_forecasts_for_location.delay",
             lambda *_: (_ for _ in ()).throw(Exception("fail")),
         )
 
@@ -310,14 +310,16 @@ class TestLocationListView:
             last_observation_time=timezone.now() - timedelta(minutes=35),
         )
 
-        # Mock fetch to update temp
-        def fake_fetch(location):
-            cc = location.current_conditions_cache
+        # Mock background task to update temp
+        def fake_delay(location_id):
+            cc = loc.current_conditions_cache
             cc.temperature = 72
             cc.save()
             return True
 
-        monkeypatch.setattr("weather.views.fetch_current_conditions", fake_fetch)
+        monkeypatch.setattr(
+            "weather.tasks.update_current_conditions_for_location.delay", fake_delay
+        )
 
         r = client.get(reverse("weather:location-list"))
         assert r.status_code == 200
@@ -335,78 +337,24 @@ class TestLocationDetailView:
         loc.last_forecast_update = None
         loc.save(update_fields=["last_forecast_update"])
 
-        today = timezone.now().date()
-        # Avoid current conditions network by returning True
+        flags = {"conditions": False, "forecasts": False, "alerts": False}
+
         monkeypatch.setattr(
-            "weather.views.fetch_current_conditions", lambda _location: True
+            "weather.tasks.update_current_conditions_for_location.delay",
+            lambda *_: flags.__setitem__("conditions", True),
         )
-
-        # Mock NWS endpoints for forecast and alerts
-        class MockResp:
-            def __init__(self, payload):
-                self._payload = payload
-                self.status_code = 200
-
-            def json(self):
-                return self._payload
-
-            def raise_for_status(self):
-                return None
-
-        grid_payload = {
-            "properties": {
-                "gridId": "XYZ",
-                "gridX": 1,
-                "gridY": 2,
-                "forecast": "https://api.weather.gov/gridpoints/XYZ/1,2/forecast",
-            }
-        }
-        forecast_payload = {
-            "properties": {
-                "periods": [
-                    {
-                        "startTime": f"{today}T06:00:00Z",
-                        "endTime": f"{today}T18:00:00Z",
-                        "isDaytime": True,
-                        "temperature": 72,
-                        "temperatureUnit": "F",
-                        "windSpeed": "10 mph",
-                        "windDirection": "S",
-                        "shortForecast": "Sunny",
-                        "detailedForecast": "Clear day",
-                        "probabilityOfPrecipitation": {"value": 0},
-                    }
-                ]
-            }
-        }
-        alerts_payload = {
-            "features": [
-                {
-                    "properties": {
-                        "id": "DL1",
-                        "event": "Storm",
-                        "headline": "Heads",
-                        "description": "desc",
-                        "severity": "Moderate",
-                        "urgency": "Expected",
-                        "onset": f"{today}T07:00:00Z",
-                        "expires": f"{today}T08:00:00Z",
-                    }
-                }
-            ]
-        }
-
-        def fake_get(url, headers=None, timeout=10):
-            if "points" in url:
-                return MockResp(grid_payload)
-            if "forecast" in url:
-                return MockResp(forecast_payload)
-            if "alerts" in url:
-                return MockResp(alerts_payload)
-            return MockResp({})
-
-        monkeypatch.setattr("requests.get", fake_get)
+        monkeypatch.setattr(
+            "weather.tasks.update_forecasts_for_location.delay",
+            lambda *_: flags.__setitem__("forecasts", True),
+        )
+        monkeypatch.setattr(
+            "weather.tasks.update_alerts_for_location.delay",
+            lambda *_: flags.__setitem__("alerts", True),
+        )
 
         r = client.get(f"/locations/{loc.pk}/")
         assert r.status_code == 200
         assert "daily_forecasts" in r.context
+        assert flags["conditions"] is True
+        assert flags["forecasts"] is True
+        assert flags["alerts"] is True
