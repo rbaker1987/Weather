@@ -8,13 +8,6 @@
         <h5 class="mb-0"><i class="fas fa-user-plus"></i> Create Account</h5>
       </div>
       <div class="card-body">
-        {% if form.username.errors %}
-        <div class="alert alert-danger">
-          That username is already taken. Please choose another.
-        </div>
-        {% elif form.errors %}
-        <div class="alert alert-danger">Please fix the errors below.</div>
-        {% endif %}
         <form method="post" action="{% url 'signup' %}">
           {% csrf_token %}
           <div class="mb-3">
@@ -107,11 +100,7 @@
               autocomplete="new-password"
               required
             />
-            {% if form.password2.errors %}
-            <div class="text-danger small mt-1">
-              {{ form.password2.errors|striptags }}
-            </div>
-            {% endif %}
+            <div id="password-match-message" class="small mt-1" style="display: none"></div>
           </div>
           <button type="submit" class="btn btn-primary w-100">Create Account</button>
         </form>
@@ -122,4 +111,32 @@
     </div>
   </div>
 </div>
+<script>
+  const password1Input = document.getElementById("id_password1");
+  const password2Input = document.getElementById("id_password2");
+  const matchMessage = document.getElementById("password-match-message");
+
+  function checkPasswordMatch() {
+    const password1 = password1Input.value;
+    const password2 = password2Input.value;
+
+    // Only show indicator if confirm password is not empty
+    if (!password2) {
+      matchMessage.style.display = "none";
+      return;
+    }
+
+    matchMessage.style.display = "block";
+    if (password1 === password2) {
+      matchMessage.textContent = "✓ Passwords match";
+      matchMessage.className = "small mt-1 text-success";
+    } else {
+      matchMessage.textContent = "✗ Passwords do not match";
+      matchMessage.className = "small mt-1 text-danger";
+    }
+  }
+
+  password1Input.addEventListener("input", checkPasswordMatch);
+  password2Input.addEventListener("input", checkPasswordMatch);
+</script>
 {% endblock %}

@@ -8,6 +8,21 @@ from django.contrib.auth.forms import UserCreationForm
 class UniqueUsernameCreationForm(UserCreationForm):
     """User creation form with case-insensitive username validation."""
 
+    first_name = forms.CharField(required=True)
+    last_name = forms.CharField(required=True)
+    email = forms.EmailField(required=True)
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = (
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "password1",
+            "password2",
+        )
+
     def clean_username(self):
         username = self.cleaned_data.get("username", "").strip()
         if not username:
@@ -29,6 +44,15 @@ class UniqueUsernameCreationForm(UserCreationForm):
             self.add_error("password2", "Passwords do not match.")
 
         return cleaned_data
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.first_name = self.cleaned_data.get("first_name", "")
+        user.last_name = self.cleaned_data.get("last_name", "")
+        user.email = self.cleaned_data.get("email", "")
+        if commit:
+            user.save()
+        return user
 
 
 class ProfileEditForm(forms.ModelForm):
