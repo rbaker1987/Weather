@@ -4,7 +4,7 @@
     {
       "label": "Django Runserver",
       "type": "shell",
-      "command": "cd weather_app && ${workspaceFolder}\\.venv\\Scripts\\python.exe manage.py runserver 8001",
+      "command": "cd weather_app && ${workspaceFolder}\\.venv\\Scripts\\python.exe manage.py runserver 8000",
       "isBackground": true,
       "problemMatcher": []
     }
