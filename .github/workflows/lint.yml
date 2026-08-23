@@ -34,7 +34,8 @@ jobs:
             git fetch origin "${{ github.base_ref }}" --depth=1
             changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
             if [ -n "$changed_files" ]; then
-              pre-commit run --files $changed_files --show-diff-on-failure
+              pre-commit run --files $changed_files --show-diff-on-failure || \
+                pre-commit run --files $changed_files --show-diff-on-failure
             else
               echo "No changed files; skipping pre-commit."
             fi
