@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,11 +25,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev]
           pip install .[django]
-          pip install pytest-django pytest-cov
+          pip install pytest-django pytest-cov diff-cover
 
       - name: Run pytest with coverage
         run: |
-          PYTHONPATH=weather_app:$PYTHONPATH DJANGO_SETTINGS_MODULE=config.settings pytest -v --cov=weather --cov-report=xml --cov-report=html --cov-report=term tests/
+          PYTHONPATH=weather_app:$PYTHONPATH DJANGO_SETTINGS_MODULE=config.settings pytest -v --cov=weather --cov-fail-under=50 --cov-report=xml --cov-report=html --cov-report=term tests/
+
+      - name: Check pull request coverage
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref }} --fail-under=80
 
       - name: Django system checks
         run: |
