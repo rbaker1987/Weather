@@ -13,6 +13,7 @@ help:
 install:
 	pip install -e ".[dev,django]"
 	npm install
+	pre-commit install
 
 lint:
 	@echo "Running Python linter..."
