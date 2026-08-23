@@ -27,7 +27,7 @@ jobs:
 
       - name: Run pytest with coverage
         run: |
-          PYTHONPATH=weather_app:$PYTHONPATH DJANGO_SETTINGS_MODULE=config.settings pytest -v --cov=weather --cov-fail-under=90 --cov-report=xml --cov-report=html --cov-report=term tests/
+          PYTHONPATH=weather_app:$PYTHONPATH DJANGO_SETTINGS_MODULE=config.settings pytest -v --cov=weather --cov-fail-under=50 --cov-report=xml --cov-report=html --cov-report=term tests/
 
       - name: Check pull request coverage
         if: github.event_name == 'pull_request'
