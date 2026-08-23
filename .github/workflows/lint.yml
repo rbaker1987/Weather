@@ -32,7 +32,12 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin "${{ github.base_ref }}" --depth=1
-            pre-commit run --from-ref "origin/${{ github.base_ref }}" --to-ref HEAD --show-diff-on-failure
+            changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+            if [ -n "$changed_files" ]; then
+              pre-commit run --files $changed_files --show-diff-on-failure
+            else
+              echo "No changed files; skipping pre-commit."
+            fi
           else
             pre-commit run --all-files --show-diff-on-failure
           fi
