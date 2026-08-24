@@ -2523,7 +2523,7 @@ class ModelDetailView(TemplateView):
             elif ptype == "sleet" and area_ratio_cold_to_warm < 1.5:
                 # Borderline: cold area only slightly dominates (ratio 1.0-1.5)
                 # Blend toward freezing rain as cold dominance decreases
-                frzr_slr = min(1.0, 2.0 / area_ratio_warm_to_cold)
+                frzr_slr = min(1.0, 2.0 / max(area_ratio_warm_to_cold, 0.5))
                 # At ratio 1.0 (equal areas): 50% freezing rain SLR, at 1.5: 0% freezing rain SLR
                 blend_factor = (
                     1.5 - area_ratio_cold_to_warm
