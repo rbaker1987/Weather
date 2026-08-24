@@ -1,7 +1,7 @@
 """Tests for background weather tasks."""
 
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import pytest
@@ -80,7 +80,8 @@ class TestBackgroundTasks:
         fresh = Location.objects.create(
             name="Fresh", last_forecast_update=timezone.now()
         )
-        with patch.object(tasks.bulk_update_forecasts, "delay", return_value="queued") as delay:
+        delay = Mock(return_value="queued")
+        with patch.object(tasks.bulk_update_forecasts, "delay", new=delay):
             result = tasks.periodic_forecast_updates.run()
 
         assert result == "queued"
