@@ -172,6 +172,9 @@ class WeatherIntegrationService:
         count = 0
         with transaction.atomic():
             for forecast in pydantic_forecasts:
+                first_hourly = forecast.hourly_forecasts[0] if forecast.hourly_forecasts else None
+                temperature = first_hourly.temperature if first_hourly else None
+                wind = first_hourly.wind_condition if first_hourly else None
                 django_forecast, created = DailyForecast.objects.update_or_create(
                     location=location,
                     forecast_date=forecast.date,
@@ -179,25 +182,17 @@ class WeatherIntegrationService:
                     period_end=forecast.period_end,
                     defaults={
                         "is_daytime": getattr(forecast, "is_daytime", True),
-                        "temperature": forecast.temperature.value,
-                        "temperature_unit": forecast.temperature.unit.value,
-                        "high_temperature": forecast.high_temperature.value
-                        if forecast.high_temperature
-                        else None,
-                        "low_temperature": forecast.low_temperature.value
-                        if forecast.low_temperature
-                        else None,
-                        "short_forecast": forecast.short_forecast or "",
-                        "detailed_forecast": forecast.detailed_forecast or "",
-                        "wind_speed": forecast.wind_condition.speed
-                        if forecast.wind_condition
-                        else 0,
-                        "wind_direction": forecast.wind_condition.direction
-                        if forecast.wind_condition
-                        else "",
-                        "wind_gust": forecast.wind_condition.gust
-                        if forecast.wind_condition
-                        else None,
+                        "temperature": temperature.value if temperature else 0,
+                        "temperature_unit": temperature.unit.value if temperature else "F",
+                        "high_temperature": forecast.high_temperature,
+                        "low_temperature": forecast.low_temperature,
+                        "short_forecast": forecast.primary_weather or "",
+                        "detailed_forecast": (
+                            first_hourly.detailed_forecast if first_hourly else ""
+                        ),
+                        "wind_speed": wind.speed if wind else 0,
+                        "wind_direction": wind.direction if wind else "",
+                        "wind_gust": wind.gust if wind else None,
                         "precipitation_probability": getattr(
                             forecast, "precipitation_probability", None
                         ),

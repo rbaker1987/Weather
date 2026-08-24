@@ -176,6 +176,20 @@ class DailyForecast(BaseModel):
     hourly_forecasts: list[HourlyForecast] = Field(default_factory=list)
 
     @property
+    def period_start(self) -> datetime:
+        """Get the start of the first hourly forecast period."""
+        if not self.hourly_forecasts:
+            return datetime.combine(self.date, datetime.min.time())
+        return min(forecast.period_start for forecast in self.hourly_forecasts)
+
+    @property
+    def period_end(self) -> datetime:
+        """Get the end of the last hourly forecast period."""
+        if not self.hourly_forecasts:
+            return datetime.combine(self.date, datetime.max.time())
+        return max(forecast.period_end for forecast in self.hourly_forecasts)
+
+    @property
     def high_temperature(self) -> Optional[int]:
         """Get the highest temperature for the day."""
         if not self.hourly_forecasts:
