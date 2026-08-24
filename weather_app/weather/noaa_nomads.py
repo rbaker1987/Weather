@@ -168,8 +168,19 @@ def _decode_point(
                         )
                     except Exception:
                         continue
-        # Fallback: try direct variable names like t2m/u10/v10/gust
-        for candidate in ["t2m", "u10", "v10", "r2m", "gust"]:
+        # Fallback: try the direct variable name matching the requested field.
+        fallback_candidates = []
+        if "t" in shortnames:
+            fallback_candidates.append("t2m")
+        if "u" in shortnames:
+            fallback_candidates.append("u10")
+        if "v" in shortnames:
+            fallback_candidates.append("v10")
+        if "r" in shortnames:
+            fallback_candidates.append("r2m")
+        if "gust" in shortnames:
+            fallback_candidates.append("gust")
+        for candidate in fallback_candidates:
             if candidate in point:
                 v = point[candidate].values
                 return (
