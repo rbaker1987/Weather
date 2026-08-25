@@ -151,6 +151,75 @@ class TestCurrentConditionsActions:
 
 @pytest.mark.django_db
 class TestForecastAndExportBranches:
+    def test_ensure_browser_location_requires_coordinates(self):
+        response = APIClient().post(
+            "/api/locations/ensure_browser_location/",
+            {"name": "Missing"},
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert "required" in response.data["message"]
+
+    def test_ensure_browser_location_falls_back_when_tasks_fail(self):
+        with patch(
+            "weather.tasks.enqueue_current_conditions", side_effect=RuntimeError
+        ), patch("weather.views._refresh_forecasts_for_location") as refresh:
+            response = APIClient().post(
+                "/api/locations/ensure_browser_location/",
+                {"latitude": 30.1, "longitude": -97.7},
+                format="json",
+            )
+
+        assert response.status_code == 200
+        refresh.assert_called_once()
+
+    def test_update_forecast_reports_external_request_error(self):
+        location = Location.objects.create(name="Request failure", latitude=30, longitude=-97)
+        client = APIClient()
+        add_location_to_session(client, location)
+
+        with patch(
+            "requests.get", side_effect=__import__("requests").RequestException("down")
+        ):
+            response = client.post(f"/api/locations/{location.id}/update_forecast/")
+
+        assert response.status_code == 500
+        assert "internal error" in response.data["message"]
+
+    def test_update_forecast_continues_when_observation_fetch_fails(self):
+        location = Location.objects.create(name="Forecast only", latitude=30, longitude=-97)
+        client = APIClient()
+        add_location_to_session(client, location)
+        grid = Mock()
+        grid.json.return_value = {
+            "properties": {
+                "forecast": "https://example.test/forecast",
+                "observationStations": "https://example.test/stations",
+            }
+        }
+        stations = Mock()
+        stations.json.return_value = {
+            "features": [{"properties": {"stationIdentifier": "KATT"}}]
+        }
+        failed_observation = Mock()
+        failed_observation.raise_for_status.side_effect = RuntimeError("bad observation")
+        forecast = Mock()
+        forecast.json.return_value = {"properties": {"periods": []}}
+        alerts = Mock()
+        alerts.json.return_value = {"features": []}
+        for response in (grid, stations, forecast, alerts):
+            response.raise_for_status.return_value = None
+
+        with patch(
+            "requests.get",
+            side_effect=[grid, stations, failed_observation, forecast, alerts],
+        ):
+            response = client.post(f"/api/locations/{location.id}/update_forecast/")
+
+        assert response.status_code == 200
+        assert response.data["periods_created"] == 0
+
     def test_clear_all_deletes_active_locations(self):
         Location.objects.create(name="Active", is_active=True)
         Location.objects.create(name="Inactive", is_active=False)
