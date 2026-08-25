@@ -79,6 +79,22 @@ class TestGeocodingActions:
 
         assert response.status_code == 503
 
+    def test_geocode_search_reports_unexpected_error(self):
+        with patch("requests.get", side_effect=ValueError("bad payload")):
+            response = APIClient().get(
+                "/api/locations/geocode_search/", {"q": "Austin"}
+            )
+
+        assert response.status_code == 500
+
+    def test_geocode_reverse_reports_unexpected_error(self):
+        with patch("requests.get", side_effect=ValueError("bad payload")):
+            response = APIClient().get(
+                "/api/locations/geocode_reverse/", {"lat": "30", "lon": "-97"}
+            )
+
+        assert response.status_code == 500
+
 
 @pytest.mark.django_db
 class TestCurrentConditionsActions:
@@ -135,6 +151,38 @@ class TestCurrentConditionsActions:
 
 @pytest.mark.django_db
 class TestForecastAndExportBranches:
+    def test_clear_all_deletes_active_locations(self):
+        Location.objects.create(name="Active", is_active=True)
+        Location.objects.create(name="Inactive", is_active=False)
+
+        response = APIClient().post("/api/locations/clear_all/")
+
+        assert response.status_code == 200
+        assert response.data["deleted"] == 1
+        assert not Location.objects.filter(is_active=True).exists()
+
+    def test_ensure_browser_location_updates_existing_current_location(self):
+        location = Location.objects.create(
+            name="Old", latitude=1, longitude=2, is_current_location=True
+        )
+        client = APIClient()
+        add_location_to_session(client, location)
+
+        with patch("weather.tasks.enqueue_current_conditions"), patch(
+            "weather.tasks.enqueue_forecasts"
+        ), patch("weather.tasks.enqueue_alerts"):
+            response = client.post(
+                "/api/locations/ensure_browser_location/",
+                {"name": "New", "latitude": 30.1, "longitude": -97.7},
+                format="json",
+            )
+
+        location.refresh_from_db()
+        assert response.status_code == 200
+        assert response.data["location_id"] == str(location.id)
+        assert location.name == "New"
+        assert float(location.latitude) == 30.1
+
     def test_location_actions_set_current_toggle_and_reorder(self):
         first = Location.objects.create(name="First", is_current_location=True)
         second = Location.objects.create(name="Second", is_enabled=True)
