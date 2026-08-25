@@ -69,6 +69,16 @@ class TestGeocodingActions:
         assert found.data["address"]["city"] == "Austin"
         assert missing.status_code == 400
 
+    def test_geocode_reverse_reports_service_error(self):
+        with patch(
+            "requests.get", side_effect=__import__("requests").RequestException("down")
+        ):
+            response = APIClient().get(
+                "/api/locations/geocode_reverse/", {"lat": "30", "lon": "-97"}
+            )
+
+        assert response.status_code == 503
+
 
 @pytest.mark.django_db
 class TestCurrentConditionsActions:
@@ -125,6 +135,30 @@ class TestCurrentConditionsActions:
 
 @pytest.mark.django_db
 class TestForecastAndExportBranches:
+    def test_location_actions_set_current_toggle_and_reorder(self):
+        first = Location.objects.create(name="First", is_current_location=True)
+        second = Location.objects.create(name="Second", is_enabled=True)
+        client = APIClient()
+        add_location_to_session(client, second)
+
+        current = client.post(f"/api/locations/{second.id}/set_current/")
+        toggled = client.post(f"/api/locations/{second.id}/toggle_enabled/")
+        reordered = client.post(
+            "/api/locations/reorder/", {"location_order": [str(first.id), str(second.id)]}, format="json"
+        )
+
+        assert current.status_code == 200
+        assert toggled.data["is_enabled"] is False
+        assert reordered.status_code == 200
+        second.refresh_from_db()
+        assert second.is_current_location is True
+        assert second.display_order == 1
+
+    def test_reorder_requires_location_order(self):
+        response = APIClient().post("/api/locations/reorder/", {}, format="json")
+
+        assert response.status_code == 400
+
     def test_update_forecast_rejects_location_without_coordinates_or_zip(self):
         location = Location.objects.create(name="Missing coordinates")
         client = APIClient()
