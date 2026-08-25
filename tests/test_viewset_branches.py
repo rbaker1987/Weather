@@ -8,7 +8,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from weather.models import CurrentConditions, DailyForecast, Location
+from weather.models import CurrentConditions, DailyForecast, Location, WeatherAlert
 
 
 def add_location_to_session(client, location):
@@ -168,6 +168,96 @@ class TestForecastAndExportBranches:
 
         assert response.status_code == 500
         assert response.data["message"] == "Forecast URL not found."
+
+    def test_update_forecast_stores_conditions_forecast_and_alert(self):
+        location = Location.objects.create(
+            name="Austin", latitude=30, longitude=-97
+        )
+        client = APIClient()
+        add_location_to_session(client, location)
+
+        grid = Mock()
+        grid.json.return_value = {
+            "properties": {
+                "gridId": "FWD",
+                "gridX": 1,
+                "gridY": 2,
+                "forecast": "https://example.test/forecast",
+                "observationStations": "https://example.test/stations",
+            }
+        }
+        stations = Mock()
+        stations.json.return_value = {
+            "features": [{"properties": {"stationIdentifier": "KATT"}}]
+        }
+        observation = Mock()
+        observation.json.return_value = {
+            "properties": {
+                "temperature": {"value": 20},
+                "relativeHumidity": {"value": 60},
+                "windSpeed": {"value": 10},
+                "windGust": {"value": 20},
+                "windDirection": {"value": 180},
+                "textDescription": "Sunny",
+                "dewpoint": {"value": 10},
+                "timestamp": "2026-08-25T12:00:00Z",
+            }
+        }
+        forecast = Mock()
+        forecast.json.return_value = {
+            "properties": {
+                "periods": [
+                    {
+                        "startTime": "2026-08-25T06:00:00Z",
+                        "endTime": "2026-08-25T18:00:00Z",
+                        "isDaytime": True,
+                        "temperature": 86,
+                        "temperatureUnit": "F",
+                        "windSpeed": "10 to 20 mph",
+                        "windDirection": "S",
+                        "shortForecast": "Sunny",
+                        "detailedForecast": "Clear",
+                        "probabilityOfPrecipitation": {"value": 10},
+                    }
+                ]
+            }
+        }
+        alerts = Mock()
+        alerts.json.return_value = {
+            "features": [
+                {
+                    "properties": {
+                        "id": "alert-1",
+                        "event": "Heat Advisory",
+                        "headline": "Heat",
+                        "description": "Hot",
+                        "severity": "Moderate",
+                        "urgency": "Expected",
+                        "onset": "2026-08-25T12:00:00Z",
+                        "expires": "2026-08-26T12:00:00Z",
+                    }
+                }
+            ]
+        }
+        for response in (grid, stations, observation, forecast, alerts):
+            response.raise_for_status.return_value = None
+
+        with patch(
+            "requests.get",
+            side_effect=[grid, stations, observation, forecast, alerts],
+        ):
+            response = client.post(
+                f"/api/locations/{location.id}/update_forecast/"
+            )
+
+        assert response.status_code == 200
+        assert response.data["periods_created"] == 1
+        assert response.data["alerts_created"] == 1
+        assert DailyForecast.objects.get(location=location).wind_speed == 15
+        conditions = CurrentConditions.objects.get(location=location)
+        assert conditions.temperature == 68
+        assert conditions.wind_direction == "S"
+        assert WeatherAlert.objects.get(nws_alert_id="alert-1").is_active is True
 
     def test_forecasts_post_validates_payload(self):
         location = Location.objects.create(name="Austin")
