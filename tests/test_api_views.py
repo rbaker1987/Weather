@@ -113,6 +113,18 @@ class TestExportAPI:
         )
         assert "Austin" in content
 
+    def test_export_kml_skips_locations_without_coordinates(self, client):
+        location = Location.objects.create(name="Unknown")
+
+        response = client.post(
+            "/api/export/",
+            data=json.dumps({"format": "kml", "locations": [str(location.id)]}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert "<Placemark>" not in response.content.decode()
+
 
 @pytest.mark.django_db
 class TestStatsAPI:
@@ -153,6 +165,13 @@ class TestStatsAPI:
 
 @pytest.mark.django_db
 class TestBulkForecastAPI:
+    def test_bulk_forecast_rejects_invalid_request(self, client):
+        response = client.post(
+            "/api/bulk-forecast/", data="{}", content_type="application/json"
+        )
+
+        assert response.status_code == 400
+
     def test_bulk_forecast_with_existing_location(self, client):
         loc = Location.objects.create(name="BulkCity")
         today = timezone.now().date()

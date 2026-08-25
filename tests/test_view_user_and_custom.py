@@ -208,3 +208,40 @@ def test_custom_forecast_view_loads_owner_reference_data(client):
     assert response.context["climate_normals"] == {"avg_high": 88, "avg_low": 66}
     assert response.context["nws_forecast_periods"] == [{"name": "Today"}]
     assert response.context["custom_forecasts"][0]["afternoon_temp"] == 82
+
+
+@pytest.mark.django_db
+def test_forecast_list_prefers_authenticated_custom_periods(client):
+    user = User.objects.create_user(username="forecast-owner", password="pass")
+    location = Location.objects.create(name="Owned", owner=user, is_enabled=True)
+    session = client.session
+    session["location_ids"] = [str(location.id)]
+    session.save()
+    today = timezone.now().date()
+    DailyForecast.objects.create(
+        location=location,
+        forecast_date=today,
+        period_start=timezone.now(),
+        period_end=timezone.now() + timedelta(hours=12),
+        is_daytime=True,
+        temperature=70,
+        short_forecast="NWS",
+        wind_speed=4,
+    )
+    custom = CustomDailyForecast.objects.create(
+        owner=user,
+        location=location,
+        forecast_date=today,
+        period_start=timezone.now(),
+        period_end=timezone.now() + timedelta(hours=12),
+        is_daytime=True,
+        temperature=80,
+        short_forecast="Custom",
+    )
+    client.force_login(user)
+
+    response = client.get("/forecasts/")
+
+    assert response.status_code == 200
+    grouped = response.context["grouped_by_date"]
+    assert grouped[0]["locations"][0]["day"].id == custom.id
