@@ -1,8 +1,9 @@
 """Tests for the asynchronous NWS client and service."""
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 import pytest
 
 from weather.api.nws_client import (
@@ -10,6 +11,7 @@ from weather.api.nws_client import (
     LocationNotFoundError,
     NWSAPIError,
     NWSClient,
+    RateLimitError,
     WeatherService,
 )
 from weather.core.models import Location
@@ -165,3 +167,88 @@ async def test_nws_client_close_closes_existing_client(nws_client):
 
     client.aclose.assert_awaited_once_with()
     assert nws_client._client is None
+
+
+@pytest.mark.asyncio
+async def test_make_request_returns_data_and_passes_parameters(nws_client):
+    response = Mock()
+    response.json.return_value = {"properties": {"ok": True}}
+    response.raise_for_status.return_value = None
+    client = AsyncMock()
+    client.get.return_value = response
+    nws_client._client = client
+    nws_client.rate_limit_delay = 0
+
+    result = await nws_client._make_request("https://example.test", {"page": 1})
+
+    assert result == {"properties": {"ok": True}}
+    client.get.assert_awaited_once_with("https://example.test", params={"page": 1})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "exception"),
+    [(404, LocationNotFoundError), (429, RateLimitError), (500, NWSAPIError)],
+)
+async def test_make_request_translates_api_error_statuses(nws_client, status, exception):
+    response = Mock()
+    response.json.return_value = {"status": status, "title": "Failure"}
+    response.raise_for_status.return_value = None
+    client = AsyncMock()
+    client.get.return_value = response
+    nws_client._client = client
+    nws_client.rate_limit_delay = 0
+
+    with pytest.raises(exception):
+        await nws_client._make_request("https://example.test")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [404, 429, 503])
+async def test_make_request_translates_http_status_errors(nws_client, status):
+    response = httpx.Response(status, text="failure", request=httpx.Request("GET", "https://example.test"))
+    client = AsyncMock()
+    client.get.side_effect = httpx.HTTPStatusError("failure", request=response.request, response=response)
+    nws_client._client = client
+    nws_client.rate_limit_delay = 0
+
+    exception = {
+        404: LocationNotFoundError,
+        429: RateLimitError,
+        503: NWSAPIError,
+    }[status]
+    with pytest.raises(exception):
+        await nws_client._make_request("https://example.test")
+
+
+@pytest.mark.asyncio
+async def test_make_request_translates_request_errors_and_rate_limits(nws_client):
+    client = AsyncMock()
+    client.get.side_effect = httpx.ConnectError("offline", request=Mock())
+    nws_client._client = client
+    nws_client.rate_limit_delay = 1
+    nws_client._last_request_time = 100
+
+    with patch("weather.api.nws_client.asyncio.get_event_loop") as get_loop, patch(
+        "weather.api.nws_client.asyncio.sleep", new=AsyncMock()
+    ) as sleep:
+        get_loop.return_value.time.side_effect = [100, 100, 101]
+        with pytest.raises(NWSAPIError, match="Request failed"):
+            await nws_client._make_request("https://example.test")
+
+    sleep.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_nws_client_url_wrappers(nws_client):
+    nws_client._make_request = AsyncMock(return_value={"ok": True})
+
+    assert await nws_client.get_grid_point(30, -97) == {"ok": True}
+    assert await nws_client.get_forecast_grid_data("EWX", 1, 2) == {"ok": True}
+    assert await nws_client.get_hourly_forecast("EWX", 1, 2) == {"ok": True}
+
+    assert nws_client._make_request.await_args_list[0].args[0].endswith("/points/30,-97")
+    assert nws_client._make_request.await_args_list[1].args[0].endswith("/gridpoints/EWX/1,2")
+    assert nws_client._make_request.await_args_list[2].args[0].endswith(
+        "/gridpoints/EWX/1,2/forecast/hourly"
+    )
