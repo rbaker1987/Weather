@@ -165,3 +165,46 @@ def test_forecast_list_includes_current_location_outside_session(client):
 
     assert response.status_code == 200
     assert response.context["forecasts"][0].location_id == current.id
+
+
+@pytest.mark.django_db
+def test_custom_forecast_view_loads_owner_reference_data(client):
+    user = User.objects.create_user(username="custom-owner", password="pass")
+    location = Location.objects.create(
+        name="Owned",
+        owner=user,
+        latitude=30,
+        longitude=-97,
+        avg_high_temp=88,
+        avg_low_temp=66,
+    )
+    CustomDailyForecast.objects.create(
+        owner=user,
+        location=location,
+        forecast_date=timezone.now().date(),
+        period_start=timezone.now(),
+        period_end=timezone.now() + timedelta(hours=12),
+        is_daytime=True,
+        temperature=82,
+        short_forecast="Warm",
+    )
+    client.force_login(user)
+    session = client.session
+    session["location_ids"] = [str(location.id)]
+    session.save()
+    points = Mock(status_code=200)
+    points.json.return_value = {
+        "properties": {"forecast": "https://example.test/forecast"}
+    }
+    forecast = Mock(status_code=200)
+    forecast.json.return_value = {"properties": {"periods": [{"name": "Today"}]}}
+
+    with patch("requests.get", side_effect=[points, forecast]):
+        response = client.get(
+            "/forecasts/custom/", {"location_id": str(location.id)}
+        )
+
+    assert response.status_code == 200
+    assert response.context["climate_normals"] == {"avg_high": 88, "avg_low": 66}
+    assert response.context["nws_forecast_periods"] == [{"name": "Today"}]
+    assert response.context["custom_forecasts"][0]["afternoon_temp"] == 82
