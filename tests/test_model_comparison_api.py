@@ -5,6 +5,7 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pytest
+from django.core.cache import cache
 from django.urls import reverse
 
 from weather.models import Location
@@ -203,6 +204,64 @@ class TestModelDetailView:
         assert response.status_code == 200
         # Context should have clamped forecast_days as string
         assert int(response.context["forecast_days"]) <= 2
+
+    @staticmethod
+    def _cache_model_data(model_name, hourly):
+        max_days = {"NBM": 11, "ICON": 7, "GEM": 10}[model_name]
+        cache.set(
+            f"model_detail:v4:{model_name}:det:30.0:-97.0:days:{max_days}",
+            {"timezone": "UTC", "hourly": hourly},
+        )
+
+    def test_model_detail_nbm_adds_static_slr_defaults(self, client):
+        self._cache_model_data("NBM", {"time": ["2026-08-25T12:00:00"]})
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "NBM"}),
+            {"latitude": "30.0", "longitude": "-97.0"},
+        )
+
+        hourly = response.context["data"]["hourly"]
+        assert response.status_code == 200
+        assert hourly["snow_liquid_ratio"] == [1.0]
+        assert hourly["default_slrs"]["snow"] == 10.0
+
+    def test_model_detail_uses_native_precipitation_probabilities(self, client):
+        self._cache_model_data(
+            "ICON",
+            {
+                "time": ["2026-08-25T12:00:00"],
+                "temperature_2m": [20],
+                "snowfall_probability": [80],
+                "rain_probability": [10],
+            },
+        )
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+            {"latitude": "30.0", "longitude": "-97.0"},
+        )
+
+        assert response.context["data"]["hourly"]["precip_type"] == ["snow"]
+        assert response.context["data"]["hourly"]["snow_liquid_ratio"] == [10.0]
+
+    def test_model_detail_uses_surface_temperature_fallback(self, client):
+        self._cache_model_data(
+            "GEM",
+            {
+                "time": ["2026-08-25T12:00:00", "2026-08-25T13:00:00"],
+                "temperature_2m": [10, 50],
+            },
+        )
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "GEM"}),
+            {"latitude": "30.0", "longitude": "-97.0"},
+        )
+
+        hourly = response.context["data"]["hourly"]
+        assert hourly["precip_type"] == ["snow", "rain"]
+        assert hourly["snow_liquid_ratio"] == [12.0, 1.0]
 
 
 @pytest.mark.django_db
