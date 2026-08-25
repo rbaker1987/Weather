@@ -16,6 +16,9 @@ class Value:
     def tolist(self):
         return self._value
 
+    def sel(self, **kwargs):
+        return self
+
 
 class Variable:
     def __init__(self, short_name, values, dims=()):
@@ -24,8 +27,8 @@ class Variable:
         self.coords = {}
         self.values = Value(values)
 
-    def sel(self, **kwargs):
-        return Value(self.values)
+    def sel(self, *args, **kwargs):
+        return self.values
 
 
 class Dataset:
@@ -34,7 +37,7 @@ class Dataset:
     coords = {"latitude": [30], "longitude": [-97]}
 
     def __contains__(self, key):
-        return key in {"time", "t2m", "u10", "v10", "tp", "sd"}
+        return key == "time" or key in self.data_vars
 
     def __getitem__(self, key):
         if key == "time":
@@ -65,6 +68,29 @@ def test_decode_point_extracts_direct_fallback_variables():
     assert result["temperature_2m"] == [70]
     assert result["u10"] == [3]
     assert result["v10"] == [4]
+    assert result["precipitation"] == [1.5]
+    assert result["snowfall"] == [2]
+
+
+def test_decode_point_extracts_height_level_and_short_name_variables():
+    dataset = Dataset()
+    dataset.data_vars = {
+        "temperature": Variable("t", [70], dims=("heightAboveGround",)),
+        "humidity": Variable("r", [55], dims=("height",)),
+        "pressure_temp": Variable("t", [40], dims=("isobaricInhPa",)),
+        "precip": Variable("tp", [1.5]),
+        "snow": Variable("sd", [2]),
+    }
+
+    with (
+        patch.object(noaa_nomads, "_ensure_cfgrib"),
+        patch("xarray.open_dataset", return_value=dataset),
+    ):
+        result = noaa_nomads._decode_point("forecast.grib2", 30, -97)
+
+    assert result["temperature_2m"] == [70]
+    assert result["relativehumidity_2m"] == [55]
+    assert result["temperature_975hPa"] == [40]
     assert result["precipitation"] == [1.5]
     assert result["snowfall"] == [2]
 
