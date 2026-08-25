@@ -2,8 +2,10 @@
 
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
+from asgiref.sync import sync_to_async
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -15,6 +17,17 @@ from weather.services import (
     ForecastService,
     WeatherIntegrationService,
 )
+
+
+class Response:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def json(self):
+        return self.payload
+
+    def raise_for_status(self):
+        return None
 
 
 @pytest.mark.django_db(transaction=True)
@@ -48,6 +61,75 @@ async def test_create_location_from_input_handles_geocoder_exception():
         result = await service.create_location_from_input("Austin")
 
     assert result is None
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
+async def test_location_queries_include_only_active_locations():
+    active = await sync_to_async(Location.objects.create)(name="Active")
+    await sync_to_async(Location.objects.create)(name="Inactive", is_active=False)
+    service = WeatherIntegrationService()
+
+    assert await service.get_location_by_id(str(active.id)) == active
+    assert await service.get_location_by_id(str(uuid4())) is None
+    assert await service.get_all_active_locations() == [active]
+
+
+@pytest.mark.asyncio
+async def test_context_manager_closes_weather_client():
+    service = WeatherIntegrationService()
+    service.weather_service = AsyncMock()
+
+    async with service as entered:
+        assert entered is service
+
+    service.weather_service.close.assert_awaited_once_with()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
+async def test_update_forecasts_saves_results_and_updates_timestamp():
+    location = await sync_to_async(Location.objects.create)(name="Austin")
+    service = WeatherIntegrationService()
+    service.weather_service = AsyncMock()
+    service.weather_service.get_forecasts_for_locations.return_value = {
+        "Austin": {"daily": [], "hourly": []}
+    }
+    service.save_daily_forecasts = AsyncMock(return_value=2)
+    service.save_hourly_forecasts = AsyncMock(return_value=3)
+
+    result = await service.update_forecasts_for_location(location)
+
+    assert result["success"] is True
+    assert result["daily_forecasts"] == 2
+    assert result["hourly_forecasts"] == 3
+    await sync_to_async(location.refresh_from_db)()
+    assert location.last_forecast_update is not None
+
+
+@pytest.mark.django_db
+def test_current_conditions_returns_none_for_missing_station_data():
+    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
+    responses = [
+        Response({"properties": {"observationStations": "stations-url"}}),
+        Response({"features": []}),
+    ]
+
+    with patch("requests.get", side_effect=responses):
+        assert CurrentConditionsService.fetch_and_cache_current_conditions(location) is None
+
+
+@pytest.mark.django_db
+def test_current_conditions_returns_none_for_unexpected_response_error():
+    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
+    responses = [
+        Response({"properties": {"observationStations": "stations-url"}}),
+        Response({"features": [{"properties": {"stationIdentifier": "KAUS"}}]}),
+        Response({"properties": {"temperature": {"value": "bad"}}}),
+    ]
+
+    with patch("requests.get", side_effect=responses):
+        assert CurrentConditionsService.fetch_and_cache_current_conditions(location) is None
 
 
 @pytest.mark.django_db
