@@ -11,6 +11,12 @@ from rest_framework.test import APIClient
 from weather.models import CurrentConditions, DailyForecast, Location
 
 
+def add_location_to_session(client, location):
+    session = client.session
+    session["location_ids"] = [str(location.id)]
+    session.save()
+
+
 @pytest.mark.django_db
 class TestGeocodingActions:
     def test_geocode_search_valid_and_empty_results(self):
@@ -119,6 +125,50 @@ class TestCurrentConditionsActions:
 
 @pytest.mark.django_db
 class TestForecastAndExportBranches:
+    def test_update_forecast_rejects_location_without_coordinates_or_zip(self):
+        location = Location.objects.create(name="Missing coordinates")
+        client = APIClient()
+        add_location_to_session(client, location)
+
+        response = client.post(f"/api/locations/{location.id}/update_forecast/")
+
+        assert response.status_code == 400
+        assert "does not have coordinates" in response.data["message"]
+
+    def test_update_forecast_reports_geocoding_failure(self):
+        location = Location.objects.create(name="Unknown", zip_code="00000")
+        client = APIClient()
+        add_location_to_session(client, location)
+        geocode = Mock()
+        geocode.json.return_value = []
+        geocode.raise_for_status.return_value = None
+
+        with patch("requests.get", return_value=geocode):
+            response = client.post(
+                f"/api/locations/{location.id}/update_forecast/"
+            )
+
+        assert response.status_code == 400
+        assert "Could not geocode zip code" in response.data["message"]
+
+    def test_update_forecast_reports_missing_forecast_url(self):
+        location = Location.objects.create(
+            name="Grid only", latitude=30, longitude=-97
+        )
+        client = APIClient()
+        add_location_to_session(client, location)
+        grid = Mock()
+        grid.json.return_value = {"properties": {"gridId": "FWD"}}
+        grid.raise_for_status.return_value = None
+
+        with patch("requests.get", return_value=grid):
+            response = client.post(
+                f"/api/locations/{location.id}/update_forecast/"
+            )
+
+        assert response.status_code == 500
+        assert response.data["message"] == "Forecast URL not found."
+
     def test_forecasts_post_validates_payload(self):
         location = Location.objects.create(name="Austin")
         client = APIClient()
