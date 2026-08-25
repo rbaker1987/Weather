@@ -1,6 +1,7 @@
 """Tests for user and custom-forecast view branches."""
 
 from datetime import timedelta
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.auth.models import User
@@ -8,7 +9,12 @@ from django.test import RequestFactory
 from django.utils import timezone
 
 from weather.models import CustomDailyForecast, DailyForecast, Location
-from weather.views import LocationDetailView, ModelsView, SignUpView
+from weather.views import (
+    LocationDetailView,
+    ModelsView,
+    SignUpView,
+    _refresh_forecasts_for_location,
+)
 
 
 class SessionDict(dict):
@@ -95,3 +101,67 @@ def test_location_detail_prefers_authenticated_custom_daily_forecasts():
 
     assert context["has_custom_daily"] is True
     assert context["daily_forecasts"][0]["day"].short_forecast == "Custom"
+
+
+@pytest.mark.django_db
+def test_refresh_forecasts_stores_nws_periods():
+    location = Location.objects.create(
+        name="Refresh", latitude=30, longitude=-97
+    )
+    grid_response = Mock()
+    grid_response.json.return_value = {
+        "properties": {
+            "gridId": "FWD",
+            "gridX": 1,
+            "gridY": 2,
+            "forecast": "https://example.test/forecast",
+        }
+    }
+    forecast_response = Mock()
+    forecast_response.json.return_value = {
+        "properties": {
+            "periods": [
+                {
+                    "startTime": "2026-08-24T06:00:00Z",
+                    "endTime": "2026-08-24T18:00:00Z",
+                    "isDaytime": True,
+                    "temperature": 78,
+                    "windSpeed": "10 to 20 mph",
+                    "shortForecast": "Sunny",
+                    "detailedForecast": "Clear skies",
+                    "probabilityOfPrecipitation": {"value": 10},
+                }
+            ]
+        }
+    }
+    with patch("requests.get", side_effect=[grid_response, forecast_response]):
+        assert _refresh_forecasts_for_location(location) is True
+
+    location.refresh_from_db()
+    forecast = DailyForecast.objects.get(location=location)
+    assert forecast.temperature == 78
+    assert forecast.wind_speed == 15
+    assert location.nws_office == "FWD"
+
+
+@pytest.mark.django_db
+def test_forecast_list_includes_current_location_outside_session(client):
+    current = Location.objects.create(
+        name="Current", is_current_location=True, is_enabled=True
+    )
+    today = timezone.now().date()
+    DailyForecast.objects.create(
+        location=current,
+        forecast_date=today,
+        period_start=timezone.now(),
+        period_end=timezone.now() + timedelta(hours=12),
+        is_daytime=True,
+        temperature=75,
+        short_forecast="Clear",
+        wind_speed=4,
+    )
+
+    response = client.get("/forecasts/")
+
+    assert response.status_code == 200
+    assert response.context["forecasts"][0].location_id == current.id
