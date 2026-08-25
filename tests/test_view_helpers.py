@@ -4,6 +4,7 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pytest
+from django.contrib.auth.models import User
 from rest_framework.test import APIRequestFactory
 
 from weather.models import Location
@@ -59,6 +60,21 @@ def test_location_viewset_filters_anonymous_locations_by_session():
 
 
 @pytest.mark.django_db
+def test_location_viewset_filters_authenticated_locations_by_owner():
+    owner = User.objects.create_user(username="location-owner")
+    owned = Location.objects.create(name="Owned", owner=owner)
+    Location.objects.create(name="Other")
+    request = APIRequestFactory().get("/api/locations/")
+    request.user = owner
+    request.session = SessionDict()
+
+    view = LocationViewSet()
+    view.request = request
+
+    assert list(view.get_queryset()) == [owned]
+
+
+@pytest.mark.django_db
 def test_location_viewset_perform_create_geocodes_and_queues_tasks():
     request = APIRequestFactory().post("/api/locations/")
     request.user = Mock(is_authenticated=False)
@@ -83,6 +99,31 @@ def test_location_viewset_perform_create_geocodes_and_queues_tasks():
     location.refresh_from_db()
     assert location.latitude == Decimal("30.267200")
     assert location.longitude == Decimal("-97.743100")
+    assert str(location.id) in request.session["location_ids"]
+
+
+@pytest.mark.django_db
+def test_location_viewset_perform_create_handles_empty_geocode_result():
+    request = APIRequestFactory().post("/api/locations/")
+    request.user = Mock(is_authenticated=False)
+    request.session = SessionDict()
+    serializer = Mock()
+    location = Location.objects.create(name="No match", zip_code="00000")
+    serializer.save.return_value = location
+    response = Mock()
+    response.json.return_value = []
+    response.raise_for_status.return_value = None
+
+    view = LocationViewSet()
+    view.request = request
+    with patch("requests.get", return_value=response), patch(
+        "weather.tasks.enqueue_current_conditions"
+    ), patch("weather.tasks.enqueue_forecasts"), patch("weather.tasks.enqueue_alerts"):
+        view.perform_create(serializer)
+
+    location.refresh_from_db()
+    assert location.latitude is None
+    assert location.longitude is None
     assert str(location.id) in request.session["location_ids"]
 
 
