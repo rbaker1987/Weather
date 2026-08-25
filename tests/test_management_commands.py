@@ -100,6 +100,35 @@ class TestPopulateClimateNormalsCommand:
 
         assert result == (80.0, 60.0)
 
+    @pytest.mark.parametrize(
+        "payload",
+        [{}, {"properties": {}}, {"properties": {"forecast": "url"}}],
+    )
+    def test_fetch_climate_normals_handles_incomplete_responses(self, payload):
+        command = PopulateClimateNormalsCommand()
+        response = Mock()
+        response.json.return_value = payload
+
+        with patch(
+            "weather.management.commands.populate_climate_normals.requests.get",
+            return_value=response,
+        ):
+            result = command._fetch_climate_normals(30, -97)
+
+        assert result == (None, None)
+
+    def test_fetch_climate_normals_handles_request_error(self):
+        import requests
+
+        command = PopulateClimateNormalsCommand()
+        with patch(
+            "weather.management.commands.populate_climate_normals.requests.get",
+            side_effect=requests.RequestException("offline"),
+        ):
+            result = command._fetch_climate_normals(30, -97)
+
+        assert result == (None, None)
+
 
 @pytest.mark.django_db
 class TestUpdateForecastsCommand:
