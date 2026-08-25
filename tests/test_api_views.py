@@ -125,6 +125,22 @@ class TestExportAPI:
         assert response.status_code == 200
         assert "<Placemark>" not in response.content.decode()
 
+    def test_export_kml_reports_rendering_error(self, client, monkeypatch):
+        location = Location.objects.create(name="Broken")
+        monkeypatch.setattr(
+            "weather.views.ExportAPIView._location_to_kml",
+            lambda *_args: (_ for _ in ()).throw(RuntimeError("render failed")),
+        )
+
+        response = client.post(
+            "/api/export/",
+            data=json.dumps({"format": "kml", "locations": [str(location.id)]}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 500
+        assert response.json()["error"] == "KML export failed"
+
 
 @pytest.mark.django_db
 class TestStatsAPI:
@@ -171,6 +187,29 @@ class TestBulkForecastAPI:
         )
 
         assert response.status_code == 400
+
+    def test_bulk_forecast_marks_request_failed_on_processing_error(self, client, monkeypatch):
+        location = Location.objects.create(name="Bulk failure")
+        monkeypatch.setattr(
+            "weather.views.BulkForecastAPIView._get_forecast_data",
+            lambda *_args: (_ for _ in ()).throw(RuntimeError("processing failed")),
+        )
+
+        response = client.post(
+            "/api/bulk-forecast/",
+            data=json.dumps(
+                {
+                    "locations": [location.name],
+                    "forecast_type": "daily",
+                    "days": 1,
+                    "include_alerts": False,
+                }
+            ),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 500
+        assert response.json()["error"] == "Forecast request failed"
 
     def test_bulk_forecast_with_existing_location(self, client):
         loc = Location.objects.create(name="BulkCity")
