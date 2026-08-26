@@ -29,6 +29,44 @@ class TestPrecipitationLogic:
         assert types == [expected_type]
         assert slrs[0] >= minimum_slr
 
+    def test_classification_detects_freezing_rain_warm_nose(self):
+        types, slrs = ModelDetailView._classify_precip_types(
+            {
+                "temperature_2m": [30],
+                "temperature_850hPa": [40],
+                "temperature_700hPa": [20],
+                "temperature_550hPa": [20],
+            }
+        )
+
+        assert types == ["freezing_rain"]
+        assert slrs[0] == pytest.approx(0.466585)
+
+    def test_classification_demotes_warm_surface_to_rain(self):
+        types, slrs = ModelDetailView._classify_precip_types(
+            {
+                "temperature_2m": [40],
+                "temperature_850hPa": [50],
+                "temperature_700hPa": [20],
+                "temperature_550hPa": [20],
+            }
+        )
+
+        assert types == ["rain"]
+        assert slrs == [1.0]
+
+    def test_classification_interpolates_missing_550hpa_temperature(self):
+        types, slrs = ModelDetailView._classify_precip_types(
+            {
+                "temperature_2m": [20],
+                "temperature_575hPa": [5],
+                "temperature_525hPa": [-5],
+            }
+        )
+
+        assert types == ["snow"]
+        assert slrs[0] >= 6.0
+
     def test_classification_uses_native_probability_signals(self):
         types, slrs = ModelDetailView._classify_precip_types(
             {
