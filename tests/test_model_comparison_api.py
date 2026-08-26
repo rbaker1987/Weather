@@ -263,6 +263,62 @@ class TestModelDetailView:
         assert hourly["precip_type"] == ["snow", "rain"]
         assert hourly["snow_liquid_ratio"] == [12.0, 1.0]
 
+    def test_model_detail_uses_session_location_and_normalizes_parameters(self, client):
+        location = Location.objects.create(
+            name="Fallback", latitude=30, longitude=-97, is_active=True
+        )
+        session = client.session
+        session["location_ids"] = [str(location.id)]
+        session.save()
+        cache.set(
+            "model_detail:v4:ICON:det:30.0:-97.0:days:7",
+            {
+                "timezone": "UTC",
+                "model_source": "cached",
+                "hourly": {"time": ["2026-08-25T12:00:00"]},
+            },
+        )
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+            {"forecast_days": "bad", "ens": "unsupported"},
+        )
+
+        assert response.status_code == 200
+        assert response.context["latitude"] == location.latitude
+        assert response.context["longitude"] == location.longitude
+        assert response.context["forecast_days"] == "7"
+        assert response.context["ensemble"] == "det"
+        assert response.context["run_time"].tzinfo is not None
+
+    def test_model_detail_trims_cached_hourly_window(self, client):
+        times = [
+            "2026-08-25T00:00:00+00:00",
+            "2026-08-25T12:00:00+00:00",
+            "2026-08-26T12:00:00+00:00",
+        ]
+        cache.set(
+            "model_detail:v4:GEM:det:30.0:-97.0:days:1",
+            {
+                "timezone": "UTC",
+                "hourly": {"time": times, "temperature_2m": [40, 41, 42]},
+            },
+        )
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "GEM"}),
+            {
+                "latitude": "30.0",
+                "longitude": "-97.0",
+                "forecast_days": "1",
+            },
+        )
+
+        hourly = response.context["data"]["hourly"]
+        assert response.status_code == 200
+        assert hourly["time"] == times[:2]
+        assert hourly["temperature_2m"] == [40, 41]
+
     def test_aggregate_precip_by_6hour_handles_empty_and_invalid_inputs(self):
         from weather.views import ModelDetailView
 
