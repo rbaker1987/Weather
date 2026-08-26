@@ -263,6 +263,54 @@ class TestModelDetailView:
         assert hourly["precip_type"] == ["snow", "rain"]
         assert hourly["snow_liquid_ratio"] == [12.0, 1.0]
 
+    def test_aggregate_precip_by_6hour_handles_empty_and_invalid_inputs(self):
+        from weather.views import ModelDetailView
+
+        assert ModelDetailView.aggregate_precip_by_6hour({}, []) == {}
+        result = ModelDetailView.aggregate_precip_by_6hour(
+            {
+                "precipitation": [1.0],
+                "precip_type": ["snow"],
+                "time": ["not-a-time"],
+            },
+            ["not-a-time", "2026-08-25T12:00:00+00:00"],
+        )
+
+        assert result == {"2026-08-25T12:00:00+00:00": {
+            "snow": 0.0,
+            "sleet": 0.0,
+            "freezing_rain": 0.0,
+            "rain": 0.0,
+            "total": 0.0,
+        }}
+
+    def test_aggregate_precip_by_6hour_uses_types_and_default_slrs(self):
+        from weather.views import ModelDetailView
+
+        result = ModelDetailView.aggregate_precip_by_6hour(
+            {
+                "precipitation": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "precip_type": ["snow", "sleet", "freezing_rain", "rain", "unknown"],
+                "snow_liquid_ratio": [0, 0, 0, 0, 0],
+                "time": [
+                    "2026-08-25T07:00:00+00:00",
+                    "2026-08-25T08:00:00+00:00",
+                    "2026-08-25T09:00:00+00:00",
+                    "2026-08-25T10:00:00+00:00",
+                    "2026-08-25T11:00:00+00:00",
+                ],
+            },
+            ["2026-08-25T12:00:00+00:00"],
+        )
+
+        assert result["2026-08-25T12:00:00+00:00"] == {
+            "snow": 10.0,
+            "sleet": 5.0,
+            "freezing_rain": 1.05,
+            "rain": 9.0,
+            "total": 25.05,
+        }
+
 
 @pytest.mark.django_db
 class TestModelsView:
