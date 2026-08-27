@@ -1,5 +1,6 @@
 """Tests for NOMADS decoding and fetch edge branches."""
 
+from itertools import chain, repeat
 from unittest.mock import patch
 
 import pytest
@@ -146,7 +147,7 @@ def test_fetch_gfs_nomads_returns_none_when_all_hours_fail():
 def test_fetch_gfs_nomads_stops_when_timeout_is_exceeded():
     with (
         patch.object(noaa_nomads, "_ensure_cfgrib"),
-        patch("time.time", side_effect=[0, 100]),
+        patch("time.time", side_effect=chain([0, 100], repeat(100))),
         patch.object(noaa_nomads, "_download_grib") as download,
     ):
         assert noaa_nomads.fetch_gfs_nomads(30, -97, forecast_hours=[0], timeout=1) is None
