@@ -5,6 +5,7 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pytest
+from django.core.cache import cache
 from django.urls import reverse
 
 from weather.models import Location
@@ -203,6 +204,273 @@ class TestModelDetailView:
         assert response.status_code == 200
         # Context should have clamped forecast_days as string
         assert int(response.context["forecast_days"]) <= 2
+
+    @staticmethod
+    def _cache_model_data(model_name, hourly):
+        max_days = {"NBM": 11, "ICON": 7, "GEM": 10}[model_name]
+        cache.set(
+            f"model_detail:v4:{model_name}:det:30.0:-97.0:days:{max_days}",
+            {"timezone": "UTC", "hourly": hourly},
+        )
+
+    def test_model_detail_nbm_adds_static_slr_defaults(self, client):
+        self._cache_model_data("NBM", {"time": ["2026-08-25T12:00:00"]})
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "NBM"}),
+            {"latitude": "30.0", "longitude": "-97.0"},
+        )
+
+        hourly = response.context["data"]["hourly"]
+        assert response.status_code == 200
+        assert hourly["snow_liquid_ratio"] == [1.0]
+        assert hourly["default_slrs"]["snow"] == 10.0
+
+    def test_model_detail_uses_native_precipitation_probabilities(self, client):
+        self._cache_model_data(
+            "ICON",
+            {
+                "time": ["2026-08-25T12:00:00"],
+                "temperature_2m": [20],
+                "snowfall_probability": [80],
+                "rain_probability": [10],
+            },
+        )
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+            {"latitude": "30.0", "longitude": "-97.0"},
+        )
+
+        assert response.context["data"]["hourly"]["precip_type"] == ["snow"]
+        assert response.context["data"]["hourly"]["snow_liquid_ratio"] == [10.0]
+
+    def test_model_detail_uses_surface_temperature_fallback(self, client):
+        self._cache_model_data(
+            "GEM",
+            {
+                "time": ["2026-08-25T12:00:00", "2026-08-25T13:00:00"],
+                "temperature_2m": [10, 50],
+            },
+        )
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "GEM"}),
+            {"latitude": "30.0", "longitude": "-97.0"},
+        )
+
+        hourly = response.context["data"]["hourly"]
+        assert hourly["precip_type"] == ["snow", "rain"]
+        assert hourly["snow_liquid_ratio"] == [12.0, 1.0]
+
+    def test_model_detail_uses_session_location_and_normalizes_parameters(self, client):
+        location = Location.objects.create(
+            name="Fallback", latitude=30, longitude=-97, is_active=True
+        )
+        session = client.session
+        session["location_ids"] = [str(location.id)]
+        session.save()
+        cache.set(
+            "model_detail:v4:ICON:det:30.0:-97.0:days:7",
+            {
+                "timezone": "UTC",
+                "model_source": "cached",
+                "hourly": {"time": ["2026-08-25T12:00:00"]},
+            },
+        )
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+            {"forecast_days": "bad", "ens": "unsupported"},
+        )
+
+        assert response.status_code == 200
+        assert response.context["latitude"] == location.latitude
+        assert response.context["longitude"] == location.longitude
+        assert response.context["forecast_days"] == "7"
+        assert response.context["ensemble"] == "det"
+        assert response.context["run_time"].tzinfo is not None
+
+    def test_model_detail_trims_cached_hourly_window(self, client):
+        times = [
+            "2026-08-25T00:00:00+00:00",
+            "2026-08-25T12:00:00+00:00",
+            "2026-08-26T12:00:00+00:00",
+        ]
+        cache.set(
+            "model_detail:v4:GEM:det:30.0:-97.0:days:1",
+            {
+                "timezone": "UTC",
+                "hourly": {"time": times, "temperature_2m": [40, 41, 42]},
+            },
+        )
+
+        response = client.get(
+            reverse("weather:model-detail", kwargs={"model_name": "GEM"}),
+            {
+                "latitude": "30.0",
+                "longitude": "-97.0",
+                "forecast_days": "1",
+            },
+        )
+
+        hourly = response.context["data"]["hourly"]
+        assert response.status_code == 200
+        assert hourly["time"] == times[:2]
+        assert hourly["temperature_2m"] == [40, 41]
+
+    def test_aggregate_precip_by_6hour_handles_empty_and_invalid_inputs(self):
+        from weather.views import ModelDetailView
+
+        assert ModelDetailView.aggregate_precip_by_6hour({}, []) == {}
+        result = ModelDetailView.aggregate_precip_by_6hour(
+            {
+                "precipitation": [1.0],
+                "precip_type": ["snow"],
+                "time": ["not-a-time"],
+            },
+            ["not-a-time", "2026-08-25T12:00:00+00:00"],
+        )
+
+        assert result == {"2026-08-25T12:00:00+00:00": {
+            "snow": 0.0,
+            "sleet": 0.0,
+            "freezing_rain": 0.0,
+            "rain": 0.0,
+            "total": 0.0,
+        }}
+
+    def test_aggregate_precip_by_6hour_uses_types_and_default_slrs(self):
+        from weather.views import ModelDetailView
+
+        result = ModelDetailView.aggregate_precip_by_6hour(
+            {
+                "precipitation": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "precip_type": ["snow", "sleet", "freezing_rain", "rain", "unknown"],
+                "snow_liquid_ratio": [0, 0, 0, 0, 0],
+                "time": [
+                    "2026-08-25T07:00:00+00:00",
+                    "2026-08-25T08:00:00+00:00",
+                    "2026-08-25T09:00:00+00:00",
+                    "2026-08-25T10:00:00+00:00",
+                    "2026-08-25T11:00:00+00:00",
+                ],
+            },
+            ["2026-08-25T12:00:00+00:00"],
+        )
+
+        assert result["2026-08-25T12:00:00+00:00"] == {
+            "snow": 10.0,
+            "sleet": 5.0,
+            "freezing_rain": 1.05,
+            "rain": 9.0,
+            "total": 25.05,
+        }
+
+    def test_model_detail_fetches_non_gfs_data_and_classifies_precip(self, client):
+        cache.clear()
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "timezone": "UTC",
+                "hourly": {
+                    "time": [
+                        "2026-08-25T00:00:00Z",
+                        "2026-08-25T01:00:00Z",
+                    ],
+                    "temperature_2m": [32, 28],
+                    "temperature_850hPa": [20, 18],
+                    "temperature_700hPa": [8, 6],
+                    "precipitation": [0.3, 0.4],
+                },
+            }
+            mock_get.return_value = mock_response
+
+            response = client.get(
+                reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+                {"latitude": "30.0", "longitude": "-97.0", "forecast_days": "2"},
+            )
+
+        assert response.status_code == 200
+        hourly = response.context["data"]["hourly"]
+        assert hourly["precip_type"] == ["snow", "snow"]
+        assert all(slr >= 6.0 for slr in hourly["snow_liquid_ratio"])
+        assert response.context["forecast_days"] == "2"
+
+    def test_model_detail_uses_native_probabilities_when_levels_missing(self, client):
+        cache.clear()
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "timezone": "UTC",
+                "hourly": {
+                    "time": [
+                        "2026-08-25T00:00:00Z",
+                        "2026-08-25T01:00:00Z",
+                        "2026-08-25T02:00:00Z",
+                        "2026-08-25T03:00:00Z",
+                        "2026-08-25T04:00:00Z",
+                        "2026-08-25T05:00:00Z",
+                    ],
+                    "temperature_2m": [28, 45, 33, 34, 36, 38],
+                    "rain_probability": [0, 0, 80, 10, 0, 0],
+                    "snowfall_probability": [0, 0, 10, 80, 0, 0],
+                    "freezing_rain_probability": [0, 0, 5, 0, 80, 0],
+                    "ice_pellets_probability": [0, 0, 0, 0, 5, 80],
+                },
+            }
+            mock_get.return_value = mock_response
+
+            response = client.get(
+                reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+                {"latitude": "30.0", "longitude": "-97.0", "forecast_days": "2"},
+            )
+
+        assert response.status_code == 200
+        hourly = response.context["data"]["hourly"]
+        assert hourly["precip_type"] == [
+            "snow",
+            "rain",
+            "rain",
+            "snow",
+            "freezing_rain",
+            "sleet",
+        ]
+        assert hourly["snow_liquid_ratio"] == [10.0, 1.0, 1.0, 10.0, 0.5, 2.5]
+
+    def test_model_detail_uses_surface_temperature_fallback_without_levels(self, client):
+        cache.clear()
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "timezone": "UTC",
+                "hourly": {
+                    "time": [
+                        "2026-08-25T00:00:00Z",
+                        "2026-08-25T01:00:00Z",
+                        "2026-08-25T02:00:00Z",
+                    ],
+                    "temperature_2m": [10, 20, 40],
+                    "precipitation": [0.3, 0.4, 0.1],
+                },
+            }
+            mock_get.return_value = mock_response
+
+            response = client.get(
+                reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+                {"latitude": "30.0", "longitude": "-97.0", "forecast_days": "2"},
+            )
+
+        assert response.status_code == 200
+        hourly = response.context["data"]["hourly"]
+        assert hourly["precip_type"] == ["snow", "snow", "rain"]
+        assert hourly["snow_liquid_ratio"] == [12.0, 10.0, 1.0]
 
 
 @pytest.mark.django_db

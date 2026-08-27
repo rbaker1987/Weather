@@ -128,18 +128,18 @@ class LocationCreateSerializer(serializers.Serializer):
     zip_code = serializers.CharField(max_length=10, required=False)
     address = serializers.CharField(max_length=500, required=False)
 
-    def validate(self, data):
+    def validate(self, attrs):
         """Validate that we have enough information to create a location."""
-        has_coords = "latitude" in data and "longitude" in data
-        has_zip = "zip_code" in data
-        has_address = "address" in data
-        has_name = "name" in data
+        has_coords = "latitude" in attrs and "longitude" in attrs
+        has_zip = "zip_code" in attrs
+        has_address = "address" in attrs
+        has_name = "name" in attrs
 
         if not any([has_coords, has_zip, has_address, has_name]):
             raise serializers.ValidationError(
                 "Must provide either coordinates, zip code, address, or location name"
             )
-        return data
+        return attrs
 
 
 class HourlyForecastSerializer(ModelSerializer):
@@ -291,14 +291,14 @@ class WeatherAlertSerializer(ModelSerializer):
 class ForecastRequestSerializer(ModelSerializer):
     """Forecast request tracking serializer."""
 
-    user_name = serializers.CharField(source="user.username", read_only=True)
+    user_name = SerializerMethodField()
     location_names = SerializerMethodField()
 
     class Meta:
         model = ForecastRequest
         fields = [
             "id",
-            "user",
+            "session_key",
             "user_name",
             "location_names",
             "request_type",
@@ -313,6 +313,10 @@ class ForecastRequestSerializer(ModelSerializer):
     def get_location_names(self, obj):
         """Get names of requested locations."""
         return list(obj.locations_requested.values_list("name", flat=True))
+
+    def get_user_name(self, obj):
+        """Get the session identity associated with the request."""
+        return obj.session_key or "Anonymous"
 
 
 class BulkForecastRequestSerializer(serializers.Serializer):

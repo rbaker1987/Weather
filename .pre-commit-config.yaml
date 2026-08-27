@@ -6,8 +6,8 @@ repos:
   - repo: local
     hooks:
       - id: project-coverage
-        name: Check project coverage (50%)
-        entry: python -m pytest -q --cov=weather --cov-fail-under=50 --cov-report=term tests/
+        name: Check project coverage (90%)
+        entry: python -m pytest -q --cov=weather --cov-fail-under=90 --cov-report=term tests/
         language: system
         pass_filenames: false
 

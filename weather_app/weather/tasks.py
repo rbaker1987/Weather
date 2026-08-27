@@ -252,7 +252,8 @@ def generate_forecast_report(location_ids=None, report_type="daily"):
                     forecast_date__gte=timezone.now().date()
                 )[:7]
             else:
-                forecasts = location.hourlyforecast_set.filter(
+                forecasts = HourlyForecast.objects.filter(
+                    location=location,
                     period_start__gte=timezone.now()
                 )[:24]
 

@@ -22,8 +22,8 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.sql import delete, select
 
-from ..core.config import get_config
-from ..core.models import HourlyForecast, Location
+from .core.config import get_config
+from .core.models import HourlyForecast, Location
 
 
 class Base(DeclarativeBase):

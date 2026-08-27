@@ -110,6 +110,21 @@ class TestAlertListView:
         assert resp.context["severe_extreme_count"] == 1
         assert resp.context["moderate_count"] == 1
 
+    def test_alert_list_without_session_shows_active_alerts(self, client):
+        location = Location.objects.create(name="Public")
+        alert = WeatherAlert.objects.create(
+            location=location,
+            nws_alert_id="PUBLIC-1",
+            event="Warning",
+            expires=timezone.now() + timedelta(hours=1),
+            severity=WeatherAlert.Severity.EXTREME,
+        )
+
+        response = client.get(reverse("weather:alert-list"))
+
+        assert list(response.context["alerts"]) == [alert]
+        assert response.context["severe_extreme_count"] == 1
+
 
 @pytest.mark.django_db
 class TestForecastListView:
