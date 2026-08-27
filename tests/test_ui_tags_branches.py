@@ -86,6 +86,10 @@ def test_needs_chance_layout_handles_invalid_inputs():
     assert needs_chance_layout(Forecast("Snow")) == ""
 
 
+def test_needs_chance_layout_returns_empty_for_non_chance_precip():
+    assert needs_chance_layout(Forecast("Cloudy", 20)) == ""
+
+
 def test_precipitation_filters_handle_objects_and_none():
     assert is_snow_precip(Forecast("Light snow", 30)) is True
     assert is_snow_precip(None) is False
