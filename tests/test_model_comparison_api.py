@@ -367,6 +367,111 @@ class TestModelDetailView:
             "total": 25.05,
         }
 
+    def test_model_detail_fetches_non_gfs_data_and_classifies_precip(self, client):
+        cache.clear()
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "timezone": "UTC",
+                "hourly": {
+                    "time": [
+                        "2026-08-25T00:00:00Z",
+                        "2026-08-25T01:00:00Z",
+                    ],
+                    "temperature_2m": [32, 28],
+                    "temperature_850hPa": [20, 18],
+                    "temperature_700hPa": [8, 6],
+                    "precipitation": [0.3, 0.4],
+                },
+            }
+            mock_get.return_value = mock_response
+
+            response = client.get(
+                reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+                {"latitude": "30.0", "longitude": "-97.0", "forecast_days": "2"},
+            )
+
+        assert response.status_code == 200
+        hourly = response.context["data"]["hourly"]
+        assert hourly["precip_type"] == ["snow", "snow"]
+        assert all(slr >= 6.0 for slr in hourly["snow_liquid_ratio"])
+        assert response.context["forecast_days"] == "2"
+
+    def test_model_detail_uses_native_probabilities_when_levels_missing(self, client):
+        cache.clear()
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "timezone": "UTC",
+                "hourly": {
+                    "time": [
+                        "2026-08-25T00:00:00Z",
+                        "2026-08-25T01:00:00Z",
+                        "2026-08-25T02:00:00Z",
+                        "2026-08-25T03:00:00Z",
+                        "2026-08-25T04:00:00Z",
+                        "2026-08-25T05:00:00Z",
+                    ],
+                    "temperature_2m": [28, 45, 33, 34, 36, 38],
+                    "rain_probability": [0, 0, 80, 10, 0, 0],
+                    "snowfall_probability": [0, 0, 10, 80, 0, 0],
+                    "freezing_rain_probability": [0, 0, 5, 0, 80, 0],
+                    "ice_pellets_probability": [0, 0, 0, 0, 5, 80],
+                },
+            }
+            mock_get.return_value = mock_response
+
+            response = client.get(
+                reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+                {"latitude": "30.0", "longitude": "-97.0", "forecast_days": "2"},
+            )
+
+        assert response.status_code == 200
+        hourly = response.context["data"]["hourly"]
+        assert hourly["precip_type"] == [
+            "snow",
+            "rain",
+            "rain",
+            "snow",
+            "freezing_rain",
+            "sleet",
+        ]
+        assert hourly["snow_liquid_ratio"] == [10.0, 1.0, 1.0, 10.0, 0.5, 2.5]
+
+    def test_model_detail_uses_surface_temperature_fallback_without_levels(self, client):
+        cache.clear()
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "timezone": "UTC",
+                "hourly": {
+                    "time": [
+                        "2026-08-25T00:00:00Z",
+                        "2026-08-25T01:00:00Z",
+                        "2026-08-25T02:00:00Z",
+                    ],
+                    "temperature_2m": [10, 20, 40],
+                    "precipitation": [0.3, 0.4, 0.1],
+                },
+            }
+            mock_get.return_value = mock_response
+
+            response = client.get(
+                reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
+                {"latitude": "30.0", "longitude": "-97.0", "forecast_days": "2"},
+            )
+
+        assert response.status_code == 200
+        hourly = response.context["data"]["hourly"]
+        assert hourly["precip_type"] == ["snow", "snow", "rain"]
+        assert hourly["snow_liquid_ratio"] == [12.0, 10.0, 1.0]
+
 
 @pytest.mark.django_db
 class TestModelsView:
