@@ -45,6 +45,9 @@ jobs:
           cd weather_app && python manage.py check --deploy
 
       - name: Check for missing migrations
+        env:
+          DJANGO_ALLOWED_HOSTS: testserver
+          DJANGO_SECRET_KEY: ci-check-6Dkq9mR2xV7pL4sN8wH3bF5jT1yC0eG9aK6uQ2zX7vM4rP8
         run: |
           cd weather_app && python manage.py makemigrations --check --dry-run
 
