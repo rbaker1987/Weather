@@ -1,16 +1,19 @@
 """Tests for Django weather models."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from django.db import IntegrityError
 from django.utils import timezone
 
 from weather.models import (
     DailyForecast,
     ForecastRequest,
+    HistoricalWeatherObservation,
     HourlyForecast,
     Location,
+    TeleconnectionObservation,
     WeatherAlert,
 )
 
@@ -89,6 +92,57 @@ class TestLocation:
 
         locations = list(Location.objects.all())
         assert locations[0].id == loc2.id  # Current location first
+
+
+@pytest.mark.django_db
+class TestHistoricalClimateModels:
+    """Test persisted source data used by climate analysis."""
+
+    def test_teleconnection_observation_is_unique_per_index_and_date(self):
+        observation = TeleconnectionObservation.objects.create(
+            index_key=TeleconnectionObservation.IndexKey.NAO,
+            observation_date=date(2020, 1, 1),
+            value=-1.25,
+            source_url="https://example.com/nao",
+        )
+
+        assert str(observation) == "North Atlantic Oscillation on 2020-01-01"
+
+        with pytest.raises(IntegrityError):
+            TeleconnectionObservation.objects.create(
+                index_key=TeleconnectionObservation.IndexKey.NAO,
+                observation_date=date(2020, 1, 1),
+                value=0.5,
+                source_url="https://example.com/nao",
+            )
+
+    def test_historical_weather_preserves_distinct_source_records(self):
+        location = Location.objects.create(name="Austin, TX")
+        station_observation = HistoricalWeatherObservation.objects.create(
+            location=location,
+            observation_date=date(2020, 1, 1),
+            source_kind=HistoricalWeatherObservation.SourceKind.NCEI_STATION,
+            source_identifier="GHCND:USW00013958",
+            high_temperature=62.0,
+            precipitation=0.1,
+        )
+        fallback_observation = HistoricalWeatherObservation.objects.create(
+            location=location,
+            observation_date=date(2020, 1, 1),
+            source_kind=HistoricalWeatherObservation.SourceKind.REANALYSIS,
+            source_identifier="era5",
+            high_temperature=61.0,
+        )
+
+        assert station_observation.source_identifier == "GHCND:USW00013958"
+        assert fallback_observation.source_kind == "reanalysis"
+
+        with pytest.raises(IntegrityError):
+            HistoricalWeatherObservation.objects.create(
+                location=location,
+                observation_date=date(2020, 1, 1),
+                source_kind=HistoricalWeatherObservation.SourceKind.NCEI_STATION,
+            )
 
 
 @pytest.mark.django_db
