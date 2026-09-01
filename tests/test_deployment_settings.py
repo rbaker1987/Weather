@@ -33,3 +33,27 @@ def test_deploy_check_passes_with_production_environment():
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_production_environment_requires_secret_key():
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "DJANGO_DEBUG": "False",
+            "DJANGO_ALLOWED_HOSTS": "weather.example.com",
+            "DJANGO_SECRET_KEY": "django-insecure-local-dev",
+        }
+    )
+    environment.pop("PYTEST_CURRENT_TEST", None)
+
+    result = subprocess.run(
+        [sys.executable, str(MANAGE_PY), "check"],
+        cwd=MANAGE_PY.parent,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "DJANGO_SECRET_KEY must be set in production." in result.stderr
