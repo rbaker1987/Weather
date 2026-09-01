@@ -7,7 +7,6 @@ import pytest
 from django.test import RequestFactory
 
 from weather.api.climate_normals_api import ClimateNormalsAPIView
-from weather.models import Location
 
 
 @pytest.mark.django_db

@@ -17,6 +17,7 @@ from pathlib import Path
 
 import dj_database_url
 from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -28,10 +29,13 @@ load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-local-dev")
+def environment_list(name: str) -> list[str]:
+    return [value.strip() for value in os.getenv(name, "").split(",") if value.strip()]
 
-# SECURITY WARNING: don't run with debug turned on in production!
+
+DEFAULT_SECRET_KEY = "django-insecure-local-dev"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", DEFAULT_SECRET_KEY).strip()
+
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
 IS_TESTING = (
@@ -39,9 +43,12 @@ IS_TESTING = (
     or "pytest" in sys.modules
     or os.getenv("DJANGO_TESTING", "").lower() == "true"
 )
+IS_PRODUCTION = not DEBUG and not IS_TESTING
 
-allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS", "")
-ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+if IS_PRODUCTION and (not SECRET_KEY or SECRET_KEY == DEFAULT_SECRET_KEY):
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
+
+ALLOWED_HOSTS = environment_list("DJANGO_ALLOWED_HOSTS")
 if not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ["testserver", "localhost", "127.0.0.1", "[::1]"]
 
@@ -49,7 +56,10 @@ RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
-CSRF_TRUSTED_ORIGINS = []
+if IS_PRODUCTION and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must be set in production.")
+
+CSRF_TRUSTED_ORIGINS = environment_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 if RENDER_EXTERNAL_HOSTNAME:
     CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_EXTERNAL_HOSTNAME}")
 
@@ -203,16 +213,19 @@ REST_FRAMEWORK = {
 }
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = environment_list("DJANGO_CORS_ALLOWED_ORIGINS")
 
 # Security settings for proxy/SSL deployment
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_SSL_REDIRECT = not DEBUG and not IS_TESTING
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
-SECURE_HSTS_SECONDS = 60 if not DEBUG else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
-SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_SSL_REDIRECT = IS_PRODUCTION
+SESSION_COOKIE_SECURE = IS_PRODUCTION
+CSRF_COOKIE_SECURE = IS_PRODUCTION
+SECURE_HSTS_SECONDS = 31_536_000 if IS_PRODUCTION else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = IS_PRODUCTION
+SECURE_HSTS_PRELOAD = IS_PRODUCTION
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
 
 # Weather app specific settings
 NWS_API_BASE_URL = "https://api.weather.gov"
