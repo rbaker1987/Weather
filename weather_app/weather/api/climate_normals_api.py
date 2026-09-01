@@ -107,7 +107,7 @@ class ClimateNormalsAPIView(APIView):
             if not city or not state:
                 return None, None
 
-            logger.info(f"Found nearest location: {city}, {state}")
+            logger.info("Found nearest location for request")
 
             # Get the forecast grid point
             forecast_url = properties.get("forecast")
@@ -146,7 +146,7 @@ class ClimateNormalsAPIView(APIView):
                 avg_high = sum(highs) / len(highs)
                 avg_low = sum(lows) / len(lows)
                 logger.info(
-                    f"Climate normals for {city}, {state}: High={avg_high}°F, Low={avg_low}°F"
+                    f"Climate normals fetched: High={avg_high}°F, Low={avg_low}°F"
                 )
                 return round(avg_high, 1), round(avg_low, 1)
 

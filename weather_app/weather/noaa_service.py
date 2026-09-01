@@ -43,7 +43,7 @@ def fetch_noaa_forecast(
         points_data = points_resp.json()
 
         if "properties" not in points_data:
-            logger.error(f"No properties in points response: {points_data}")
+            logger.error("No properties in points response")
             return None
 
         props = points_data["properties"]
@@ -52,12 +52,10 @@ def fetch_noaa_forecast(
         office = props.get("cwa")
 
         if not all([grid_x, grid_y, office]):
-            logger.error(
-                f"Missing grid data: gridX={grid_x}, gridY={grid_y}, cwa={office}"
-            )
+            logger.error("Missing required grid data in response")
             return None
 
-        logger.debug(f"Got grid point: office={office}, gridX={grid_x}, gridY={grid_y}")
+        logger.debug("Got grid point data successfully")
 
         # Step 2: Map model to NOAA grid data endpoint
         if model == "GFS":

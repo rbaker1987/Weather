@@ -183,13 +183,15 @@ function applySelectedLocation() {
             const modelMatch = currentPath.match(/\/models\/([^/]+)/);
             if (modelMatch) {
                 const modelName = modelMatch[1];
+                // Validate modelName to prevent open redirect / XSS via javascript: URIs
+                if (!/^[\w-]+$/.test(modelName)) return;
                 setTimeout(() => {
-                    window.location.href = `/models/${modelName}/?latitude=${selectedTempLat}&longitude=${selectedTempLon}&forecast_days=${forecastDays}`;
+                    window.location.href = `/models/${encodeURIComponent(modelName)}/?latitude=${encodeURIComponent(selectedTempLat)}&longitude=${encodeURIComponent(selectedTempLon)}&forecast_days=${encodeURIComponent(forecastDays)}`;
                 }, 150);
             } else {
                 // Models list page: reload with custom coordinates so dropdown picks it up
                 setTimeout(() => {
-                    window.location.href = `/models/?latitude=${selectedTempLat}&longitude=${selectedTempLon}&forecast_days=${forecastDays}`;
+                    window.location.href = `/models/?latitude=${encodeURIComponent(selectedTempLat)}&longitude=${encodeURIComponent(selectedTempLon)}&forecast_days=${encodeURIComponent(forecastDays)}`;
                 }, 150);
             }
         } else if (currentPath.includes('/locations/') || currentPath.includes('/temp-location/')) {
