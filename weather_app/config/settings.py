@@ -49,6 +49,8 @@ if IS_PRODUCTION and (not SECRET_KEY or SECRET_KEY == DEFAULT_SECRET_KEY):
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
 
 ALLOWED_HOSTS = environment_list("DJANGO_ALLOWED_HOSTS")
+if IS_PRODUCTION and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must be set in production.")
 if not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ["testserver", "localhost", "127.0.0.1", "[::1]"]
 
