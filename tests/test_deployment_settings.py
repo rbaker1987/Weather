@@ -11,7 +11,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MANAGE_PY = PROJECT_ROOT / "weather_app" / "manage.py"
 
 
-@pytest.mark.django_db
 def test_deploy_check_passes_with_production_environment():
     environment = os.environ.copy()
     environment.update(
@@ -35,13 +34,14 @@ def test_deploy_check_passes_with_production_environment():
     assert result.returncode == 0, result.stderr
 
 
-def test_production_environment_requires_secret_key():
+@pytest.mark.parametrize("secret_key", ["django-insecure-local-dev", "", "   "])
+def test_production_environment_requires_a_nonempty_secret_key(secret_key):
     environment = os.environ.copy()
     environment.update(
         {
             "DJANGO_DEBUG": "False",
             "DJANGO_ALLOWED_HOSTS": "weather.example.com",
-            "DJANGO_SECRET_KEY": "django-insecure-local-dev",
+            "DJANGO_SECRET_KEY": secret_key,
         }
     )
     environment.pop("PYTEST_CURRENT_TEST", None)

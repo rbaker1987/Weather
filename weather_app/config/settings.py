@@ -34,7 +34,7 @@ def environment_list(name: str) -> list[str]:
 
 
 DEFAULT_SECRET_KEY = "django-insecure-local-dev"
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", DEFAULT_SECRET_KEY)
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", DEFAULT_SECRET_KEY).strip()
 
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
@@ -45,7 +45,7 @@ IS_TESTING = (
 )
 IS_PRODUCTION = not DEBUG and not IS_TESTING
 
-if IS_PRODUCTION and SECRET_KEY == DEFAULT_SECRET_KEY:
+if IS_PRODUCTION and (not SECRET_KEY or SECRET_KEY == DEFAULT_SECRET_KEY):
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
 
 ALLOWED_HOSTS = environment_list("DJANGO_ALLOWED_HOSTS")
