@@ -101,7 +101,7 @@ where = ["."]
 include = ["weather_app*"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

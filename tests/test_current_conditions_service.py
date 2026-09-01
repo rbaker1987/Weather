@@ -1,6 +1,5 @@
 """Tests for current-conditions caching and NWS integration."""
 
-from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
