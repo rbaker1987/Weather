@@ -36,6 +36,7 @@ from .models import (
     ForecastRequest,
     HourlyForecast,
     Location,
+    TeleconnectionObservation,
     WeatherAlert,
 )
 from .serializers import (
@@ -3431,6 +3432,12 @@ class LocationDetailView(DetailView):
         """Override get to trigger forecast update on page load."""
         self.object = self.get_object()
 
+        if not request.user.is_authenticated and self.object.owner_id is None:
+            location_ids = [str(location_id) for location_id in request.session.get("location_ids", [])]
+            if str(self.object.id) not in location_ids:
+                location_ids.append(str(self.object.id))
+                request.session["location_ids"] = location_ids
+
         # Check if forecast needs updating (older than 15 minutes or doesn't exist)
         from datetime import timedelta
 
@@ -3461,6 +3468,14 @@ class LocationDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         location = self.object
+        current_index_values = []
+        for index_key in ("nao", "ao", "pna", "oni", "epo"):
+            latest = TeleconnectionObservation.objects.filter(
+                index_key=index_key
+            ).order_by("-observation_date").first()
+            if latest:
+                current_index_values.append(latest)
+        context["current_index_values"] = current_index_values
 
         # Get all daily forecasts
         all_daily = DailyForecast.objects.filter(location=location).order_by(
