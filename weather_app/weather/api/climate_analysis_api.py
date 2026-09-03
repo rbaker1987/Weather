@@ -65,7 +65,7 @@ class ClimateAnalysisAPIView(APIView):
         last_year = date.today().year - 1
         years = [
             year
-            for year in range(self.first_year + 1, last_year)
+            for year in range(self.first_year + 1, last_year + 1)
             if not (month == 2 and day == 29 and not calendar.isleap(year))
         ]
         calendar_dates = [date(year, month, day) for year in years]
@@ -91,13 +91,13 @@ class ClimateAnalysisAPIView(APIView):
                 return self._queue_backfill(location, month, day, years, index_keys)
             try:
                 importer = ImportClimateDataCommand()
-                first_window = date(min(missing_weather_years), month, day)
-                last_window = date(max(missing_weather_years), month, day)
-                importer._import_weather(
-                    location,
-                    first_window - timedelta(days=half_window),
-                    last_window + timedelta(days=half_window),
-                )
+                for missing_year in missing_weather_years:
+                    center = date(missing_year, month, day)
+                    importer._import_weather(
+                        location,
+                        center - timedelta(days=half_window),
+                        center + timedelta(days=half_window),
+                    )
             except CommandError:
                 logger.exception("Historical weather data loading failed")
                 return Response(
