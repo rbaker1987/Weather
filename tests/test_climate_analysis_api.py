@@ -1,6 +1,6 @@
 """Tests for persisted historical climate analysis API responses."""
 
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 from rest_framework.test import APIClient
@@ -13,35 +13,45 @@ from weather.models import (
 
 
 @pytest.mark.django_db
-def test_climate_analysis_returns_session_location_data_and_correlation():
+def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypatch):
     location = Location.objects.create(name="Austin")
     client = APIClient()
     session = client.session
     session["location_ids"] = [str(location.id)]
     session.save()
-    start_date = date(2020, 1, 1)
-    for day_offset in range(3):
-        observation_date = start_date + timedelta(days=day_offset)
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.ImportClimateDataCommand._import_weather",
+        lambda *args, **kwargs: 0,
+    )
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.ImportClimateDataCommand.import_noaa_calendar_day",
+        lambda *args, **kwargs: 0,
+    )
+    for year in range(2020, 2023):
+        observation_date = date(year, 1, 1)
         TeleconnectionObservation.objects.create(
             index_key="nao",
             observation_date=observation_date,
-            value=float(day_offset + 1),
+            value=float(year - 2019),
             source_url="https://example.com/nao",
         )
         HistoricalWeatherObservation.objects.create(
             location=location,
             observation_date=observation_date,
             source_kind="ncei_station",
-            mean_temperature=float((day_offset + 1) * 10),
+            mean_temperature=float((year - 2019) * 10),
         )
 
     response = client.get(
         "/api/climate-analysis/",
-        {"location_id": str(location.id), "start_date": "2020-01-01", "end_date": "2020-01-03", "index": "nao"},
+        {"location_id": str(location.id), "month": "1", "day": "1", "index": "nao"},
     )
 
     assert response.status_code == 200
     assert len(response.data["weather"]) == 3
+    assert response.data["calendar_day"] == "01-01"
+    assert response.data["year_count"] == 3
+    assert response.data["sample_count"] == 3
     correlation = next(
         item
         for item in response.data["correlations"]
@@ -56,7 +66,18 @@ def test_climate_analysis_rejects_location_not_in_session():
 
     response = APIClient().get(
         "/api/climate-analysis/",
-        {"location_id": str(location.id), "start_date": "2020-01-01", "end_date": "2020-01-03"},
+        {"location_id": str(location.id), "month": "1", "day": "1"},
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_location_detail_registers_anonymous_location_for_climate_analysis():
+    location = Location.objects.create(name="Austin")
+    client = APIClient()
+
+    detail_response = client.get(f"/locations/{location.id}/")
+
+    assert detail_response.status_code == 200
+    assert str(location.id) in client.session["location_ids"]
