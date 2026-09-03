@@ -34,6 +34,7 @@ class ClimateAnalysisAPIView(APIView):
     window_days = 7
     weather_fields = ("mean_temperature", "precipitation", "wind_speed", "snowfall")
     supported_index_keys = ("nao", "ao", "pna", "oni", "epo")
+    max_sync_weather_backfill_years = 5
 
     def get(self, request, *args, **kwargs):
         location_id = request.query_params.get("location_id")
@@ -87,6 +88,20 @@ class ClimateAnalysisAPIView(APIView):
             if any(window_date not in existing_weather_dates for window_date in window_dates):
                 missing_weather_years.append(year)
         if missing_weather_years:
+            if (
+                not getattr(settings, "CELERY_ENABLED", False)
+                and not existing_weather_dates
+                and len(missing_weather_years) > self.max_sync_weather_backfill_years
+            ):
+                return Response(
+                    {
+                        "error": (
+                            "historical weather data is missing for too many years; "
+                            "enable Celery and retry"
+                        )
+                    },
+                    status=503,
+                )
             if getattr(settings, "CELERY_ENABLED", False):
                 return self._queue_backfill(location, month, day, years, index_keys)
             try:

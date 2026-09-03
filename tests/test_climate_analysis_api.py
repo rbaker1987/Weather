@@ -82,3 +82,29 @@ def test_location_detail_registers_anonymous_location_for_climate_analysis():
 
     assert detail_response.status_code == 200
     assert str(location.id) in client.session["location_ids"]
+
+
+@pytest.mark.django_db
+def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, settings):
+    location = Location.objects.create(name="Austin")
+    client = APIClient()
+    session = client.session
+    session["location_ids"] = [str(location.id)]
+    session.save()
+    settings.CELERY_ENABLED = False
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("synchronous weather import should not run for large backfill")
+
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.ImportClimateDataCommand._import_weather",
+        fail_if_called,
+    )
+
+    response = client.get(
+        "/api/climate-analysis/",
+        {"location_id": str(location.id), "month": "1", "day": "1", "index": "nao"},
+    )
+
+    assert response.status_code == 503
+    assert "enable Celery" in response.data["error"]
