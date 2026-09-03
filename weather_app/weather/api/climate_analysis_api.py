@@ -6,6 +6,8 @@ import calendar
 import logging
 from datetime import date, timedelta
 
+from django.conf import settings
+from django.core.cache import cache
 from django.core.management.base import CommandError
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
@@ -46,9 +48,10 @@ class ClimateAnalysisAPIView(APIView):
         except (KeyError, TypeError, ValueError):
             return Response({"error": "month and day must be a valid calendar date"}, status=400)
 
-        index_keys = request.query_params.getlist("index") or list(
-            self.supported_index_keys
-        )
+        index_keys = [
+            index.strip().lower()
+            for index in request.query_params.getlist("index")
+        ] or list(self.supported_index_keys)
         unsupported = set(index_keys) - set(self.supported_index_keys)
         if unsupported:
             return Response({"error": "unsupported climate index"}, status=400)
@@ -84,6 +87,8 @@ class ClimateAnalysisAPIView(APIView):
             if any(window_date not in existing_weather_dates for window_date in window_dates):
                 missing_weather_years.append(year)
         if missing_weather_years:
+            if getattr(settings, "CELERY_ENABLED", False):
+                return self._queue_backfill(location, month, day, years, index_keys)
             try:
                 importer = ImportClimateDataCommand()
                 first_window = date(min(missing_weather_years), month, day)
@@ -110,6 +115,8 @@ class ClimateAnalysisAPIView(APIView):
         ).values("index_key", "observation_date").distinct().count()
         index_loaded = False
         if available_index_count < len(years) * len(supported_index_keys):
+            if getattr(settings, "CELERY_ENABLED", False):
+                return self._queue_backfill(location, month, day, years, index_keys)
             try:
                 index_loaded = ImportClimateDataCommand().import_noaa_calendar_day(
                     month, day, set(missing_weather_years) | set(years), index_keys
@@ -176,6 +183,23 @@ class ClimateAnalysisAPIView(APIView):
             "wind_speed": observation.wind_speed,
             "snowfall": observation.snowfall,
         }
+
+    def _queue_backfill(self, location, month, day, years, index_keys):
+        cache_key = f"climate-backfill:{location.id}:{month:02d}-{day:02d}"
+        if cache.add(cache_key, True, timeout=600):
+            from weather.tasks import load_historical_climate_data
+
+            load_historical_climate_data.delay(
+                str(location.id), month, day, years, index_keys
+            )
+        return Response(
+            {
+                "status": "loading",
+                "calendar_day": f"{month:02d}-{day:02d}",
+                "message": "Historical climate data is being loaded. Run the analysis again shortly.",
+            },
+            status=202,
+        )
 
     def _weekly_weather(self, weather_by_date, years, month, day):
         weekly = {}

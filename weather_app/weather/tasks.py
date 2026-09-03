@@ -19,6 +19,27 @@ from .models import (
 )
 from .services import SyncWeatherService
 
+
+@shared_task
+def load_historical_climate_data(location_id, month, day, years, index_keys):
+    """Backfill the selected centered windows outside the API request cycle."""
+    from datetime import date, timedelta
+
+    from .management.commands.import_climate_data import Command
+
+    location = Location.objects.get(id=location_id, is_active=True)
+    half_window = 3
+    importer = Command()
+    first = date(min(years), month, day)
+    last = date(max(years), month, day)
+    importer._import_weather(
+        location,
+        first - timedelta(days=half_window),
+        last + timedelta(days=half_window),
+    )
+    importer.import_noaa_calendar_day(month, day, years, index_keys)
+    return {"location_id": str(location.id), "status": "complete"}
+
 logger = logging.getLogger("weather")
 
 

@@ -148,8 +148,11 @@ class Command(BaseCommand):
                     observation_date=observation_date,
                     defaults={
                         "value": float(row["value"]),
-                        "source_url": "file://" + str(path.resolve()),
-                        "source_metadata": {"importer": "import_climate_data"},
+                        "source_url": "https://local.invalid/imported-teleconnection-data",
+                        "source_metadata": {
+                            "importer": "import_climate_data",
+                            "filename": path.name,
+                        },
                     },
                 )
                 count += 1

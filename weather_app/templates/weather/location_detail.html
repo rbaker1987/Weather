@@ -974,6 +974,11 @@
               throw new Error(`Climate analysis request returned HTTP ${response.status}.`);
             }
 
+              if (response.status === 202 && data.status === 'loading') {
+                if (climateStatus) climateStatus.textContent = data.message;
+                return;
+              }
+
           if (!response.ok || !data || !Array.isArray(data.correlations)) {
               throw new Error(data?.error || 'Climate analysis request failed.');
           }
