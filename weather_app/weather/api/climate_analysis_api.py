@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar
+import logging
 from datetime import date, timedelta
 
 from django.core.management import CommandError
@@ -10,13 +11,17 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from weather.management.commands.import_climate_data import Command as ImportClimateDataCommand
 from weather.climate_analysis import calculate_pearson_correlation
+from weather.management.commands.import_climate_data import (
+    Command as ImportClimateDataCommand,
+)
 from weather.models import (
     HistoricalWeatherObservation,
     Location,
     TeleconnectionObservation,
 )
+
+logger = logging.getLogger("weather")
 
 
 class ClimateAnalysisAPIView(APIView):
@@ -82,9 +87,10 @@ class ClimateAnalysisAPIView(APIView):
                         calendar_date - timedelta(days=half_window),
                         calendar_date + timedelta(days=half_window),
                     )
-            except CommandError as exc:
+            except CommandError:
+                logger.exception("Historical weather data loading failed")
                 return Response(
-                    {"error": f"historical weather data could not be loaded: {exc}"},
+                    {"error": "historical weather data could not be loaded"},
                     status=502,
                 )
             weather_loaded = True
@@ -102,9 +108,10 @@ class ClimateAnalysisAPIView(APIView):
                 index_loaded = ImportClimateDataCommand().import_noaa_calendar_day(
                     month, day, set(missing_weather_years) | set(years), index_keys
                 ) > 0
-            except CommandError as exc:
+            except CommandError:
+                logger.exception("Climate index data loading failed")
                 return Response(
-                    {"error": f"climate index data could not be loaded: {exc}"},
+                    {"error": "climate index data could not be loaded"},
                     status=502,
                 )
 
