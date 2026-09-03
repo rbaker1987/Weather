@@ -1,6 +1,6 @@
 """Tests for persisted historical climate analysis API responses."""
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from rest_framework.test import APIClient
@@ -35,12 +35,13 @@ def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypat
             value=float(year - 2019),
             source_url="https://example.com/nao",
         )
-        HistoricalWeatherObservation.objects.create(
-            location=location,
-            observation_date=observation_date,
-            source_kind="ncei_station",
-            mean_temperature=float((year - 2019) * 10),
-        )
+        for offset in range(-3, 4):
+            HistoricalWeatherObservation.objects.create(
+                location=location,
+                observation_date=observation_date + timedelta(days=offset),
+                source_kind="ncei_station",
+                mean_temperature=float((year - 2019) * 10 + offset),
+            )
 
     response = client.get(
         "/api/climate-analysis/",

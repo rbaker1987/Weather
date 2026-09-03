@@ -3469,12 +3469,14 @@ class LocationDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         location = self.object
         current_index_values = []
-        for index_key in ("nao", "ao", "pna", "oni", "epo"):
-            latest = TeleconnectionObservation.objects.filter(
-                index_key=index_key
-            ).order_by("-observation_date").first()
-            if latest:
-                current_index_values.append(latest)
+        seen_index_keys = set()
+        indicators = TeleconnectionObservation.objects.filter(
+            index_key__in=("nao", "ao", "pna", "oni", "epo")
+        ).order_by("index_key", "-observation_date")
+        for indicator in indicators:
+            if indicator.index_key not in seen_index_keys:
+                current_index_values.append(indicator)
+                seen_index_keys.add(indicator.index_key)
         context["current_index_values"] = current_index_values
 
         # Get all daily forecasts

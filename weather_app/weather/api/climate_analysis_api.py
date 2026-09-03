@@ -6,7 +6,7 @@ import calendar
 import logging
 from datetime import date, timedelta
 
-from django.core.management import CommandError
+from django.core.management.base import CommandError
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -62,31 +62,37 @@ class ClimateAnalysisAPIView(APIView):
         last_year = date.today().year - 1
         years = [
             year
-            for year in range(self.first_year, last_year + 1)
+            for year in range(self.first_year + 1, last_year)
             if not (month == 2 and day == 29 and not calendar.isleap(year))
         ]
         calendar_dates = [date(year, month, day) for year in years]
         half_window = self.window_days // 2
 
-        weather_queryset = HistoricalWeatherObservation.objects.filter(location=location)
+        required_dates = {
+            window_date
+            for calendar_date in calendar_dates
+            for window_date in self._window_dates(calendar_date)
+        }
+        weather_queryset = HistoricalWeatherObservation.objects.filter(
+            location=location, observation_date__in=required_dates
+        )
         weather_loaded = False
         existing_weather_dates = set(weather_queryset.values_list("observation_date", flat=True))
         missing_weather_years = []
         for year, calendar_date in zip(years, calendar_dates, strict=True):
-            window_start = calendar_date - timedelta(days=half_window)
-            window_dates = [window_start + timedelta(days=offset) for offset in range(self.window_days)]
+            window_dates = self._window_dates(calendar_date)
             if any(window_date not in existing_weather_dates for window_date in window_dates):
                 missing_weather_years.append(year)
         if missing_weather_years:
             try:
                 importer = ImportClimateDataCommand()
-                for year in missing_weather_years:
-                    calendar_date = date(year, month, day)
-                    importer._import_weather(
-                        location,
-                        calendar_date - timedelta(days=half_window),
-                        calendar_date + timedelta(days=half_window),
-                    )
+                first_window = date(min(missing_weather_years), month, day)
+                last_window = date(max(missing_weather_years), month, day)
+                importer._import_weather(
+                    location,
+                    first_window - timedelta(days=half_window),
+                    last_window + timedelta(days=half_window),
+                )
             except CommandError:
                 logger.exception("Historical weather data loading failed")
                 return Response(
@@ -115,7 +121,9 @@ class ClimateAnalysisAPIView(APIView):
                     status=502,
                 )
 
-        observations = weather_queryset.order_by("observation_date", "source_kind")
+        observations = HistoricalWeatherObservation.objects.filter(
+            location=location, observation_date__in=required_dates
+        ).order_by("observation_date", "source_kind")
         weather_by_date = {}
         for observation in observations:
             existing = weather_by_date.get(observation.observation_date)
@@ -178,8 +186,8 @@ class ClimateAnalysisAPIView(APIView):
                 center + timedelta(days=offset)
                 for offset in range(-half_window, half_window + 1)
             ]
-            rows = [weather_by_date[item] for item in window_dates if item in weather_by_date]
-            if not rows:
+            rows = [weather_by_date.get(item) for item in window_dates]
+            if len(rows) != self.window_days or any(row is None for row in rows):
                 continue
             values = {}
             for field in self.weather_fields:
@@ -192,6 +200,13 @@ class ClimateAnalysisAPIView(APIView):
                 **values,
             }
         return weekly
+
+    def _window_dates(self, center):
+        half_window = self.window_days // 2
+        return [
+            center + timedelta(days=offset)
+            for offset in range(-half_window, half_window + 1)
+        ]
 
     def _serialize_indices(self, observations):
         return [
