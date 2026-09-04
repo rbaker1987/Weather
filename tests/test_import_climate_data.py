@@ -39,7 +39,7 @@ def test_import_climate_data_upserts_weather_and_csv_indices(monkeypatch, tmp_pa
     )
     monkeypatch.setattr(
         "weather.management.commands.import_climate_data.requests.get",
-        lambda *args, **kwargs: MockResponse(),
+        lambda *_args, **_kwargs: MockResponse(),
     )
     csv_path = Path(tmp_path) / "indices.csv"
     csv_path.write_text(

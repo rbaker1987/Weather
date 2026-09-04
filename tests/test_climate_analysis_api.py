@@ -96,7 +96,7 @@ def test_location_detail_registers_anonymous_location_for_climate_analysis():
 
 @pytest.mark.django_db
 def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, settings):
-    location = Location.objects.create(name="Austin")
+    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
     session = client.session
     session["location_ids"] = [str(location.id)]
