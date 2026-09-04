@@ -14,19 +14,29 @@ from weather.models import (
 
 @pytest.mark.django_db
 def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypatch):
-    location = Location.objects.create(name="Austin")
+    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
     session = client.session
     session["location_ids"] = [str(location.id)]
     session.save()
     monkeypatch.setattr(
         "weather.api.climate_analysis_api.ImportClimateDataCommand._import_weather",
-        lambda *args, **kwargs: 0,
+        lambda *_args, **_kwargs: 0,
     )
     monkeypatch.setattr(
         "weather.api.climate_analysis_api.ImportClimateDataCommand.import_noaa_calendar_day",
-        lambda *args, **kwargs: 0,
+        lambda *_args, **_kwargs: 0,
     )
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year", 2019,
+    )
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2023, 1, 2)
+
+    monkeypatch.setattr("weather.api.climate_analysis_api.date", FakeDate)
     for year in range(2020, 2023):
         observation_date = date(year, 1, 1)
         TeleconnectionObservation.objects.create(
@@ -75,7 +85,7 @@ def test_climate_analysis_rejects_location_not_in_session():
 
 @pytest.mark.django_db
 def test_location_detail_registers_anonymous_location_for_climate_analysis():
-    location = Location.objects.create(name="Austin")
+    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
 
     detail_response = client.get(f"/locations/{location.id}/")

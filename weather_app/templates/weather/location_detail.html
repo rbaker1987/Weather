@@ -508,7 +508,7 @@
           <div class="climate-current-item">
             <span class="climate-current-label">{% if indicator.index_key == "oni" %}Oceanic Niño Index (ONI){% else %}{{ indicator.index_key|upper }}{% endif %}</span>
             <strong>{{ indicator.value|floatformat:3 }}</strong>
-            <small class="text-muted">{{ indicator.observation_date|date:"M Y" }} · {% if indicator.source_metadata.cadence == "monthly" %}Monthly{% else %}Daily{% endif %}</small>
+            <small class="text-muted">{{ indicator.observation_date|date:"M Y" }} · {% if indicator.source_metadata.cadence == "daily" %}Daily{% else %}Monthly{% endif %}</small>
           </div>
           {% endfor %}
         </div>
@@ -964,7 +964,7 @@
       if (climatePrompt) climatePrompt.classList.add('d-none');
 
       try {
-          const url = `/api/climate-analysis/?location_id=${encodeURIComponent(locationId)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo`;
+          const url = `{% url 'weather:climate-analysis' %}?location_id=${encodeURIComponent(locationId)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo`;
             const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const responseText = await response.text();
             let data;

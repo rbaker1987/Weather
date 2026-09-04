@@ -61,6 +61,10 @@ class ClimateAnalysisAPIView(APIView):
         if location_id not in session_location_ids:
             return Response({"error": "location is not available in this session"}, status=404)
         location = get_object_or_404(Location, id=location_id)
+        if location.latitude is None or location.longitude is None:
+            return Response(
+                {"error": "location does not have coordinates"}, status=400
+            )
 
         # Use completed years only so every sample has a complete centered window.
         last_year = date.today().year - 1
@@ -132,16 +136,9 @@ class ClimateAnalysisAPIView(APIView):
         if available_index_count < len(years) * len(supported_index_keys):
             if getattr(settings, "CELERY_ENABLED", False):
                 return self._queue_backfill(location, month, day, years, index_keys)
-            try:
-                index_loaded = ImportClimateDataCommand().import_noaa_calendar_day(
-                    month, day, set(missing_weather_years) | set(years), index_keys
-                ) > 0
-            except CommandError:
-                logger.exception("Climate index data loading failed")
-                return Response(
-                    {"error": "climate index data could not be loaded"},
-                    status=502,
-                )
+            return Response(
+                {"error": "climate index data is not loaded yet"}, status=503
+            )
 
         observations = HistoricalWeatherObservation.objects.filter(
             location=location, observation_date__in=required_dates

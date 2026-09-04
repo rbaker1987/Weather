@@ -28,15 +28,17 @@ def load_historical_climate_data(location_id, month, day, years, index_keys):
     from .management.commands.import_climate_data import Command
 
     location = Location.objects.get(id=location_id, is_active=True)
+    if location.latitude is None or location.longitude is None:
+        return {"location_id": str(location.id), "status": "missing_coordinates"}
     half_window = 3
     importer = Command()
-    first = date(min(years), month, day)
-    last = date(max(years), month, day)
-    importer._import_weather(
-        location,
-        first - timedelta(days=half_window),
-        last + timedelta(days=half_window),
-    )
+    for year in years:
+        center = date(year, month, day)
+        importer._import_weather(
+            location,
+            center - timedelta(days=half_window),
+            center + timedelta(days=half_window),
+        )
     importer.import_noaa_calendar_day(month, day, years, index_keys)
     return {"location_id": str(location.id), "status": "complete"}
 

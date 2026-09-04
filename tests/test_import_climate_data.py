@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 from django.core.management import call_command
 
-from weather.models import HistoricalWeatherObservation, Location, TeleconnectionObservation
+from weather.models import (
+    HistoricalWeatherObservation,
+    Location,
+    TeleconnectionObservation,
+)
 
 
 class MockResponse:
