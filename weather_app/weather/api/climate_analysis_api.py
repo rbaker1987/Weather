@@ -200,7 +200,12 @@ class ClimateAnalysisAPIView(APIView):
         }
 
     def _queue_backfill(self, location, month, day, years, index_keys):
-        cache_key = f"climate-backfill:{location.id}:{month:02d}-{day:02d}"
+        year_key = ",".join(str(year) for year in sorted(set(years)))
+        index_key = ",".join(sorted(set(index_keys)))
+        cache_key = (
+            f"climate-backfill:{location.id}:{month:02d}-{day:02d}:"
+            f"{year_key}:{index_key}"
+        )
         if cache.add(cache_key, True, timeout=600):
             from weather.tasks import load_historical_climate_data
 
