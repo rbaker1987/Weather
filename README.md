@@ -78,6 +78,38 @@ The server will start at http://127.0.0.1:8000/
 
 To stop the server, press **`Ctrl + C`** in the terminal.
 
+**Importing Historical Climate Data:**
+
+The historical climate analysis compares a centered seven-day average around one
+calendar day (month/day) across every completed year. It loads missing daily weather
+from the Open-Meteo archive and the
+monthly NOAA PSL values for `nao`, `ao`, `pna`, `oni`, and `epo` automatically:
+
+```bash
+python manage.py import_climate_data \
+  --location-id <location-uuid> \
+  --start-date 2025-09-01 \
+  --end-date 2025-09-30 \
+  --teleconnection-file indices.csv
+```
+
+The optional CSV must contain `index,date,value` columns for manual imports. The
+Historical Climate Analysis panel asks for only a month and day, then reports
+annual weather samples and the strongest index relationship for each weather
+value. It also identifies warm, cool, dry, and wet weeks as the top or bottom 10%
+of the selected day's historical weekly distribution. These labels are
+season-agnostic statistical departures, not claims of a heat wave, arctic outbreak,
+drought, or flood.
+NOAA's monthly feed is expanded onto matching calendar dates for each year.
+
+**UI Hint Plan:**
+
+The historical analysis section now includes an inline explanation of its controls,
+data sources, event thresholds, and correlation meaning. Extend this pattern across
+the app in a later pass: inventory each workflow, add short contextual hints near
+the relevant controls, link technical details to help text, and verify hints at
+mobile and desktop widths without obscuring the primary actions.
+
 ## Usage
 
 ### Web Interface

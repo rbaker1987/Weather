@@ -19,6 +19,35 @@ from .models import (
 )
 from .services import SyncWeatherService
 
+
+@shared_task
+def load_historical_climate_data(location_id, month, day, years, index_keys):
+    """Backfill the selected centered windows outside the API request cycle."""
+    from datetime import date, timedelta
+
+    from .management.commands.import_climate_data import Command
+
+    try:
+        location = Location.objects.get(id=location_id, is_active=True)
+    except Location.DoesNotExist:
+        return {"location_id": str(location_id), "status": "location_unavailable"}
+    if location.latitude is None or location.longitude is None:
+        return {"location_id": str(location.id), "status": "missing_coordinates"}
+    half_window = 3
+    importer = Command()
+    for year in years:
+        try:
+            center = date(year, month, day)
+        except ValueError:
+            continue
+        importer._import_weather(
+            location,
+            center - timedelta(days=half_window),
+            center + timedelta(days=half_window),
+        )
+    importer.import_noaa_calendar_day(month, day, years, index_keys)
+    return {"location_id": str(location.id), "status": "complete"}
+
 logger = logging.getLogger("weather")
 
 

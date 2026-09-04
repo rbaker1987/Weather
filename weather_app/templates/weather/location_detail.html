@@ -1,5 +1,4 @@
-{% extends "weather/base.html" %} {% load ui_tags %} {% block title %}{{ location.name
-}} - Weather Details{% endblock %} {% block extra_css %}
+{% extends "weather/base.html" %} {% load ui_tags %} {% block title %}{{ location.name }} - Weather Details{% endblock %} {% block extra_css %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   .export-processing {
@@ -16,6 +15,88 @@
   }
   #radarMap {
     z-index: 1;
+  }
+  .climate-event-summary {
+    border-top: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 0.9rem 0;
+    margin-bottom: 1rem;
+  }
+  .climate-current-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .climate-current-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    padding: 0.45rem 0.6rem;
+    border-left: 3px solid var(--weather-info);
+    background: var(--weather-bg-2);
+  }
+  .climate-current-label {
+    font-weight: 600;
+    color: var(--weather-primary);
+  }
+  @media (max-width: 768px) {
+    .climate-current-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 480px) {
+    .climate-current-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .climate-results-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    align-items: start;
+  }
+  @media (max-width: 768px) {
+    .climate-results-columns {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+  }
+  .climate-subsection-title {
+    color: var(--weather-primary);
+    margin-bottom: 0.35rem;
+  }
+  .climate-event-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+  .climate-event-grid > .fw-semibold {
+    grid-column: 1 / -1;
+  }
+  .climate-event-grid > .col-12:not(.fw-semibold) {
+    width: auto;
+  }
+  .climate-event-item {
+    border-left: 3px solid var(--weather-accent);
+    padding: 0.55rem 0.7rem;
+    background: var(--weather-bg-2);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .climate-ranking-item {
+    border-left: 3px solid var(--weather-primary);
+    padding: 0.55rem 0.7rem;
+    background: var(--weather-bg-2);
+  }
+  @media (max-width: 768px) {
+    .climate-event-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 480px) {
+    .climate-event-grid {
+      grid-template-columns: 1fr;
+    }
   }
   /* Uniform small hourly forecast icons */
   /* Unified icon sizing across all forecast displays */
@@ -72,10 +153,7 @@
       </div>
       <div>
         <div class="row g-2 align-items-end page-actions">
-          {% include "weather/components/location_selector.html" with
-          locations=locations current_location_id=location.id latitude=location.latitude
-          longitude=location.longitude location_col_class='col-12 col-md-auto'
-          map_btn_col_class='col-12 col-md-auto' %} {% if not is_temp_location %}
+          {% include "weather/components/location_selector.html" with locations=locations current_location_id=location.id latitude=location.latitude longitude=location.longitude location_col_class='col-12 col-md-auto' map_btn_col_class='col-12 col-md-auto' %} {% if not is_temp_location %}
           <div class="col-12 col-md-auto">
             <button
               class="btn btn-outline-primary"
@@ -105,8 +183,7 @@
   <div class="col-md-8">
     <div class="card weather-card">
       <div class="card-header">
-        {% include "weather/components/section_header.html" with icon="info-circle"
-        title="Location Information" %}
+        {% include "weather/components/section_header.html" with icon="info-circle" title="Location Information" %}
       </div>
       <div class="card-body">
         <div class="row">
@@ -120,8 +197,7 @@
             <p class="mb-2" style="font-size: 1.1rem">
               <strong>Coordinates:</strong>
               <span class="location-coordinates">
-                {{ location.latitude|floatformat:4 }}, {{
-                location.longitude|floatformat:4 }}
+                {{ location.latitude|floatformat:4 }}, {{ location.longitude|floatformat:4 }}
               </span>
             </p>
             {% endif %}
@@ -136,8 +212,7 @@
             <p class="mb-2" style="font-size: 1.1rem">
               <strong>Grid:</strong> {{ location.grid_x }}, {{ location.grid_y }}
             </p>
-            {% endif %} {% include "weather/components/forecast_update_timestamp.html"
-            with location=location extra_classes='text-muted' show_label=True %}
+            {% endif %} {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-muted' show_label=True %}
           </div>
         </div>
       </div>
@@ -154,8 +229,7 @@
         <span class="badge bg-success mb-2" style="font-size: 1.1rem">
           <i class="fas fa-check"></i> Active
         </span>
-        {% include "weather/components/forecast_update_timestamp.html" with
-        location=location extra_classes='text-muted' show_label=True %} {% else %}
+        {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-muted' show_label=True %} {% else %}
         <span class="badge bg-warning mb-2" style="font-size: 1.1rem">
           <i class="fas fa-exclamation-triangle"></i> No Data
         </span>
@@ -420,16 +494,136 @@
 </div>
 {% endif %}
 
+<!-- Current Climate Indicators -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-header">
+        {% include "weather/components/section_header.html" with icon="globe-americas" title="Latest Available Climate Indicators" %}
+      </div>
+      <div class="card-body">
+        {% if current_index_values %}
+        <div class="climate-current-grid">
+          {% for indicator in current_index_values %}
+          <div class="climate-current-item">
+            <span class="climate-current-label">{% if indicator.index_key == "oni" %}Oceanic Niño Index (ONI){% else %}{{ indicator.index_key|upper }}{% endif %}</span>
+            <strong>{{ indicator.value|floatformat:3 }}</strong>
+            <small class="text-muted">{{ indicator.observation_date|date:"M Y" }} · {% if indicator.source_metadata.cadence == "daily" %}Daily{% else %}Monthly{% endif %}</small>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No current climate-index values are available yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Historical Climate Analysis -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          {% include "weather/components/section_header.html" with icon="chart-line" title="Historical Climate Analysis" %}
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-light rounded-circle"
+          data-bs-toggle="modal"
+          data-bs-target="#climateAnalysisHelpModal"
+          aria-label="About historical climate analysis"
+          title="About this analysis"
+        >
+          <i class="fas fa-question"></i>
+        </button>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 mb-3 align-items-end">
+          <div class="col-md-3">
+            <label for="climateAnalysisMonth" class="form-label">Month</label>
+            <select id="climateAnalysisMonth" class="form-select">
+              <option value="1">January</option><option value="2">February</option>
+              <option value="3">March</option><option value="4">April</option>
+              <option value="5">May</option><option value="6">June</option>
+              <option value="7">July</option><option value="8">August</option>
+              <option value="9">September</option><option value="10">October</option>
+              <option value="11">November</option><option value="12">December</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label for="climateAnalysisDay" class="form-label">Day</label>
+            <select id="climateAnalysisDay" class="form-select"></select>
+          </div>
+          <div class="col-md-6">
+            <button id="runClimateAnalysisBtn" class="btn btn-primary w-100">
+              <i class="fas fa-chart-line"></i> Run analysis
+            </button>
+          </div>
+        </div>
+        <div id="climateAnalysisStatus" class="mb-2 text-muted small"></div>
+        <div class="climate-results-columns">
+          <div id="climateAnalysisHighlights" class="row g-2 mb-3 d-none"></div>
+          <div id="climateEventPanel" class="climate-event-summary d-none">
+          <h6 class="climate-subsection-title">Unusual weather relationships</h6>
+          <p class="text-muted small mb-2">Climate indexes most associated with warm, cool, dry, and wet weeks for the selected calendar day.</p>
+          <div id="climateEventHighlights" class="climate-event-grid"></div>
+          </div>
+        </div>
+        <div id="climateAnalysisEmpty" class="alert alert-light border d-none mb-0">
+          No historical climate correlations are available for the selected week.
+        </div>
+        <div id="climateAnalysisPrompt" class="text-muted small">Choose a month and day, then click Run analysis to load the historical weather and climate-index data.</div>
+        <div id="climateAnalysisResults" class="table-responsive d-none">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>NAO</th>
+                <th>AO</th>
+                <th>PNA</th>
+                <th>ONI</th>
+                <th>EPO</th>
+              </tr>
+            </thead>
+            <tbody id="climateAnalysisTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="climateAnalysisHelpModal" tabindex="-1" aria-labelledby="climateAnalysisHelpTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="climateAnalysisHelpTitle">About Historical Climate Analysis</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Choose a month and day, then run the analysis. Each result uses a centered 7-day weather average for that calendar day across completed years only, so every sample includes the full week.</p>
+        <p class="mb-2">Unusual weeks are defined from that historical distribution:</p>
+        <ul>
+          <li>Warm: warmest 10%</li>
+          <li>Cool: coolest 10%</li>
+          <li>Wet: wettest 10%</li>
+          <li>Dry: driest 10%</li>
+        </ul>
+        <p class="mb-0">NOAA climate indexes describe broad climate patterns. A correlation near +1 or -1 is stronger than one near 0, but it shows association, not causation.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- NWS Hourly -->
 <div class="row mb-4">
   <div class="col-12">
     <div class="card weather-card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <div>
-          {% include "weather/components/section_header.html" with icon="clock"
-          title="NWS Hourly" %} {% include
-          "weather/components/forecast_update_timestamp.html" with location=location
-          extra_classes='text-white d-block mt-1' show_label=True %}
+          {% include "weather/components/section_header.html" with icon="clock" title="NWS Hourly" %} {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
         </div>
         <button
           onclick="exportSectionAsImage('next24HoursBody')"
@@ -467,8 +661,7 @@
               NWS Daily
             {% endif %}
           </h5>
-          {% include "weather/components/forecast_update_timestamp.html" with
-          location=location extra_classes='text-white d-block mt-1' show_label=True %}
+          {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
         </div>
         <button
           onclick="exportForecastAsImage()"
@@ -488,11 +681,7 @@
                 <strong>{{ day_group.date|date:"D, M j" }}</strong>
               </div>
               <div class="card-body p-0 d-flex flex-column">
-                {% if day_group.day %} {% include
-                "weather/components/forecast_period_card.html" with period=day_group.day
-                period_type="day" %} {% endif %} {% if day_group.night %} {% include
-                "weather/components/forecast_period_card.html" with
-                period=day_group.night period_type="night" %} {% endif %}
+                {% if day_group.day %} {% include "weather/components/forecast_period_card.html" with period=day_group.day period_type="day" %} {% endif %} {% if day_group.night %} {% include "weather/components/forecast_period_card.html" with period=day_group.night period_type="night" %} {% endif %}
               </div>
             </div>
           </div>
@@ -519,8 +708,7 @@
               NWS Hourly for {{ location.display_name }}
             {% endif %}
           </h5>
-          {% include "weather/components/forecast_update_timestamp.html" with
-          location=location extra_classes='text-white d-block mt-1' show_label=True %}
+          {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
         </div>
         <button
           onclick="exportSectionAsImage('hourlyForecastTable')"
@@ -583,8 +771,7 @@
   <div class="col-12">
     <div class="card weather-card">
       <div class="card-header">
-        {% include "weather/components/section_header.html" with icon="cloud-sun"
-        title="Weather Model Comparison" %}
+          {% include "weather/components/section_header.html" with icon="cloud-sun" title="Weather Model Comparison" %}
       </div>
       <div class="card-body">
         <p class="text-muted mb-3">
@@ -654,9 +841,7 @@
     <div class="card weather-card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <div>
-          {% include "weather/components/section_header.html" with
-          icon="broadcast-tower" title="Radar" icon_class="text-white" %} {% include
-          "weather/components/radar_timestamp.html" %}
+          {% include "weather/components/section_header.html" with icon="broadcast-tower" title="Radar" icon_class="text-white" %} {% include "weather/components/radar_timestamp.html" %}
         </div>
         <div class="btn-group">
           <button
@@ -670,9 +855,7 @@
         </div>
       </div>
       <div class="card-body p-0">
-        {% include 'weather/components/radar_map.html' with map_id='radarMap'
-        lat=location.latitude lon=location.longitude location_name=location.display_name
-        no_wrapper=True hide_header=True %}
+        {% include 'weather/components/radar_map.html' with map_id='radarMap' lat=location.latitude lon=location.longitude location_name=location.display_name no_wrapper=True hide_header=True %}
       </div>
     </div>
   </div>
@@ -704,9 +887,219 @@
           });
       });
 
+        const climateMonthInput = document.getElementById('climateAnalysisMonth');
+        const climateDayInput = document.getElementById('climateAnalysisDay');
+        if (climateMonthInput && climateDayInput) {
+          const today = new Date();
+          climateMonthInput.value = String(today.getMonth() + 1);
+            const updateClimateDays = () => {
+              const selectedDay = Number(climateDayInput.value) || today.getDate();
+              const daysInMonth = new Date(2000, Number(climateMonthInput.value), 0).getDate();
+              climateDayInput.replaceChildren();
+              for (let day = 1; day <= daysInMonth; day += 1) {
+                const option = document.createElement('option');
+                option.value = String(day);
+                option.textContent = String(day);
+                climateDayInput.appendChild(option);
+              }
+              climateDayInput.value = String(Math.min(selectedDay, daysInMonth));
+            };
+            climateMonthInput.addEventListener('change', updateClimateDays);
+            updateClimateDays();
+      }
+
+      const runClimateBtn = document.getElementById('runClimateAnalysisBtn');
+      if (runClimateBtn) {
+          runClimateBtn.addEventListener('click', loadClimateAnalysis);
+      }
+
       // Load next 24 hours forecast
       loadNext24Hours();
   });
+
+  async function loadClimateAnalysis() {
+      const locationId = '{{ location.id|default:"None" }}';
+      const climateStatus = document.getElementById('climateAnalysisStatus');
+      const climateResults = document.getElementById('climateAnalysisResults');
+      const climateEmpty = document.getElementById('climateAnalysisEmpty');
+      const climateHighlights = document.getElementById('climateAnalysisHighlights');
+      const climateEventHighlights = document.getElementById('climateEventHighlights');
+      const climateEventPanel = document.getElementById('climateEventPanel');
+      const climatePrompt = document.getElementById('climateAnalysisPrompt');
+      const tableBody = document.getElementById('climateAnalysisTableBody');
+      const climateMonthInput = document.getElementById('climateAnalysisMonth');
+      const climateDayInput = document.getElementById('climateAnalysisDay');
+      const displayIndex = (index) => (index || 'N/A').toUpperCase();
+
+      if (!locationId || locationId === 'None' || !climateMonthInput || !climateDayInput) {
+          if (climateStatus) {
+              climateStatus.textContent = 'Historical climate analysis is only available for saved locations.';
+          }
+          if (climateResults) climateResults.classList.add('d-none');
+          if (climateHighlights) climateHighlights.classList.add('d-none');
+          if (climateEmpty) climateEmpty.classList.remove('d-none');
+          return;
+      }
+
+        const month = climateMonthInput.value;
+        const day = climateDayInput.value;
+        if (!month || !day) {
+          if (climateStatus) {
+            climateStatus.textContent = 'Choose a valid calendar day to run the climate analysis.';
+          }
+          return;
+      }
+
+      if (climateStatus) {
+          climateStatus.textContent = 'Loading historical climate relationships...';
+      }
+      if (climateResults) climateResults.classList.add('d-none');
+        if (climateHighlights) {
+          climateHighlights.replaceChildren();
+          climateHighlights.classList.add('d-none');
+        }
+      if (climateEventHighlights) climateEventHighlights.replaceChildren();
+      if (climateEventPanel) climateEventPanel.classList.add('d-none');
+      if (climateEmpty) climateEmpty.classList.add('d-none');
+      if (climatePrompt) climatePrompt.classList.add('d-none');
+
+      try {
+          const url = `{% url 'weather:climate-analysis' %}?location_id=${encodeURIComponent(locationId)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo`;
+            const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const responseText = await response.text();
+            let data;
+            try {
+              data = JSON.parse(responseText);
+            } catch (parseError) {
+              throw new Error(`Climate analysis request returned HTTP ${response.status}.`);
+            }
+
+              if (response.status === 202 && data.status === 'loading') {
+                if (climateStatus) climateStatus.textContent = data.message;
+                return;
+              }
+
+          if (!response.ok || !data || !Array.isArray(data.correlations)) {
+              throw new Error(data?.error || 'Climate analysis request failed.');
+          }
+
+          if (!tableBody) {
+              return;
+          }
+
+          if (data.correlations.length === 0) {
+              if (climateEmpty) climateEmpty.classList.remove('d-none');
+              if (climateStatus) {
+                climateStatus.textContent = data.indexes_available
+                  ? (data.weather_loaded
+                    ? 'Historical weather data was loaded, but no matched climate observations were found for this week.'
+                    : 'No matched climate observations were found for this week.')
+                  : 'No published climate-index values are available for this selected week yet.';
+              }
+              return;
+          }
+
+              if (climatePrompt) climatePrompt.classList.add('d-none');
+
+              const strongestByVariable = new Map();
+              data.correlations.forEach((item) => {
+                if (item.value == null) return;
+                const current = strongestByVariable.get(item.weather_variable);
+                if (!current || Math.abs(Number(item.value)) > Math.abs(Number(current.value))) {
+                  strongestByVariable.set(item.weather_variable, item);
+                }
+              });
+              if (climateHighlights) {
+                climateHighlights.replaceChildren();
+                const heading = document.createElement('div');
+                heading.className = 'col-12 fw-semibold';
+                heading.textContent = 'Strongest relationship by weather value';
+                climateHighlights.appendChild(heading);
+                [...strongestByVariable.values()].forEach((item) => {
+                  const col = document.createElement('div');
+                  col.className = 'col-12 col-md-6 col-xl-3';
+                  const summary = document.createElement('div');
+                  summary.className = 'climate-ranking-item';
+                  const variable = item.weather_variable.replace(/_/g, ' ');
+                  const displayVariable = variable.replace(/\b\w/g, (letter) => letter.toUpperCase());
+                  summary.textContent = `${displayVariable}: ${displayIndex(item.index)} (${Number(item.value).toFixed(3)})`;
+                  col.appendChild(summary);
+                  climateHighlights.appendChild(col);
+                });
+                climateHighlights.classList.remove('d-none');
+              }
+
+              if (climateEventHighlights && Array.isArray(data.event_correlations)) {
+                const strongestEvents = new Map();
+                data.event_correlations.forEach((item) => {
+                  if (item.value == null) return;
+                  const current = strongestEvents.get(item.event);
+                  if (!current || Math.abs(Number(item.value)) > Math.abs(Number(current.value))) {
+                    strongestEvents.set(item.event, item);
+                  }
+                });
+                if (strongestEvents.size) {
+                  const heading = document.createElement('div');
+                  heading.className = 'col-12 fw-semibold';
+                  heading.textContent = 'Strongest index relationships for unusual weeks';
+                  climateEventHighlights.appendChild(heading);
+                  strongestEvents.forEach((item) => {
+                    const col = document.createElement('div');
+                    col.className = 'col-12 col-md-6 col-xl-3';
+                    const summary = document.createElement('div');
+                    summary.className = 'climate-event-item';
+                    const label = item.event.replace(/_/g, ' ');
+                    const displayLabel = label.charAt(0).toUpperCase() + label.slice(1);
+                    summary.textContent = `${displayLabel}: ${displayIndex(item.index)} (${Number(item.value).toFixed(3)})`;
+                    col.appendChild(summary);
+                    climateEventHighlights.appendChild(col);
+                  });
+                  climateEventHighlights.classList.remove('d-none');
+                  if (climateEventPanel) climateEventPanel.classList.remove('d-none');
+                }
+              }
+
+              const indexOrder = ['nao', 'ao', 'pna', 'oni', 'epo'];
+              const groupedCorrelations = new Map();
+              data.correlations.forEach((item) => {
+                if (!groupedCorrelations.has(item.weather_variable)) {
+                  groupedCorrelations.set(item.weather_variable, new Map());
+                }
+                groupedCorrelations.get(item.weather_variable).set(item.index, item);
+              });
+          const fragment = document.createDocumentFragment();
+              groupedCorrelations.forEach((indexValues, weatherVariable) => {
+              const row = document.createElement('tr');
+
+              const variableCell = document.createElement('td');
+              variableCell.textContent = weatherVariable.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+              row.appendChild(variableCell);
+
+              indexOrder.forEach((indexKey) => {
+                const cell = document.createElement('td');
+                const item = indexValues.get(indexKey);
+                cell.textContent = !item || item.value == null
+                    ? 'N/A'
+                  : Number(item.value).toFixed(3);
+                row.appendChild(cell);
+              });
+
+              fragment.appendChild(row);
+          });
+
+          tableBody.replaceChildren(fragment);
+          if (climateResults) climateResults.classList.remove('d-none');
+          if (climateStatus) {
+                climateStatus.textContent = `Showing ${data.correlations.length} correlations for the centered week around ${data.calendar_day} across ${data.year_count} completed years.`;
+          }
+      } catch (error) {
+          console.error('Climate analysis failed:', error);
+          if (climateStatus) {
+              climateStatus.textContent = error.message || 'Climate analysis could not be loaded.';
+          }
+          if (climateEmpty) climateEmpty.classList.remove('d-none');
+      }
+  }
 
   // Load next 24 hours forecast for location
   async function loadNext24Hours() {
@@ -715,7 +1108,6 @@
           console.warn('next24HoursBody element not found');
           return;
       }
-
       const loadingWrap = document.createElement('div');
       loadingWrap.className = 'text-center py-4';
       const loadingSpinner = document.createElement('div');
@@ -1191,6 +1583,7 @@
                   break;
               }
           }
+
       }
       return cookieValue;
   }
