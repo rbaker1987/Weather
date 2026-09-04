@@ -139,6 +139,7 @@ class ClimateAnalysisAPIView(APIView):
             return Response(
                 {"error": "climate index data is not loaded yet"}, status=503
             )
+        index_loaded = available_index_count > 0
 
         observations = HistoricalWeatherObservation.objects.filter(
             location=location, observation_date__in=required_dates

@@ -27,7 +27,10 @@ def load_historical_climate_data(location_id, month, day, years, index_keys):
 
     from .management.commands.import_climate_data import Command
 
-    location = Location.objects.get(id=location_id, is_active=True)
+    try:
+        location = Location.objects.get(id=location_id, is_active=True)
+    except Location.DoesNotExist:
+        return {"location_id": str(location_id), "status": "location_unavailable"}
     if location.latitude is None or location.longitude is None:
         return {"location_id": str(location.id), "status": "missing_coordinates"}
     half_window = 3
