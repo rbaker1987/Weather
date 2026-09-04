@@ -9,7 +9,6 @@ from pathlib import Path
 
 import requests
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
 
 from weather.models import (
     HistoricalWeatherObservation,
@@ -40,7 +39,6 @@ class Command(BaseCommand):
             help="CSV with index,date,value columns; dates may be YYYY-MM-DD",
         )
 
-    @transaction.atomic
     def handle(self, *args, **options):
         location = self._get_location(options["location_id"])
         start_date = self._as_date(options["start_date"])
@@ -48,9 +46,12 @@ class Command(BaseCommand):
         self._validate_dates(start_date, end_date)
 
         weather_count = self._import_weather(location, start_date, end_date)
-        index_count = 0
         if options.get("teleconnection_file"):
             index_count = self._import_teleconnections(options["teleconnection_file"])
+        else:
+            index_count = self.import_noaa_indices(
+                start_date, end_date, self.index_urls.keys()
+            )
 
         self.stdout.write(
             self.style.SUCCESS(

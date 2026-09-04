@@ -36,7 +36,10 @@ def load_historical_climate_data(location_id, month, day, years, index_keys):
     half_window = 3
     importer = Command()
     for year in years:
-        center = date(year, month, day)
+        try:
+            center = date(year, month, day)
+        except ValueError:
+            continue
         importer._import_weather(
             location,
             center - timedelta(days=half_window),

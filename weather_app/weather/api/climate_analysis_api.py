@@ -107,7 +107,9 @@ class ClimateAnalysisAPIView(APIView):
                     status=503,
                 )
             if getattr(settings, "CELERY_ENABLED", False):
-                return self._queue_backfill(location, month, day, years, index_keys)
+                return self._queue_backfill(
+                    location, month, day, missing_weather_years, index_keys
+                )
             try:
                 importer = ImportClimateDataCommand()
                 for missing_year in missing_weather_years:
