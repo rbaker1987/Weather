@@ -1,10 +1,12 @@
 """Tests for persisted historical climate analysis API responses."""
 
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 import pytest
 from rest_framework.test import APIClient
 
+from weather.api.climate_analysis_api import ClimateAnalysisAPIView
 from weather.models import (
     HistoricalWeatherObservation,
     Location,
@@ -84,6 +86,19 @@ def test_climate_analysis_rejects_location_not_in_session():
 
 
 @pytest.mark.django_db
+def test_climate_analysis_validates_required_parameters():
+    client = APIClient()
+    assert client.get("/api/climate-analysis/").status_code == 400
+    assert client.get(
+        "/api/climate-analysis/", {"location_id": "x", "month": "13", "day": "1"}
+    ).status_code == 400
+    assert client.get(
+        "/api/climate-analysis/",
+        {"location_id": "x", "month": "1", "day": "1", "index": "bad"},
+    ).status_code == 400
+
+
+@pytest.mark.django_db
 def test_location_detail_registers_anonymous_location_for_climate_analysis():
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
@@ -118,3 +133,100 @@ def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, setti
 
     assert response.status_code == 503
     assert "enable Celery" in response.data["error"]
+
+
+@pytest.mark.django_db
+def test_climate_analysis_rejects_location_without_coordinates():
+    location = Location.objects.create(name="No Coordinates")
+    client = APIClient()
+    session = client.session
+    session["location_ids"] = [str(location.id)]
+    session.save()
+
+    response = client.get(
+        "/api/climate-analysis/",
+        {"location_id": str(location.id), "month": "1", "day": "1"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_climate_analysis_helpers_average_complete_windows_and_events():
+    view = ClimateAnalysisAPIView()
+    weekly = {}
+    for year in range(2015, 2025):
+        center = date(year, 6, 15)
+        weather = {
+            field: float(year - 2010 + offset)
+            for offset, field in enumerate(view.weather_fields)
+        }
+        weekly[center] = {
+            "date": center.isoformat(),
+            "source_kind": "weekly_average",
+            "source_identifier": "test",
+            **weather,
+        }
+    rows = {
+        center + timedelta(days=offset): SimpleNamespace(
+            mean_temperature=80 + year,
+            precipitation=0.1,
+            wind_speed=5,
+            snowfall=0,
+        )
+        for year, center in [(year, date(year, 6, 15)) for year in range(2015, 2025)]
+        for offset in range(-3, 4)
+    }
+    averaged = view._weekly_weather(rows, range(2015, 2025), 6, 15)
+    assert len(averaged) == 10
+    correlations = view._correlations(
+        [{"index": "nao", "date": center.isoformat(), "value": float(index)}
+         for index, center in enumerate(weekly)],
+        weekly,
+    )
+    assert len(correlations) == 4
+    events, thresholds = view._event_correlations(
+        [{"index": "nao", "date": center.isoformat(), "value": float(index)}
+         for index, center in enumerate(weekly)],
+        weekly,
+    )
+    assert len(events) == 4
+    assert set(thresholds) == {"warm", "cool", "dry", "wet"}
+
+
+def test_climate_analysis_serialization_helpers():
+    view = ClimateAnalysisAPIView()
+    observation = SimpleNamespace(
+        observation_date=date(2025, 6, 15),
+        source_kind="reanalysis",
+        source_identifier="archive",
+        mean_temperature=80,
+        precipitation=0.1,
+        wind_speed=5,
+        snowfall=0,
+    )
+    serialized = view._serialize_weather(observation)
+    assert serialized["date"] == "2025-06-15"
+    assert view._serialize_weather({"date": "x"}) == {"date": "x"}
+    assert view._weather_value(None, "mean_temperature") is None
+    assert view._weather_value({"mean_temperature": 80}, "mean_temperature") == 80
+    assert view._weather_value(observation, "mean_temperature") == 80
+    assert len(view._window_dates(date(2025, 6, 15))) == 7
+
+
+@pytest.mark.django_db
+def test_climate_analysis_serializes_index_observations():
+    observation = TeleconnectionObservation.objects.create(
+        index_key="nao",
+        observation_date=date(2025, 6, 15),
+        value=0.5,
+        source_url="https://example.com/nao",
+    )
+    serialized = ClimateAnalysisAPIView()._serialize_indices([observation])
+    assert serialized == [
+        {
+            "index": "nao",
+            "date": "2025-06-15",
+            "value": 0.5,
+            "source_url": "https://example.com/nao",
+        }
+    ]

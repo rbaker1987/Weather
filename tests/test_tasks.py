@@ -50,6 +50,27 @@ class TestEnqueueHelpers:
 
 @pytest.mark.django_db
 class TestBackgroundTasks:
+    def test_climate_backfill_handles_missing_location_and_invalid_year(self):
+        missing = tasks.load_historical_climate_data.run(
+            str(uuid4()), 2, 29, [2023], ["nao"]
+        )
+        assert missing["status"] == "location_unavailable"
+
+        location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
+        with patch(
+            "weather.management.commands.import_climate_data.Command"
+        ) as importer_class:
+            importer = importer_class.return_value
+            result = tasks.load_historical_climate_data.run(
+                str(location.id), 2, 29, [2023, 2024], ["nao"]
+            )
+
+        assert result["status"] == "complete"
+        assert importer._import_weather.call_count == 1
+        importer.import_noaa_calendar_day.assert_called_once_with(
+            2, 29, [2023, 2024], ["nao"]
+        )
+
     def test_update_location_forecast_success_and_not_found(self):
         location = Location.objects.create(name="Austin")
         result = {"success": True, "daily_forecasts": 2, "hourly_forecasts": 4}
