@@ -5,6 +5,7 @@ from __future__ import annotations
 import calendar
 import logging
 from datetime import date, timedelta
+from math import ceil
 
 from django.conf import settings
 from django.core.cache import cache
@@ -306,8 +307,12 @@ class ClimateAnalysisAPIView(APIView):
             if len(values) < 5:
                 continue
             ordered = sorted(values)
-            threshold_index = max(0, min(len(ordered) - 1, int(len(ordered) * 0.9) - 1))
-            threshold = ordered[threshold_index] if direction == "high" else ordered[len(ordered) - 1 - threshold_index]
+            event_count = max(1, ceil(len(ordered) * 0.1))
+            threshold = (
+                ordered[-event_count]
+                if direction == "high"
+                else ordered[event_count - 1]
+            )
             thresholds[event_name] = round(threshold, 2)
             for center, item in weekly_weather.items():
                 value = item.get(field)

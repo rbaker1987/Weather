@@ -508,7 +508,7 @@
           <div class="climate-current-item">
             <span class="climate-current-label">{% if indicator.index_key == "oni" %}Oceanic Niño Index (ONI){% else %}{{ indicator.index_key|upper }}{% endif %}</span>
             <strong>{{ indicator.value|floatformat:3 }}</strong>
-            <small class="text-muted">{{ indicator.observation_date|date:"M Y" }} · {% if indicator.source_metadata.cadence == "daily" %}Daily{% else %}Monthly{% endif %}</small>
+            <small class="text-muted">{{ indicator.observation_date|date:"M Y" }} · {% if indicator.source_metadata.cadence == "daily" %}Daily{% elif indicator.source_metadata.cadence == "monthly" %}Monthly{% else %}Unknown cadence{% endif %}</small>
           </div>
           {% endfor %}
         </div>

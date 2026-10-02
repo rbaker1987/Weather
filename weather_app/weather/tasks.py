@@ -25,6 +25,8 @@ def load_historical_climate_data(location_id, month, day, years, index_keys):
     """Backfill the selected centered windows outside the API request cycle."""
     from datetime import date, timedelta
 
+    from django.core.management.base import CommandError
+
     from .management.commands.import_climate_data import Command
 
     try:
@@ -45,7 +47,15 @@ def load_historical_climate_data(location_id, month, day, years, index_keys):
             center - timedelta(days=half_window),
             center + timedelta(days=half_window),
         )
-    importer.import_noaa_calendar_day(month, day, years, index_keys)
+    try:
+        importer.import_noaa_calendar_day(month, day, years, index_keys)
+    except CommandError as exc:
+        logger.exception("Historical climate backfill failed")
+        return {
+            "location_id": str(location.id),
+            "status": "failed",
+            "error": str(exc),
+        }
     return {"location_id": str(location.id), "status": "complete"}
 
 logger = logging.getLogger("weather")
