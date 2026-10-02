@@ -206,6 +206,80 @@ class Location(TimeStampedModel):
             return None
 
 
+class TeleconnectionObservation(TimeStampedModel):
+    """A dated value for a published large-scale climate index."""
+
+    class IndexKey(models.TextChoices):
+        ONI = "oni", "Oceanic Nino Index"
+        AO = "ao", "Arctic Oscillation"
+        NAO = "nao", "North Atlantic Oscillation"
+        PNA = "pna", "Pacific-North American Pattern"
+        EPO = "epo", "East Pacific Oscillation"
+        WPO = "wpo", "West Pacific Oscillation"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    index_key = models.CharField(max_length=12, choices=IndexKey.choices)
+    observation_date = models.DateField()
+    value = models.FloatField()
+    source_url = models.URLField(max_length=500)
+    source_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["index_key", "observation_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["index_key", "observation_date"],
+                name="unique_teleconnection_index_date",
+            )
+        ]
+        indexes = [models.Index(fields=["index_key", "observation_date"])]
+
+    def __str__(self):
+        return f"{self.get_index_key_display()} on {self.observation_date}"
+
+
+class HistoricalWeatherObservation(TimeStampedModel):
+    """Daily historical weather for a location with traceable source provenance."""
+
+    class SourceKind(models.TextChoices):
+        NCEI_STATION = "ncei_station", "NCEI station observation"
+        REANALYSIS = "reanalysis", "Reanalysis fallback"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    location = models.ForeignKey(
+        Location,
+        on_delete=models.CASCADE,
+        related_name="historical_weather_observations",
+    )
+    observation_date = models.DateField()
+    source_kind = models.CharField(max_length=20, choices=SourceKind.choices)
+    source_identifier = models.CharField(max_length=100, blank=True)
+    source_url = models.URLField(max_length=500, blank=True)
+    high_temperature = models.FloatField(null=True, blank=True)
+    low_temperature = models.FloatField(null=True, blank=True)
+    mean_temperature = models.FloatField(null=True, blank=True)
+    precipitation = models.FloatField(null=True, blank=True)
+    wind_speed = models.FloatField(null=True, blank=True)
+    snowfall = models.FloatField(null=True, blank=True)
+    source_metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["location", "observation_date", "source_kind"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["location", "observation_date", "source_kind"],
+                name="unique_historical_weather_location_date_source",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["location", "observation_date"]),
+            models.Index(fields=["source_kind", "observation_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.location} on {self.observation_date} ({self.source_kind})"
+
+
 class CurrentConditions(TimeStampedModel):
     """Current weather conditions for a location (cached, 15-min TTL)."""
 
