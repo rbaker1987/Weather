@@ -9,12 +9,15 @@ from pathlib import Path
 
 import requests
 from django.core.management.base import BaseCommand, CommandError
+from timezonefinder import TimezoneFinder
 
 from weather.models import (
     HistoricalWeatherObservation,
     Location,
     TeleconnectionObservation,
 )
+
+_TIMEZONE_CACHE = {}
 
 
 class Command(BaseCommand):
@@ -79,6 +82,7 @@ class Command(BaseCommand):
             raise CommandError("date range cannot exceed 366 days")
 
     def _import_weather(self, location, start_date, end_date):
+        timezone_name = self._timezone_for_location(location)
         params = {
             "latitude": float(location.latitude),
             "longitude": float(location.longitude),
@@ -97,7 +101,7 @@ class Command(BaseCommand):
             "temperature_unit": "fahrenheit",
             "wind_speed_unit": "mph",
             "precipitation_unit": "inch",
-            "timezone": "UTC",
+            "timezone": timezone_name,
         }
         try:
             response = requests.get(self.weather_url, params=params, timeout=30)
@@ -124,11 +128,26 @@ class Command(BaseCommand):
                     "precipitation": self._value(values["precipitation_sum"], index),
                     "wind_speed": self._value(values["wind_speed_10m_max"], index),
                     "snowfall": self._value(values["snowfall_sum"], index),
-                    "source_metadata": {"timezone": "UTC"},
+                    "source_metadata": {"timezone": timezone_name},
                 },
             )
             count += 1
         return count
+
+    @staticmethod
+    def _timezone_for_location(location):
+        latitude = float(location.latitude)
+        longitude = float(location.longitude)
+        key = (latitude, longitude)
+        if key not in _TIMEZONE_CACHE:
+            try:
+                _TIMEZONE_CACHE[key] = (
+                    TimezoneFinder().timezone_at(lat=latitude, lng=longitude)
+                    or "UTC"
+                )
+            except Exception:
+                _TIMEZONE_CACHE[key] = "UTC"
+        return _TIMEZONE_CACHE[key]
 
     def _import_teleconnections(self, path):
         if not path.is_file():

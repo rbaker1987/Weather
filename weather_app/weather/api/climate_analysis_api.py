@@ -12,7 +12,7 @@ from django.core.cache import cache
 from django.core.management.base import CommandError
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 
 from weather.climate_analysis import calculate_pearson_correlation
@@ -32,11 +32,15 @@ class ClimateAnalysisThrottle(AnonRateThrottle):
     rate = "10/hour"
 
 
+class ClimateAnalysisUserThrottle(UserRateThrottle):
+    rate = "10/hour"
+
+
 class ClimateAnalysisAPIView(APIView):
     """Return smoothed weekly observations centered on a calendar day."""
 
     permission_classes = []
-    throttle_classes = [ClimateAnalysisThrottle]
+    throttle_classes = [ClimateAnalysisThrottle, ClimateAnalysisUserThrottle]
     first_year = 1950
     window_days = 7
     weather_fields = ("mean_temperature", "precipitation", "wind_speed", "snowfall")

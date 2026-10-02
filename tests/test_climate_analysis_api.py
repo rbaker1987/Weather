@@ -4,12 +4,14 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from rest_framework.test import APIClient
 
 from weather.api.climate_analysis_api import (
     ClimateAnalysisAPIView,
     ClimateAnalysisThrottle,
+    ClimateAnalysisUserThrottle,
 )
 from weather.models import (
     HistoricalWeatherObservation,
@@ -116,6 +118,26 @@ def test_climate_analysis_throttles_anonymous_backfill_requests(monkeypatch):
     )
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
+    session = client.session
+    session["location_ids"] = [str(location.id)]
+    session.save()
+    params = {"location_id": str(location.id), "month": "1", "day": "1"}
+
+    assert client.get("/api/climate-analysis/", params).status_code == 200
+    assert client.get("/api/climate-analysis/", params).status_code == 429
+    cache.clear()
+
+
+@pytest.mark.django_db
+def test_climate_analysis_throttles_authenticated_backfill_requests(monkeypatch):
+    cache.clear()
+    monkeypatch.setattr(ClimateAnalysisUserThrottle, "rate", "1/minute")
+    monkeypatch.setattr(
+        ClimateAnalysisAPIView, "first_year", date.today().year - 1
+    )
+    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
+    client = APIClient()
+    client.force_authenticate(user=get_user_model().objects.create_user("climate-user"))
     session = client.session
     session["location_ids"] = [str(location.id)]
     session.save()

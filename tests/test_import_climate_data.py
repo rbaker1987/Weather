@@ -73,6 +73,48 @@ def test_import_climate_data_upserts_weather_and_csv_indices(monkeypatch, tmp_pa
 
 
 @pytest.mark.django_db
+def test_importer_uses_and_persists_location_timezone(monkeypatch):
+    location = Location.objects.create(
+        name="New York", latitude=40.71, longitude=-74.00
+    )
+    request_params = {}
+
+    class NewYorkTimezoneFinder:
+        def timezone_at(self, *, lat, lng):
+            assert (lat, lng) == (40.71, -74.0)
+            return "America/New_York"
+
+    class TimezoneResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "daily": {
+                    "time": ["2025-01-01"],
+                    "temperature_2m_mean": [32],
+                }
+            }
+
+    def get_response(_url, *, params, **_kwargs):
+        request_params.update(params)
+        return TimezoneResponse()
+
+    monkeypatch.setattr(
+        "weather.management.commands.import_climate_data.TimezoneFinder",
+        NewYorkTimezoneFinder,
+    )
+    monkeypatch.setattr(
+        "weather.management.commands.import_climate_data.requests.get", get_response
+    )
+
+    assert Command()._import_weather(location, date(2025, 1, 1), date(2025, 1, 1)) == 1
+    observation = HistoricalWeatherObservation.objects.get(location=location)
+    assert request_params["timezone"] == "America/New_York"
+    assert observation.source_metadata["timezone"] == "America/New_York"
+
+
+@pytest.mark.django_db
 def test_importer_validates_dates_and_location():
     command = Command()
     with pytest.raises(CommandError):
