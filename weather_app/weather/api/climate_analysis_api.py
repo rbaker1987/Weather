@@ -12,6 +12,7 @@ from django.core.cache import cache
 from django.core.management.base import CommandError
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from weather.climate_analysis import calculate_pearson_correlation
@@ -27,10 +28,15 @@ from weather.models import (
 logger = logging.getLogger("weather")
 
 
+class ClimateAnalysisThrottle(AnonRateThrottle):
+    rate = "10/hour"
+
+
 class ClimateAnalysisAPIView(APIView):
     """Return smoothed weekly observations centered on a calendar day."""
 
     permission_classes = []
+    throttle_classes = [ClimateAnalysisThrottle]
     first_year = 1950
     window_days = 7
     weather_fields = ("mean_temperature", "precipitation", "wind_speed", "snowfall")
@@ -61,7 +67,7 @@ class ClimateAnalysisAPIView(APIView):
         session_location_ids = {str(item) for item in request.session.get("location_ids", [])}
         if location_id not in session_location_ids:
             return Response({"error": "location is not available in this session"}, status=404)
-        location = get_object_or_404(Location, id=location_id)
+        location = get_object_or_404(Location, id=location_id, is_active=True)
         if location.latitude is None or location.longitude is None:
             return Response(
                 {"error": "location does not have coordinates"}, status=400

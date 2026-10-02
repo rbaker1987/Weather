@@ -78,6 +78,8 @@ def test_importer_validates_dates_and_location():
     with pytest.raises(CommandError):
         command._validate_dates(date(2025, 1, 2), date(2025, 1, 1))
     with pytest.raises(CommandError):
+        command._validate_dates(date(2024, 1, 1), date(2025, 1, 1))
+    with pytest.raises(CommandError):
         command._get_location("00000000-0000-0000-0000-000000000000")
 
 
@@ -131,6 +133,26 @@ def test_importer_reports_http_and_json_errors(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_importer_reports_invalid_weather_json(monkeypatch):
+    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
+
+    class InvalidJsonResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            raise ValueError("invalid JSON")
+
+    monkeypatch.setattr(
+        "weather.management.commands.import_climate_data.requests.get",
+        lambda *_args, **_kwargs: InvalidJsonResponse(),
+    )
+
+    with pytest.raises(CommandError, match="historical weather request failed"):
+        Command()._import_weather(location, date(2025, 1, 1), date(2025, 1, 1))
+
+
+@pytest.mark.django_db
 def test_importer_reads_calendar_day_from_noaa_feeds(monkeypatch):
     class IndexResponse:
         text = "2024 1 2 3 4 5 6 7 8 9 10 11 12\n"
@@ -150,3 +172,31 @@ def test_importer_reads_calendar_day_from_noaa_feeds(monkeypatch):
     assert TeleconnectionObservation.objects.filter(
         observation_date=date(2024, 2, 29)
     ).count() == 5
+
+
+@pytest.mark.django_db
+def test_importer_skips_invalid_noaa_calendar_day_rows(monkeypatch):
+    class IndexResponse:
+        text = "\n".join(
+            [
+                "header row",
+                "not-a-year 1 1 1 1 1 1 1 1 1 1 1 1",
+                "2024 1 1 1 1 1 1 1 1 1 1 1 1",
+                "2025 1 invalid 1 1 1 1 1 1 1 1 1 1",
+                "2025 1 -99 1 1 1 1 1 1 1 1 1 1",
+                "2025 1 2 1 1 1 1 1 1 1 1 1 1",
+            ]
+        )
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(
+        "weather.management.commands.import_climate_data.requests.get",
+        lambda *_args, **_kwargs: IndexResponse(),
+    )
+
+    count = Command().import_noaa_calendar_day(2, 29, [2025], ["nao"])
+
+    assert count == 0
+    assert not TeleconnectionObservation.objects.exists()
