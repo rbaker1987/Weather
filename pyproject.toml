@@ -57,7 +57,7 @@ modern-ui = [
     "plotly>=5.17.0",     # Interactive charts
     "pandas>=2.0.0",      # Data manipulation
     "fastapi>=0.104.0",   # REST API framework
-    "uvicorn>=0.24.0",    # ASGI server
+    "uvicorn>=0.39.0",    # ASGI server
 ]
 django = [
     "Django>=4.2.0",              # Django framework
