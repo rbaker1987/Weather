@@ -3468,7 +3468,7 @@ class LocationDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         location = self.object
-        index_keys = ("nao", "ao", "pna", "oni", "epo")
+        index_keys = ("nao", "ao", "pna", "oni", "epo", "wpo")
         current_index_values = []
         for index_key in index_keys:
             latest = (

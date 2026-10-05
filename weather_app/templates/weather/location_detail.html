@@ -506,7 +506,7 @@
         <div class="climate-current-grid">
           {% for indicator in current_index_values %}
           <div class="climate-current-item">
-            <span class="climate-current-label">{% if indicator.index_key == "oni" %}Oceanic Niño Index (ONI){% else %}{{ indicator.index_key|upper }}{% endif %}</span>
+            <span class="climate-current-label">{% if indicator.index_key == "oni" %}ENSO{% else %}{{ indicator.index_key|upper }}{% endif %}</span>
             <strong>{{ indicator.value|floatformat:3 }}</strong>
             <small class="text-muted">{{ indicator.observation_date|date:"M Y" }} · {% if indicator.source_metadata.cadence == "daily" %}Daily{% elif indicator.source_metadata.cadence == "monthly" %}Monthly{% else %}Unknown cadence{% endif %}</small>
           </div>
@@ -583,8 +583,9 @@
                 <th>NAO</th>
                 <th>AO</th>
                 <th>PNA</th>
-                <th>ONI</th>
+                <th>ENSO</th>
                 <th>EPO</th>
+                <th>WPO</th>
               </tr>
             </thead>
             <tbody id="climateAnalysisTableBody"></tbody>
@@ -964,7 +965,7 @@
       if (climatePrompt) climatePrompt.classList.add('d-none');
 
       try {
-          const url = `{% url 'weather:climate-analysis' %}?location_id=${encodeURIComponent(locationId)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo`;
+          const url = `{% url 'weather:climate-analysis' %}?location_id=${encodeURIComponent(locationId)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo&index=wpo`;
             const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const responseText = await response.text();
             let data;
@@ -1059,7 +1060,7 @@
                 }
               }
 
-              const indexOrder = ['nao', 'ao', 'pna', 'oni', 'epo'];
+              const indexOrder = ['nao', 'ao', 'pna', 'oni', 'epo', 'wpo'];
               const groupedCorrelations = new Map();
               data.correlations.forEach((item) => {
                 if (!groupedCorrelations.has(item.weather_variable)) {

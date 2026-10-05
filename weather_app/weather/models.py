@@ -210,7 +210,7 @@ class TeleconnectionObservation(TimeStampedModel):
     """A dated value for a published large-scale climate index."""
 
     class IndexKey(models.TextChoices):
-        ONI = "oni", "Oceanic Nino Index"
+        ONI = "oni", "ENSO"
         AO = "ao", "Arctic Oscillation"
         NAO = "nao", "North Atlantic Oscillation"
         PNA = "pna", "Pacific-North American Pattern"
