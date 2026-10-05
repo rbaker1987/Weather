@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import calendar
 import csv
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import requests
@@ -30,6 +29,17 @@ class Command(BaseCommand):
         "oni": "https://psl.noaa.gov/data/correlation/oni.data",
         "epo": "https://psl.noaa.gov/data/correlation/epo.data",
     }
+    cpc_daily = "https://ftp.cpc.ncep.noaa.gov/cwlinks/norm.daily.{}.index.b500101.current.ascii"
+    psl_daily = "https://downloads.psl.noaa.gov/Public/map/teleconnections/{}.reanalysis.t10trunc.1948-present.txt"
+    # ENSO (oni) is only published monthly; everything else is daily.
+    daily_index_urls = {
+        "nao": cpc_daily.format("nao"),
+        "ao": cpc_daily.format("ao"),
+        "pna": cpc_daily.format("pna"),
+        "epo": psl_daily.format("epo"),
+        "wpo": psl_daily.format("wpo"),
+    }
+    available_index_keys = set(index_urls) | set(daily_index_urls)
     maximum_days = 366
 
     def add_arguments(self, parser):
@@ -53,7 +63,7 @@ class Command(BaseCommand):
             index_count = self._import_teleconnections(options["teleconnection_file"])
         else:
             index_count = self.import_noaa_indices(
-                start_date, end_date, self.index_urls.keys()
+                start_date, end_date, self.available_index_keys
             )
 
         self.stdout.write(
@@ -178,91 +188,116 @@ class Command(BaseCommand):
                 count += 1
         return count
 
-    def import_noaa_indices(self, start_date, end_date, index_keys):
-        """Import CPC monthly indices, expanded across each month's days."""
-        count = 0
-        for index_key in set(index_keys) & self.index_urls.keys():
-            url = self.index_urls[index_key]
+    def _fetch_index(self, index_key):
+        """Return (cadence, url, values); daily when available, else monthly.
+
+        Daily values are keyed by date; monthly values by (year, month).
+        """
+        daily_url = self.daily_index_urls.get(index_key)
+        if daily_url:
             try:
-                response = requests.get(url, timeout=30)
+                response = requests.get(daily_url, timeout=60)
                 response.raise_for_status()
-            except requests.RequestException as exc:
-                raise CommandError(f"{index_key} index request failed: {exc}") from exc
+                values = self._parse_daily(response.text)
+                if values:
+                    return "daily", daily_url, values
+            except requests.RequestException:
+                if index_key not in self.index_urls:
+                    raise CommandError(f"{index_key} index request failed") from None
+        url = self.index_urls.get(index_key)
+        if url is None:
+            raise CommandError(f"{index_key} has no available data source")
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise CommandError(f"{index_key} index request failed: {exc}") from exc
+        return "monthly", url, self._parse_monthly(response.text)
 
-            for line in response.text.splitlines():
-                fields = line.split()
-                if len(fields) < 13 or not fields[0].isdigit():
-                    continue
-                year = int(fields[0])
-                for month, value_text in enumerate(fields[1:13], start=1):
-                    try:
-                        value = float(value_text)
-                    except ValueError:
-                        continue
-                    if value <= -99:
-                        continue
-                    month_start = date(year, month, 1)
-                    month_end = date(year, month, calendar.monthrange(year, month)[1])
-                    range_start = max(start_date, month_start)
-                    range_end = min(end_date, month_end)
-                    current = range_start
-                    while current <= range_end:
-                        TeleconnectionObservation.objects.update_or_create(
-                            index_key=index_key,
-                            observation_date=current,
-                            defaults={
-                                "value": value,
-                                "source_url": url,
-                                "source_metadata": {"cadence": "monthly", "month": month},
-                            },
-                        )
-                        count += 1
-                        current = current.fromordinal(current.toordinal() + 1)
-        return count
-
-    def import_noaa_calendar_day(self, month, day, years, index_keys):
-        """Import monthly NOAA values only for one calendar day per year."""
-        count = 0
-        for index_key in set(index_keys) & self.index_urls.keys():
-            url = self.index_urls[index_key]
+    @staticmethod
+    def _parse_daily(text):
+        values = {}
+        for line in text.splitlines():
+            fields = line.split()
+            if len(fields) != 4:
+                continue
             try:
-                response = requests.get(url, timeout=30)
-                response.raise_for_status()
-            except requests.RequestException as exc:
-                raise CommandError(f"{index_key} index request failed: {exc}") from exc
+                year, month, day = (int(item) for item in fields[:3])
+                value = float(fields[3])
+                if value <= -99:
+                    continue
+                values[date(year, month, day)] = value
+            except ValueError:
+                continue
+        return values
 
-            values_by_date = {}
-            for line in response.text.splitlines():
-                fields = line.split()
-                if len(fields) < 13 or not fields[0].isdigit():
-                    continue
-                year = int(fields[0])
-                if year not in years:
-                    continue
+    @staticmethod
+    def _parse_monthly(text):
+        values = {}
+        for line in text.splitlines():
+            fields = line.split()
+            if len(fields) < 13 or not fields[0].isdigit():
+                continue
+            year = int(fields[0])
+            for month, value_text in enumerate(fields[1:13], start=1):
                 try:
-                    value = float(fields[month])
-                except (IndexError, ValueError):
+                    value = float(value_text)
+                except ValueError:
                     continue
                 if value <= -99:
                     continue
-                try:
-                    values_by_date[date(year, month, day)] = value
-                except ValueError:
-                    continue
+                values[(year, month)] = value
+        return values
 
-            for observation_date, value in values_by_date.items():
-                TeleconnectionObservation.objects.update_or_create(
-                    index_key=index_key,
-                    observation_date=observation_date,
-                    defaults={
-                        "value": value,
-                        "source_url": url,
-                        "source_metadata": {"cadence": "monthly", "month": month},
-                    },
-                )
-                count += 1
+    def _save_index(self, index_key, observation_date, value, url, cadence):
+        TeleconnectionObservation.objects.update_or_create(
+            index_key=index_key,
+            observation_date=observation_date,
+            defaults={
+                "value": value,
+                "source_url": url,
+                "source_metadata": {"cadence": cadence},
+            },
+        )
+
+    @staticmethod
+    def _day_values(cadence, values, observation_date):
+        if cadence == "daily":
+            return values.get(observation_date)
+        return values.get((observation_date.year, observation_date.month))
+
+    def import_noaa_indices(self, start_date, end_date, index_keys):
+        """Import daily indices where published; monthly ones span each month's days."""
+        count = 0
+        for index_key in set(index_keys) & self.available_index_keys:
+            cadence, url, values = self._fetch_index(index_key)
+            current = start_date
+            while current <= end_date:
+                value = self._day_values(cadence, values, current)
+                if value is not None:
+                    self._save_index(index_key, current, value, url, cadence)
+                    count += 1
+                current += timedelta(days=1)
         return count
 
+    def import_noaa_calendar_day(self, month, day, years, index_keys, half_window=3):
+        """Import index values for a calendar day (and its centered window) per year."""
+        count = 0
+        for index_key in set(index_keys) & self.available_index_keys:
+            cadence, url, values = self._fetch_index(index_key)
+            for year in years:
+                try:
+                    center = date(year, month, day)
+                except ValueError:
+                    continue
+                offsets = range(-half_window, half_window + 1) if cadence == "daily" else [0]
+                for offset in offsets:
+                    observation_date = center + timedelta(days=offset)
+                    value = self._day_values(cadence, values, observation_date)
+                    if value is not None:
+                        self._save_index(index_key, observation_date, value, url, cadence)
+                        count += 1
+        return count
     @staticmethod
     def _as_date(value):
         return date.fromisoformat(value) if isinstance(value, str) else value
