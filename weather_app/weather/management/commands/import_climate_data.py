@@ -29,13 +29,14 @@ class Command(BaseCommand):
         "oni": "https://psl.noaa.gov/data/correlation/oni.data",
         "epo": "https://psl.noaa.gov/data/correlation/epo.data",
     }
-    cpc_daily = "https://ftp.cpc.ncep.noaa.gov/cwlinks/norm.daily.{}.index.b500101.current.ascii"
+    # CDAS files run a few days fresher than the .ascii index files.
+    cpc_daily = "https://ftp.cpc.ncep.noaa.gov/cwlinks/norm.daily.{}.cdas.{}.19500101_current.csv"
     psl_daily = "https://downloads.psl.noaa.gov/Public/map/teleconnections/{}.reanalysis.t10trunc.1948-present.txt"
     # ENSO (oni) is only published monthly; everything else is daily.
     daily_index_urls = {
-        "nao": cpc_daily.format("nao"),
-        "ao": cpc_daily.format("ao"),
-        "pna": cpc_daily.format("pna"),
+        "nao": cpc_daily.format("nao", "z500"),
+        "ao": cpc_daily.format("ao", "z1000"),
+        "pna": cpc_daily.format("pna", "z500"),
         "epo": psl_daily.format("epo"),
         "wpo": psl_daily.format("wpo"),
     }
@@ -228,7 +229,7 @@ class Command(BaseCommand):
     def _parse_daily(text):
         values = {}
         for line in text.splitlines():
-            fields = line.split()
+            fields = line.replace(",", " ").split()
             if len(fields) != 4:
                 continue
             try:
