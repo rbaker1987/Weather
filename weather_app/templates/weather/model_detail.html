@@ -810,13 +810,15 @@ Weather{% endblock %} {% block extra_css %}
       const locationId = opt.value; // Get the location ID from the option
       const selectedModel = modelSel ? modelSel.value : '{{ model_name }}';
       console.log('reloadDetail: lat=', lat, 'lon=', lon, 'model=', selectedModel);
+      // Validate selectedModel to prevent open redirect / XSS via javascript: URIs
+      if (!/^[\w-]+$/.test(selectedModel)) return;
       rebuildDayOptions(selectedModel);
       const days = ensureDaysWithinModel(selectedModel);
-      const base = `/models/${selectedModel}/`;
+      const base = `/models/${encodeURIComponent(selectedModel)}/`;
       // Include location_id in the URL if it's a saved location (not 'custom')
-      let url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
+      let url = `${base}?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&forecast_days=${encodeURIComponent(days)}`;
       if(locationId && locationId !== 'custom') {
-        url += `&location_id=${locationId}`;
+        url += `&location_id=${encodeURIComponent(locationId)}`;
       }
       console.log('Navigating to:', url);
       window.location.href = url;
@@ -849,12 +851,14 @@ Weather{% endblock %} {% block extra_css %}
 
       if(lat && lon) {
         console.log('reloadWithCurrentCoords: using coords lat=', lat, 'lon=', lon);
+        // Validate selectedModel to prevent open redirect / XSS via javascript: URIs
+        if (!/^[\w-]+$/.test(selectedModel)) return;
         rebuildDayOptions(selectedModel);
         const days = forceExpand ? expandDaysToModelMax(selectedModel) : ensureDaysWithinModel(selectedModel);
-        const base = `/models/${selectedModel}/`;
-        let url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
+        const base = `/models/${encodeURIComponent(selectedModel)}/`;
+        let url = `${base}?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&forecast_days=${encodeURIComponent(days)}`;
         if(locationId && locationId !== 'custom') {
-          url += `&location_id=${locationId}`;
+          url += `&location_id=${encodeURIComponent(locationId)}`;
         }
         console.log('Navigating to:', url);
         window.location.href = url;

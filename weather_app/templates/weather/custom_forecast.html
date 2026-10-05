@@ -214,7 +214,7 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous"></script>
 <script>
 let forecastDays = [];
 let nwsForecast = [];
@@ -270,9 +270,9 @@ function loadLocation() {
     const select = document.getElementById('locationSelect');
     const locationId = select.value;
 
-    if (locationId) {
+    if (locationId && /^[\w-]+$/.test(locationId)) {
         // Reload page with location_id to fetch reference data
-        window.location.href = `/forecasts/custom/?location_id=${locationId}`;
+        window.location.href = `/forecasts/custom/?location_id=${encodeURIComponent(locationId)}`;
     }
 }
 
@@ -872,7 +872,9 @@ function updateForecastDisplay() {
                 `;
             } else {
                 const icon = getWeatherIcon(description);
-                return `<i class="fas ${icon}"></i>`;
+                // Sanitize to ensure only valid CSS class name characters in each token
+                const safeIcon = icon.split(/\s+/).map(function(t){ return t.replace(/[^a-zA-Z0-9\-]/g, ''); }).join(' ');
+                return `<i class="fas ${safeIcon}"></i>`;
             }
         }
 

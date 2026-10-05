@@ -657,7 +657,7 @@ class LocationViewSet(viewsets.ModelViewSet):
             )
         except Exception as e:
             return Response(
-                {"status": "error", "message": f"Error toggling location: {str(e)}"},
+                {"status": "error", "message": "Error toggling location"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -821,7 +821,7 @@ class LocationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Geocoding search error: {str(e)}")
             return Response(
-                {"status": "error", "message": f"Error: {str(e)}"},
+                {"status": "error", "message": "An internal error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -868,7 +868,7 @@ class LocationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Reverse geocoding error: {str(e)}")
             return Response(
-                {"status": "error", "message": f"Error: {str(e)}"},
+                {"status": "error", "message": "An internal error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -1111,7 +1111,7 @@ class BulkForecastAPIView(APIView):
 
             logger.error(f"Bulk forecast request failed: {e}")
             return Response(
-                {"error": "Forecast request failed", "details": str(e)},
+                {"error": "Forecast request failed"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -1289,7 +1289,7 @@ class ExportAPIView(APIView):
 
         except Exception as e:
             return Response(
-                {"error": "KML export failed", "details": str(e)},
+                {"error": "KML export failed"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -2731,7 +2731,7 @@ class ModelDetailView(TemplateView):
                         first_dt_local = first_dt
                     run_time = first_dt_local.astimezone(dt_timezone.utc)
                 logger.info(
-                    f"ModelDetailView cache hit for {cache_key} (source={model_source}, cycle={cycle})"
+                    f"ModelDetailView cache hit (source={model_source}, cycle={cycle})"
                 )
 
             # Prefer NOMADS GRIB for GFS deterministic/ensemble to get full fields
