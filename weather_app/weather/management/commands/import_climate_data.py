@@ -31,7 +31,7 @@ class Command(BaseCommand):
     }
     # CDAS files run a few days fresher than the .ascii index files.
     cpc_daily = "https://ftp.cpc.ncep.noaa.gov/cwlinks/norm.daily.{}.cdas.{}.19500101_current.csv"
-    psl_daily = "https://downloads.psl.noaa.gov/Public/map/teleconnections/{}.reanalysis.t10trunc.1948-present.txt"
+    psl_daily = "https://downloads.psl.noaa.gov/Public/map/teleconnections/{}.core.reanalysis.t10trunc.1950-present.txt"
     # ENSO (oni) is only published monthly; everything else is daily.
     daily_index_urls = {
         "nao": cpc_daily.format("nao", "z500"),
@@ -40,6 +40,9 @@ class Command(BaseCommand):
         "epo": psl_daily.format("epo"),
         "wpo": psl_daily.format("wpo"),
     }
+    # PSL publishes raw height differences; scale them to z-scores like the CPC indices.
+    standardized_indices = {"epo", "wpo"}
+    baseline_years = range(1991, 2021)
     available_index_keys = set(index_urls) | set(daily_index_urls)
     maximum_days = 366
 
@@ -210,6 +213,8 @@ class Command(BaseCommand):
                 response = requests.get(daily_url, timeout=60)
                 response.raise_for_status()
                 values = self._parse_daily(response.text)
+                if index_key in self.standardized_indices:
+                    values = self._standardize(values)
                 if values:
                     return "daily", daily_url, values
             except requests.RequestException:
@@ -241,6 +246,26 @@ class Command(BaseCommand):
             except ValueError:
                 continue
         return values
+
+    @classmethod
+    def _standardize(cls, values):
+        """Z-score each value against its calendar month over the baseline period."""
+        by_month = {}
+        for observation_date, value in values.items():
+            if observation_date.year in cls.baseline_years:
+                by_month.setdefault(observation_date.month, []).append(value)
+        stats = {}
+        for month, items in by_month.items():
+            mean = sum(items) / len(items)
+            deviation = (sum((item - mean) ** 2 for item in items) / len(items)) ** 0.5
+            if deviation:
+                stats[month] = (mean, deviation)
+        return {
+            observation_date: (value - stats[observation_date.month][0])
+            / stats[observation_date.month][1]
+            for observation_date, value in values.items()
+            if observation_date.month in stats
+        }
 
     @staticmethod
     def _parse_monthly(text):
