@@ -295,3 +295,56 @@ def test_climate_analysis_serializes_index_observations():
             "source_url": "https://example.com/nao",
         }
     ]
+
+
+@pytest.mark.django_db
+def test_climate_analysis_loads_missing_indices_without_celery(monkeypatch, settings):
+    settings.CELERY_ENABLED = False
+    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
+    client = APIClient()
+    session = client.session
+    session["location_ids"] = [str(location.id)]
+    session.save()
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year", 2019,
+    )
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2023, 1, 2)
+
+    monkeypatch.setattr("weather.api.climate_analysis_api.date", FakeDate)
+    for year in range(2020, 2023):
+        for offset in range(-3, 4):
+            HistoricalWeatherObservation.objects.create(
+                location=location,
+                observation_date=date(year, 1, 1) + timedelta(days=offset),
+                source_kind="ncei_station",
+                mean_temperature=float(year + offset),
+            )
+    loaded = []
+
+    def fake_import(self, month, day, years, index_keys, half_window=3):
+        loaded.append(list(years))
+        for year in years:
+            TeleconnectionObservation.objects.create(
+                index_key="nao",
+                observation_date=date(year, month, day),
+                value=float(year),
+                source_url="https://example.com/nao",
+            )
+        return len(years)
+
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.ImportClimateDataCommand.import_noaa_calendar_day",
+        fake_import,
+    )
+    response = client.get(
+        "/api/climate-analysis/",
+        {"location_id": str(location.id), "month": "1", "day": "1", "index": "nao"},
+    )
+
+    assert response.status_code == 200
+    assert loaded == [[2020, 2021, 2022]]
+    assert response.data["indexes_available"] is True

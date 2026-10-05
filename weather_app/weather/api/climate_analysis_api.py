@@ -144,19 +144,28 @@ class ClimateAnalysisAPIView(APIView):
             weather_loaded = True
 
         supported_index_keys = set(index_keys)
-        available_index_count = TeleconnectionObservation.objects.filter(
-            index_key__in=supported_index_keys,
-            observation_date__month=month,
-            observation_date__day=day,
-            observation_date__year__in=years,
-        ).values("index_key", "observation_date").distinct().count()
-        index_loaded = False
+        def count_available_indices():
+            return TeleconnectionObservation.objects.filter(
+                index_key__in=supported_index_keys,
+                observation_date__month=month,
+                observation_date__day=day,
+                observation_date__year__in=years,
+            ).values("index_key", "observation_date").distinct().count()
+
+        available_index_count = count_available_indices()
         if available_index_count < len(years) * len(supported_index_keys):
             if getattr(settings, "CELERY_ENABLED", False):
                 return self._queue_backfill(location, month, day, years, index_keys)
-            return Response(
-                {"error": "climate index data is not loaded yet"}, status=503
-            )
+            try:
+                ImportClimateDataCommand().import_noaa_calendar_day(
+                    month, day, years, index_keys, half_window
+                )
+            except CommandError:
+                logger.exception("Climate index data loading failed")
+                return Response(
+                    {"error": "climate index data could not be loaded"}, status=502
+                )
+            available_index_count = count_available_indices()
         index_loaded = available_index_count > 0
 
         observations = HistoricalWeatherObservation.objects.filter(
