@@ -258,11 +258,19 @@ def test_importer_prefers_daily_feeds_and_imports_window(monkeypatch):
         "weather.management.commands.import_climate_data.requests.get",
         lambda *_args, **_kwargs: DailyResponse(),
     )
-    count = Command().import_noaa_calendar_day(3, 15, [2024], ["wpo"])
+    count = Command().import_noaa_calendar_day(3, 15, [2024], ["nao"])
 
     assert count == 7
     observation = TeleconnectionObservation.objects.get(
-        index_key="wpo", observation_date=date(2024, 3, 12)
+        index_key="nao", observation_date=date(2024, 3, 12)
     )
     assert observation.value == 1.2
     assert observation.source_metadata["cadence"] == "daily"
+
+def test_psl_indices_are_standardized_by_calendar_month():
+    values = {date(year, 3, 1): float(year - 1990) for year in range(1991, 2021)}
+    values[date(2026, 3, 1)] = 15.5
+    standardized = Command._standardize(values)
+
+    assert standardized[date(2026, 3, 1)] == pytest.approx(0.0)
+    assert sum(standardized[date(y, 3, 1)] for y in range(1991, 2021)) == pytest.approx(0.0)
