@@ -3472,7 +3472,9 @@ class LocationDetailView(DetailView):
         current_index_values = []
         for index_key in index_keys:
             latest = (
-                TeleconnectionObservation.objects.filter(index_key=index_key)
+                TeleconnectionObservation.objects.filter(
+                    index_key=index_key, observation_date__lte=timezone.localdate()
+                )
                 .order_by("-observation_date")
                 .first()
             )

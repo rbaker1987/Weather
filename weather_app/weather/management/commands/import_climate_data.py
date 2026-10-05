@@ -43,9 +43,14 @@ class Command(BaseCommand):
     maximum_days = 366
 
     def add_arguments(self, parser):
-        parser.add_argument("--location-id", required=True, type=str)
+        parser.add_argument("--location-id", type=str)
         parser.add_argument("--start-date", required=True, type=date.fromisoformat)
         parser.add_argument("--end-date", required=True, type=date.fromisoformat)
+        parser.add_argument(
+            "--indices-only",
+            action="store_true",
+            help="Import teleconnection indices only (no location or weather needed)",
+        )
         parser.add_argument(
             "--teleconnection-file",
             type=Path,
@@ -53,12 +58,17 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        location = self._get_location(options["location_id"])
+        indices_only = options.get("indices_only")
+        if not indices_only and not options.get("location_id"):
+            raise CommandError("--location-id is required unless --indices-only is set")
         start_date = self._as_date(options["start_date"])
         end_date = self._as_date(options["end_date"])
         self._validate_dates(start_date, end_date)
 
-        weather_count = self._import_weather(location, start_date, end_date)
+        weather_count = 0
+        if not indices_only:
+            location = self._get_location(options["location_id"])
+            weather_count = self._import_weather(location, start_date, end_date)
         if options.get("teleconnection_file"):
             index_count = self._import_teleconnections(options["teleconnection_file"])
         else:
