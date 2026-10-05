@@ -15,7 +15,12 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 
-from weather.climate_analysis import calculate_pearson_correlation
+from weather.climate_analysis import (
+    calculate_pearson_correlation,
+    calculate_spearman_correlation,
+    correlation_significance,
+    detrend_by_year,
+)
 from weather.management.commands.import_climate_data import (
     Command as ImportClimateDataCommand,
 )
@@ -44,7 +49,7 @@ class ClimateAnalysisAPIView(APIView):
     first_year = 1950
     window_days = 7
     weather_fields = ("mean_temperature", "precipitation", "wind_speed", "snowfall")
-    supported_index_keys = ("nao", "ao", "pna", "oni", "epo")
+    supported_index_keys = ("nao", "ao", "pna", "oni", "epo", "wpo")
     max_sync_weather_backfill_years = 5
 
     def get(self, request, *args, **kwargs):
@@ -169,11 +174,9 @@ class ClimateAnalysisAPIView(APIView):
         daily_weather = [self._serialize_weather(observation) for observation in weekly_weather.values()]
         index_observations = TeleconnectionObservation.objects.filter(
             index_key__in=index_keys,
-            observation_date__month=month,
-            observation_date__day=day,
-            observation_date__year__in=years,
+            observation_date__in=required_dates,
         ).order_by("index_key", "observation_date")
-        indices = self._serialize_indices(index_observations)
+        indices = self._window_mean_indices(index_observations, years, month, day)
 
         correlations = self._correlations(indices, weekly_weather)
         event_correlations, event_thresholds = self._event_correlations(
@@ -274,31 +277,65 @@ class ClimateAnalysisAPIView(APIView):
             for observation in observations
         ]
 
+    def _window_mean_indices(self, observations, years, month, day):
+        """Average each index over the same centered window used for weather."""
+        by_index = {}
+        for observation in observations:
+            by_index.setdefault(observation.index_key, {})[observation.observation_date] = observation
+        results = []
+        for index_key in sorted(by_index):
+            rows = by_index[index_key]
+            for year in years:
+                center = date(year, month, day)
+                window = [rows[d] for d in self._window_dates(center) if d in rows]
+                if center not in rows or not window:
+                    continue
+                results.append(
+                    {
+                        "index": index_key,
+                        "date": center.isoformat(),
+                        "value": sum(item.value for item in window) / len(window),
+                        "days_averaged": len(window),
+                        "source_url": rows[center].source_url,
+                    }
+                )
+        return results
+
     def _correlations(self, indices, weather_by_date):
         results = []
-        for index_key in {item["index"] for item in indices}:
+        for index_key in sorted({item["index"] for item in indices}):
             index_values = {
                 date.fromisoformat(item["date"]): item["value"]
                 for item in indices
                 if item["index"] == index_key
             }
             for field in self.weather_fields:
-                result = calculate_pearson_correlation(
-                    (
-                        (value, self._weather_value(weather_by_date.get(date_key), field))
-                        for date_key, value in index_values.items()
+                pairs = [
+                    (value, self._weather_value(weather_by_date.get(date_key), field))
+                    for date_key, value in index_values.items()
+                ]
+                result = calculate_pearson_correlation(pairs)
+                spearman = calculate_spearman_correlation(pairs)
+                detrended = calculate_pearson_correlation(
+                    detrend_by_year(
+                        (x, y, date_key.year)
+                        for date_key, (x, y) in zip(index_values, pairs, strict=True)
                     )
                 )
+                significance = correlation_significance(result.value, result.sample_count)
                 results.append(
                     {
                         "index": index_key,
                         "weather_variable": field,
                         "value": result.value,
                         "sample_count": result.sample_count,
+                        "r_squared": None if result.value is None else result.value**2,
+                        "spearman": spearman.value,
+                        "detrended_value": detrended.value,
+                        **significance,
                     }
                 )
         return results
-
     def _event_correlations(self, indices, weekly_weather):
         event_definitions = {
             "warm": ("mean_temperature", "high"),
@@ -355,6 +392,7 @@ class ClimateAnalysisAPIView(APIView):
                         "value": result.value,
                         "sample_count": result.sample_count,
                         "event_count": sum(1 for is_event in year_events.values() if is_event),
+                        **correlation_significance(result.value, result.sample_count),
                     }
                 )
         return results, thresholds

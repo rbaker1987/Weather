@@ -76,7 +76,9 @@ def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypat
         for item in response.data["correlations"]
         if item["index"] == "nao" and item["weather_variable"] == "mean_temperature"
     )
-    assert correlation == {"index": "nao", "weather_variable": "mean_temperature", "value": 1.0, "sample_count": 3}
+    assert correlation["value"] == pytest.approx(1.0)
+    assert correlation["sample_count"] == 3
+    assert correlation["r_squared"] == pytest.approx(1.0)
 
 
 @pytest.mark.django_db
