@@ -7,14 +7,12 @@ import pytz
 import requests
 from astral import LocationInfo
 from astral.sun import sun
-from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from timezonefinder import TimezoneFinder
 
-from ..models import HourlyForecast, Location
 from ..utils.apparent_temperature import calculate_apparent_temperature
 
 # Simple in-memory cache for timezone lookups keyed by rounded lat/lon
@@ -58,26 +56,6 @@ class HourlyForecastForLocationAPIView(APIView):
                     _TZ_CACHE[key] = tz_name
             except Exception:
                 tz_name = "UTC"
-
-            # Get location by coordinates to check for custom hourly forecasts
-            location = None
-            try:
-                # Find location that matches these coordinates (within small tolerance)
-                from decimal import Decimal
-
-                lat_decimal = Decimal(str(lat_f))
-                lon_decimal = Decimal(str(lon_f))
-                tolerance = Decimal("0.01")
-
-                location = Location.objects.filter(
-                    latitude__gte=lat_decimal - tolerance,
-                    latitude__lte=lat_decimal + tolerance,
-                    longitude__gte=lon_decimal - tolerance,
-                    longitude__lte=lon_decimal + tolerance,
-                    is_active=True,
-                ).first()
-            except Exception as e:
-                logger.debug(f"Could not find location for coordinates: {e}")
 
             # Fetch NWS hourly forecast
             headers = {"User-Agent": "(Weather App, contact@example.com)"}
@@ -141,192 +119,117 @@ class HourlyForecastForLocationAPIView(APIView):
                     "sunset": ss.isoformat(),
                 }
 
-            # Get custom hourly forecasts if location exists
-            custom_forecasts_dict = {}
-            if location:
-                from datetime import timedelta as td
-
-                cutoff_time = timezone.now() - td(hours=1)
-                custom_hourly = HourlyForecast.objects.filter(
-                    location=location,
-                    nws_data_url="",  # Only custom forecasts
-                    period_start__gte=cutoff_time,
-                ).order_by("period_start")[
-                    : hours_count * 2
-                ]  # Get extra to ensure coverage
-
-                # Build dictionary keyed by rounded hour for fast lookup
-                for custom in custom_hourly:
-                    # Round to nearest hour for matching
-                    rounded_hour = custom.period_start.replace(
-                        minute=0, second=0, microsecond=0
-                    )
-                    # Store if not already stored or if this one is closer
-                    if rounded_hour not in custom_forecasts_dict:
-                        custom_forecasts_dict[rounded_hour] = custom
-                    else:
-                        existing_diff = abs(
-                            (
-                                custom_forecasts_dict[rounded_hour].period_start
-                                - rounded_hour
-                            ).total_seconds()
-                        )
-                        new_diff = abs(
-                            (custom.period_start - rounded_hour).total_seconds()
-                        )
-                        if new_diff < existing_diff:
-                            custom_forecasts_dict[rounded_hour] = custom
-
-            # Format for JS, merging custom forecasts where available
+            # Format for JS
             hours_data = []
             for period in periods:
                 start_time = datetime.fromisoformat(
                     period["startTime"].replace("Z", "+00:00")
                 )
-                rounded_hour = start_time.replace(minute=0, second=0, microsecond=0)
 
-                # Check if we have a custom forecast for this hour
-                custom_forecast = custom_forecasts_dict.get(rounded_hour)
-
-                if custom_forecast:
-                    # Use custom forecast data
-                    # Determine is_daytime for icon selection
-                    # Use local timezone date to match sun_events keys
-                    start_time_local = start_time.astimezone(tz)
-                    day_key = start_time_local.date().isoformat()
-                    sr_raw = sun_events.get(day_key, {}).get("sunrise")
-                    ss_raw = sun_events.get(day_key, {}).get("sunset")
-                    if sr_raw and ss_raw:
-                        sr_dt = datetime.fromisoformat(sr_raw)
-                        ss_dt = datetime.fromisoformat(ss_raw)
-                        is_daytime = sr_dt <= start_time < ss_dt
-                    else:
-                        is_daytime = 6 <= start_time.hour < 18
-
-                    hours_data.append(
-                        {
-                            "time": start_time.strftime("%I %p").lstrip("0"),
-                            "start": start_time.isoformat(),
-                            "temp": custom_forecast.temperature,
-                            "apparentTemp": custom_forecast.apparent_temperature,
-                            "condition": custom_forecast.short_forecast,
-                            "icon": self._get_weather_icon(
-                                custom_forecast.short_forecast, is_daytime
-                            ),
-                            "wind": f"{custom_forecast.wind_speed} mph"
-                            if custom_forecast.wind_speed
-                            else "",
-                            "windDir": custom_forecast.wind_direction or "",
-                            "windGust": custom_forecast.wind_gust,
-                            "pop": custom_forecast.precipitation_probability,
-                        }
-                    )
-                else:
-                    # Use NWS forecast data
-                    # Extract wind gust
-                    wind_gust = None
-                    gust_str = period.get("windGust")
-                    if gust_str:
-                        gust_parts = gust_str.split()
-                        if gust_parts:
-                            try:
-                                wind_gust = int(gust_parts[0])
-                            except (ValueError, IndexError):
-                                wind_gust = None
-
-                    # Extract precipitation probability
-                    precip_prob = None
-                    pop = period.get("probabilityOfPrecipitation")
-                    if isinstance(pop, dict):
-                        value = pop.get("value")
-                        if value is not None:
-                            try:
-                                precip_prob = int(value)
-                            except (ValueError, TypeError):
-                                precip_prob = None
-
-                    # Extract apparent temperature (feels like)
-                    apparent_temp = None
-                    app_temp = period.get("apparentTemperature")
-                    if isinstance(app_temp, dict):
-                        value = app_temp.get("value")
-                        if value is not None:
-                            try:
-                                # Convert from Celsius to Fahrenheit if needed
-                                unit = app_temp.get("unitCode", "")
-                                if "wmoUnit:degC" in unit:
-                                    apparent_temp = int((value * 9 / 5) + 32)
-                                else:
-                                    apparent_temp = int(value)
-                            except (ValueError, TypeError):
-                                apparent_temp = None
-
-                    # Calculate apparent temperature if NWS didn't provide it
-                    if apparent_temp is None:
+                # Extract wind gust
+                wind_gust = None
+                gust_str = period.get("windGust")
+                if gust_str:
+                    gust_parts = gust_str.split()
+                    if gust_parts:
                         try:
-                            temp = period.get("temperature")
-                            humidity_data = period.get("relativeHumidity")
-                            wind_speed_str = period.get("windSpeed", "")
+                            wind_gust = int(gust_parts[0])
+                        except (ValueError, IndexError):
+                            wind_gust = None
 
-                            # Extract humidity percentage
-                            humidity = None
-                            if isinstance(humidity_data, dict):
-                                humidity = humidity_data.get("value")
+                # Extract precipitation probability
+                precip_prob = None
+                pop = period.get("probabilityOfPrecipitation")
+                if isinstance(pop, dict):
+                    value = pop.get("value")
+                    if value is not None:
+                        try:
+                            precip_prob = int(value)
+                        except (ValueError, TypeError):
+                            precip_prob = None
 
-                            # Extract wind speed (format: "10 mph" or "5 to 10 mph")
-                            wind_speed = None
-                            if wind_speed_str:
-                                parts = wind_speed_str.split()
-                                if parts:
-                                    with contextlib.suppress(ValueError, IndexError):
-                                        wind_speed = int(parts[0])
+                # Extract apparent temperature (feels like)
+                apparent_temp = None
+                app_temp = period.get("apparentTemperature")
+                if isinstance(app_temp, dict):
+                    value = app_temp.get("value")
+                    if value is not None:
+                        try:
+                            # Convert from Celsius to Fahrenheit if needed
+                            unit = app_temp.get("unitCode", "")
+                            if "wmoUnit:degC" in unit:
+                                apparent_temp = int((value * 9 / 5) + 32)
+                            else:
+                                apparent_temp = int(value)
+                        except (ValueError, TypeError):
+                            apparent_temp = None
 
-                            # Calculate if we have the required data
-                            if (
-                                temp is not None
-                                and humidity is not None
-                                and wind_speed is not None
-                            ):
-                                apparent_temp = calculate_apparent_temperature(
-                                    temperature_f=temp,
-                                    humidity=humidity,
-                                    wind_speed_mph=wind_speed,
-                                )
-                        except Exception as e:
-                            logger.debug(
-                                f"Could not calculate apparent temperature: {e}"
+                # Calculate apparent temperature if NWS didn't provide it
+                if apparent_temp is None:
+                    try:
+                        temp = period.get("temperature")
+                        humidity_data = period.get("relativeHumidity")
+                        wind_speed_str = period.get("windSpeed", "")
+
+                        # Extract humidity percentage
+                        humidity = None
+                        if isinstance(humidity_data, dict):
+                            humidity = humidity_data.get("value")
+
+                        # Extract wind speed (format: "10 mph" or "5 to 10 mph")
+                        wind_speed = None
+                        if wind_speed_str:
+                            parts = wind_speed_str.split()
+                            if parts:
+                                with contextlib.suppress(ValueError, IndexError):
+                                    wind_speed = int(parts[0])
+
+                        # Calculate if we have the required data
+                        if (
+                            temp is not None
+                            and humidity is not None
+                            and wind_speed is not None
+                        ):
+                            apparent_temp = calculate_apparent_temperature(
+                                temperature_f=temp,
+                                humidity=humidity,
+                                wind_speed_mph=wind_speed,
                             )
+                    except Exception as e:
+                        logger.debug(
+                            f"Could not calculate apparent temperature: {e}"
+                        )
 
-                    # Determine is_daytime using that hour's date-specific sunrise/sunset
-                    # Use local timezone date to match sun_events keys
-                    start_time_local = start_time.astimezone(tz)
-                    day_key = start_time_local.date().isoformat()
-                    sr_raw = sun_events.get(day_key, {}).get("sunrise")
-                    ss_raw = sun_events.get(day_key, {}).get("sunset")
-                    if sr_raw and ss_raw:
-                        sr_dt = datetime.fromisoformat(sr_raw)
-                        ss_dt = datetime.fromisoformat(ss_raw)
-                        is_daytime = sr_dt <= start_time < ss_dt
-                    else:
-                        # Fallback simple rule
-                        is_daytime = 6 <= start_time.hour < 18
+                # Determine is_daytime using that hour's date-specific sunrise/sunset
+                # Use local timezone date to match sun_events keys
+                start_time_local = start_time.astimezone(tz)
+                day_key = start_time_local.date().isoformat()
+                sr_raw = sun_events.get(day_key, {}).get("sunrise")
+                ss_raw = sun_events.get(day_key, {}).get("sunset")
+                if sr_raw and ss_raw:
+                    sr_dt = datetime.fromisoformat(sr_raw)
+                    ss_dt = datetime.fromisoformat(ss_raw)
+                    is_daytime = sr_dt <= start_time < ss_dt
+                else:
+                    # Fallback simple rule
+                    is_daytime = 6 <= start_time.hour < 18
 
-                    hours_data.append(
-                        {
-                            "time": start_time.strftime("%I %p").lstrip("0"),
-                            "start": start_time.isoformat(),
-                            "temp": period.get("temperature", "N/A"),
-                            "apparentTemp": apparent_temp,
-                            "condition": period.get("shortForecast", "N/A"),
-                            "icon": self._get_weather_icon(
-                                period.get("shortForecast", ""), is_daytime
-                            ),
-                            "wind": period.get("windSpeed", ""),
-                            "windDir": period.get("windDirection", ""),
-                            "windGust": wind_gust,
-                            "pop": precip_prob,
-                        }
-                    )
+                hours_data.append(
+                    {
+                        "time": start_time.strftime("%I %p").lstrip("0"),
+                        "start": start_time.isoformat(),
+                        "temp": period.get("temperature", "N/A"),
+                        "apparentTemp": apparent_temp,
+                        "condition": period.get("shortForecast", "N/A"),
+                        "icon": self._get_weather_icon(
+                            period.get("shortForecast", ""), is_daytime
+                        ),
+                        "wind": period.get("windSpeed", ""),
+                        "windDir": period.get("windDirection", ""),
+                        "windGust": wind_gust,
+                        "pop": precip_prob,
+                    }
+                )
 
             return Response(
                 {"hours": hours_data, "sun_events": sun_events, "timezone": tz_name},
