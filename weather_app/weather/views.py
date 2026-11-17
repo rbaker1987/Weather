@@ -3468,11 +3468,13 @@ class LocationDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         location = self.object
-        index_keys = ("nao", "ao", "pna", "oni", "epo")
+        index_keys = ("nao", "ao", "pna", "oni", "epo", "wpo")
         current_index_values = []
         for index_key in index_keys:
             latest = (
-                TeleconnectionObservation.objects.filter(index_key=index_key)
+                TeleconnectionObservation.objects.filter(
+                    index_key=index_key, observation_date__lte=timezone.localdate()
+                )
                 .order_by("-observation_date")
                 .first()
             )

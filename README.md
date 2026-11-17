@@ -83,7 +83,10 @@ To stop the server, press **`Ctrl + C`** in the terminal.
 The historical climate analysis compares a centered seven-day average around one
 calendar day (month/day) across every completed year. It loads missing daily weather
 from the Open-Meteo archive and the
-monthly NOAA PSL values for `nao`, `ao`, `pna`, `oni`, and `epo` automatically:
+NOAA teleconnection indices automatically: daily CPC values for `nao`, `ao`, `pna`,
+daily PSL values for `epo` and `wpo`, and monthly values for `oni` (ENSO), which is
+only published monthly. Analysis averages each index over the same 7-day window as the
+weather and reports Pearson r, Spearman, detrended r, r², p-value and 95% CI:
 
 ```bash
 python manage.py import_climate_data \
