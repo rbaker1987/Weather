@@ -26,6 +26,7 @@ from .models import (
     TeleconnectionObservation,
     WeatherAlert,
 )
+from .place_service import fetch_place_weather, validate_coordinates
 from .serializers import (
     BulkForecastRequestSerializer,
     CurrentConditionsSerializer,
@@ -1497,324 +1498,68 @@ class ModelsView(TemplateView):
         return context
 
 
+def _place_context(context, lat, lon, name=None):
+    """Fill ``context`` for location_detail.html from coordinates in the request.
+
+    No database rows are created: the place is a stand-in object built from the
+    URL, with forecast data fetched on demand.
+    """
+    try:
+        latitude, longitude = validate_coordinates(lat, lon)
+    except ValueError:
+        context["error"] = "Latitude and longitude are required and must be valid"
+        context["page_title"] = "Weather"
+        return context
+
+    data = fetch_place_weather(latitude, longitude, name)
+    place = data["place"]
+    context["location"] = place
+    context["latitude"] = latitude
+    context["longitude"] = longitude
+    context["page_title"] = f"Weather - {place.display_name}"
+    context["daily_forecasts"] = data["daily_forecasts"]
+    context["hourly_forecasts"] = []
+    context["active_alerts"] = data["alerts"]
+    context["is_temp_location"] = True
+
+    # Locations list for the selector (removed once locations are stateless)
+    try:
+        location_ids = context["view"].request.session.get("location_ids", [])
+        locations_qs = Location.objects.filter(is_active=True)
+        if location_ids:
+            locations_qs = locations_qs.filter(id__in=location_ids)
+        context["locations"] = locations_qs.order_by(
+            "-is_current_location", "display_order", "name"
+        )
+    except Exception:
+        context["locations"] = Location.objects.none()
+    return context
+
+
 class TempLocationView(TemplateView):
-    """View for temporary location forecast (map-selected coordinates)."""
+    """Forecast for map-selected coordinates (?latitude=&longitude=)."""
 
     template_name = "weather/location_detail.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        lat = self.request.GET.get("latitude")
-        lon = self.request.GET.get("longitude")
-
-        if not lat or not lon:
-            context["error"] = "Latitude and longitude are required"
-            context["page_title"] = "Temporary Location"
-            return context
-
-        try:
-            latitude = float(lat)
-            longitude = float(lon)
-        except (ValueError, TypeError):
-            context["error"] = "Invalid coordinates"
-            context["page_title"] = "Temporary Location"
-            return context
-
-        # Create a pseudo-location object for template compatibility
-        from datetime import datetime
-        from itertools import groupby
-        from types import SimpleNamespace
-
-        import requests
-
-        location = SimpleNamespace(
-            id=None,
-            name=f"Map Location ({lat}, {lon})",
-            display_name="📍 Map Location",
-            latitude=latitude,
-            longitude=longitude,
-            zip_code=None,
-            nws_office="",
-            grid_x=None,
-            grid_y=None,
-            last_forecast_update=None,
-            last_observation_time=None,
-            current_temp=None,
-            current_conditions="",
-            current_humidity=None,
-            current_wind_speed=None,
-            current_wind_gust=None,
-            current_wind_direction="",
-            current_apparent_temp=None,
-            is_current_location=False,
+        return _place_context(
+            context,
+            self.request.GET.get("latitude"),
+            self.request.GET.get("longitude"),
+            self.request.GET.get("name"),
         )
-        location.alerts = SimpleNamespace(filter=lambda **_kwargs: [])
 
-        # Fetch forecast data from NWS
-        daily_forecasts = []
-        hourly_forecasts = []
-        active_alerts = []
 
-        try:
-            headers = {"User-Agent": "(Weather App, contact@example.com)"}
+class PlaceView(TemplateView):
+    """Forecast for a place carried in the URL: /weather/<lat>,<lon>/?name=."""
 
-            # Get grid point data
-            grid_url = f"https://api.weather.gov/points/{latitude},{longitude}"
-            grid_response = requests.get(grid_url, headers=headers, timeout=10)
-            grid_response.raise_for_status()
-            grid_data = grid_response.json()
+    template_name = "weather/location_detail.html"
 
-            properties = grid_data.get("properties", {})
-            location.nws_office = properties.get("gridId", "")
-            location.grid_x = properties.get("gridX")
-            location.grid_y = properties.get("gridY")
-
-            # Fetch current conditions
-            try:
-                observation_stations_url = properties.get("observationStations")
-                if observation_stations_url:
-                    stations_response = requests.get(
-                        observation_stations_url, headers=headers, timeout=10
-                    )
-                    stations_response.raise_for_status()
-                    stations_data = stations_response.json()
-
-                    stations = stations_data.get("features", [])
-                    if stations:
-                        station_id = (
-                            stations[0].get("properties", {}).get("stationIdentifier")
-                        )
-                        if station_id:
-                            obs_url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
-                            obs_response = requests.get(
-                                obs_url, headers=headers, timeout=10
-                            )
-                            obs_response.raise_for_status()
-                            obs_data = obs_response.json()
-
-                            obs_props = obs_data.get("properties", {})
-
-                            # Extract temperature FIRST before creating object
-                            temp_c = obs_props.get("temperature", {}).get("value")
-                            temp_f = (
-                                int(temp_c * 9 / 5 + 32) if temp_c is not None else 32
-                            )
-
-                            # Get or create CurrentConditions with temperature in defaults
-                            cc, created = CurrentConditions.objects.get_or_create(
-                                location=location,
-                                defaults={
-                                    "temperature": temp_f,
-                                    "condition": obs_props.get(
-                                        "textDescription", "Unknown"
-                                    ),
-                                    "humidity": 50,
-                                    "wind_speed": 0,
-                                    "wind_direction": "",
-                                    "last_observation_time": timezone.now(),
-                                },
-                            )
-
-                            # Always update fields (whether new or existing)
-                            cc.temperature = temp_f
-                            cc.condition = obs_props.get("textDescription", "Unknown")
-
-                            humidity = obs_props.get("relativeHumidity", {}).get(
-                                "value"
-                            )
-                            if humidity is not None:
-                                cc.humidity = int(humidity)
-                            elif cc.humidity is None:
-                                cc.humidity = 50  # Default humidity
-
-                            wind_speed_kmh = obs_props.get("windSpeed", {}).get("value")
-                            if wind_speed_kmh is not None:
-                                cc.wind_speed = int(wind_speed_kmh * 0.621371)
-                            else:
-                                cc.wind_speed = 0
-
-                            wind_gust_kmh = obs_props.get("windGust", {}).get("value")
-                            if wind_gust_kmh is not None:
-                                cc.wind_gust = int(wind_gust_kmh * 0.621371)
-                            else:
-                                cc.wind_gust = None
-
-                            wind_dir_deg = obs_props.get("windDirection", {}).get(
-                                "value"
-                            )
-                            if wind_dir_deg is not None:
-                                deg = float(wind_dir_deg)
-                                directions = [
-                                    "N",
-                                    "NE",
-                                    "E",
-                                    "SE",
-                                    "S",
-                                    "SW",
-                                    "W",
-                                    "NW",
-                                ]
-                                cc.wind_direction = directions[
-                                    int((deg + 22.5) / 45) % 8
-                                ]
-                            else:
-                                cc.wind_direction = ""
-
-                            timestamp = obs_props.get("timestamp")
-                            if timestamp:
-                                cc.last_observation_time = datetime.fromisoformat(
-                                    timestamp.replace("Z", "+00:00")
-                                )
-                            elif cc.last_observation_time is None:
-                                cc.last_observation_time = timezone.now()
-
-                            cc.save()
-            except Exception as e:
-                print(f"Warning: Could not fetch current conditions: {str(e)}")
-
-            # Get forecast URL
-            forecast_url = properties.get("forecast")
-            if forecast_url:
-                forecast_response = requests.get(
-                    forecast_url, headers=headers, timeout=10
-                )
-                forecast_response.raise_for_status()
-                forecast_data = forecast_response.json()
-
-                periods = forecast_data.get("properties", {}).get("periods", [])
-
-                # Parse periods into daily forecast objects
-                for period in periods[:14]:
-                    raw_start = datetime.fromisoformat(
-                        period["startTime"].replace("Z", "+00:00")
-                    )
-                    local_start = raw_start.astimezone(timezone.get_current_timezone())
-                    raw_end = datetime.fromisoformat(
-                        period["endTime"].replace("Z", "+00:00")
-                    )
-                    local_end = raw_end.astimezone(timezone.get_current_timezone())
-
-                    # For night periods, associate with the same day (not the next day)
-                    # E.g., "Friday Night" should be associated with Friday, not Saturday
-                    is_daytime = period.get("isDaytime", True)
-                    if is_daytime:
-                        forecast_date = local_start.date()
-                    else:
-                        # Night period: if it starts late in the day (e.g., 6 PM), use that date
-                        # Otherwise if it starts after midnight, subtract one day
-                        if local_start.hour >= 18:  # Starts at or after 6 PM
-                            forecast_date = local_start.date()
-                        else:
-                            forecast_date = (local_start - timedelta(days=1)).date()
-
-                    daily_forecasts.append(
-                        SimpleNamespace(
-                            forecast_date=forecast_date,
-                            period_start=local_start,
-                            period_end=local_end,
-                            is_daytime=period.get("isDaytime", True),
-                            temperature=period.get("temperature"),
-                            temperature_unit=period.get("temperatureUnit", "F"),
-                            wind_speed=self._parse_wind_speed(
-                                period.get("windSpeed", "")
-                            ),
-                            wind_direction=period.get("windDirection", ""),
-                            short_forecast=period.get("shortForecast", ""),
-                            detailed_forecast=period.get("detailedForecast", ""),
-                            precipitation_probability=period.get(
-                                "probabilityOfPrecipitation", {}
-                            ).get("value"),
-                        )
-                    )
-
-            # Fetch alerts
-            try:
-                alerts_url = f"https://api.weather.gov/alerts/active?point={latitude},{longitude}"
-                alerts_response = requests.get(alerts_url, headers=headers, timeout=10)
-                alerts_response.raise_for_status()
-                alerts_data = alerts_response.json()
-
-                features = alerts_data.get("features", [])
-                for feature in features:
-                    props = feature.get("properties", {})
-                    onset = props.get("onset")
-                    expires = props.get("expires")
-
-                    if onset:
-                        onset = datetime.fromisoformat(onset.replace("Z", "+00:00"))
-                    if expires:
-                        expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
-
-                    active_alerts.append(
-                        SimpleNamespace(
-                            event=props.get("event", "Unknown"),
-                            headline=props.get("headline", ""),
-                            description=props.get("description", ""),
-                            severity=props.get("severity", "unknown").lower(),
-                            urgency=props.get("urgency", "unknown").lower(),
-                            onset=onset,
-                            expires=expires,
-                        )
-                    )
-            except Exception as e:
-                print(f"Warning: Failed to fetch alerts: {str(e)}")
-
-            location.last_forecast_update = timezone.now()
-
-        except Exception as e:
-            print(f"Warning: Failed to fetch forecast data: {str(e)}")
-
-        # Group daily forecasts by date
-        grouped_forecasts = []
-        if daily_forecasts:
-            for date, periods in groupby(
-                daily_forecasts, key=lambda f: f.forecast_date
-            ):
-                periods_list = list(periods)
-                day_forecast = next((p for p in periods_list if p.is_daytime), None)
-                night_forecast = next(
-                    (p for p in periods_list if not p.is_daytime), None
-                )
-                grouped_forecasts.append(
-                    {"date": date, "day": day_forecast, "night": night_forecast}
-                )
-
-        context["location"] = location
-        context["latitude"] = lat
-        context["longitude"] = lon
-        context["page_title"] = f"Temporary Location - {lat}, {lon}"
-        context["daily_forecasts"] = grouped_forecasts
-        context["hourly_forecasts"] = hourly_forecasts
-        context["active_alerts"] = active_alerts
-        context["is_temp_location"] = True
-
-        # Add locations list for selector
-        try:
-            location_ids = self.request.session.get("location_ids", [])
-            locations_qs = Location.objects.filter(is_active=True)
-            if location_ids:
-                locations_qs = locations_qs.filter(id__in=location_ids)
-            context["locations"] = locations_qs.order_by(
-                "-is_current_location", "display_order", "name"
-            )
-        except Exception:
-            context["locations"] = Location.objects.none()
-
-        return context
-
-    @staticmethod
-    def _parse_wind_speed(wind_speed_str):
-        """Extract numeric wind speed from string like '10 to 15 mph' or '10 mph'."""
-        if not wind_speed_str:
-            return 0
-        import re
-
-        numbers = re.findall(r"\d+", str(wind_speed_str))
-        if numbers:
-            if len(numbers) > 1:
-                return int((int(numbers[0]) + int(numbers[1])) / 2)
-            return int(numbers[0])
-        return 0
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        lat, _, lon = kwargs["coords"].partition(",")
+        return _place_context(context, lat, lon, self.request.GET.get("name"))
 
 
 class ModelDetailView(TemplateView):
