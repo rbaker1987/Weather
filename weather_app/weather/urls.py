@@ -8,6 +8,7 @@ from .api.climate_normals_api import ClimateNormalsAPIView
 from .api.geocode_api import GeocodeAPIView
 from .api.hourly_forecast_api import HourlyForecastForLocationAPIView
 from .api.model_comparison_api import ModelComparisonAPIView
+from .api.model_spread_api import ModelSpreadAPIView
 from .api.summarize_api import SummarizeForecastAPIView
 from .converters import CoordinatesConverter
 
@@ -31,6 +32,11 @@ urlpatterns = [
         "api/model-comparison/",
         ModelComparisonAPIView.as_view(),
         name="model-comparison",
+    ),
+    path(
+        "api/model-spread/",
+        ModelSpreadAPIView.as_view(),
+        name="model-spread",
     ),
     path(
         "api/climate-normals/",

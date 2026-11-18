@@ -158,6 +158,21 @@
 
 <!-- Comparison Results -->
 <div id="modelResults" style="display: none;">
+    <!-- Model agreement: min / median / max across models for each day -->
+    <div class="chart-container mb-3" id="modelSpreadPanel">
+        <h4 class="mb-1"><i class="fas fa-balance-scale"></i> Model Agreement</h4>
+        <p class="text-muted small mb-3">Spread between the lowest and highest model for each day. Wide spreads mean the models disagree and confidence is lower.</p>
+        <div id="modelSpreadStatus" class="text-muted small"></div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 d-none" id="modelSpreadTable">
+                <thead>
+                    <tr><th>Day</th><th>High &deg;F</th><th>Low &deg;F</th><th>Precip (in)</th><th>Agreement</th></tr>
+                </thead>
+                <tbody id="modelSpreadBody"></tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- Temperature and Precipitation Comparison Chart -->
     <div class="chart-container">
         <h4 class="mb-3" id="chartTitle"><i class="fas fa-temperature-high"></i> Model Comparison — Temperature & Precipitation</h4>
@@ -331,6 +346,7 @@ async function loadModelData() {
         // Store and display the data
         currentModelData = modelData;
         displayModelComparison(modelData);
+        loadModelSpread(lat, lon, models, forecastDays);
     } catch (error) {
         console.error('Error loading model data:', error);
         alert('Error loading model data. Please try again.');
@@ -383,6 +399,71 @@ function setModelCardStatus(modelName, html) {
         if (header) header.appendChild(timeSpan); else card.appendChild(timeSpan);
     }
     timeSpan.innerHTML = html;
+}
+
+const AGREEMENT_LABELS = {
+    high: ['success', 'Models agree'],
+    moderate: ['warning', 'Some disagreement'],
+    low: ['danger', 'Models disagree']
+};
+
+function spreadCell(summary, unit) {
+    const cell = document.createElement('td');
+    if (!summary) {
+        cell.textContent = '\u2014';
+        return cell;
+    }
+    const range = document.createElement('div');
+    range.textContent = `${summary.min} \u2013 ${summary.max}`;
+    const detail = document.createElement('small');
+    detail.className = 'text-muted';
+    detail.textContent = `median ${summary.median}`
+        + (summary.outlier ? ` \u00b7 ${summary.outlier} furthest` : '');
+    cell.append(range, detail);
+    cell.title = `Spread ${summary.spread}${unit} across ${summary.models} models`;
+    return cell;
+}
+
+async function loadModelSpread(lat, lon, models, forecastDays) {
+    const status = document.getElementById('modelSpreadStatus');
+    const table = document.getElementById('modelSpreadTable');
+    const body = document.getElementById('modelSpreadBody');
+    if (!status || !table || !body) return;
+    status.textContent = 'Comparing models...';
+    table.classList.add('d-none');
+    body.replaceChildren();
+    try {
+        const params = new URLSearchParams({ latitude: lat, longitude: lon, models, forecast_days: forecastDays });
+        const response = await fetch(`/api/model-spread/?${params}`);
+        const data = await response.json();
+        if (!response.ok || data.status !== 'success') throw new Error(data.error || 'failed');
+        if (!data.days.length) {
+            status.textContent = 'Not enough models returned data to compare.';
+            return;
+        }
+        data.days.forEach((day) => {
+            const row = document.createElement('tr');
+            const label = document.createElement('td');
+            label.textContent = new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            const [color, text] = AGREEMENT_LABELS[day.agreement] || ['secondary', day.agreement];
+            const badge = document.createElement('span');
+            badge.className = `badge bg-${color}`;
+            badge.textContent = text;
+            const verdict = document.createElement('td');
+            verdict.append(badge);
+            row.append(label, spreadCell(day.high, '\u00b0F'), spreadCell(day.low, '\u00b0F'), spreadCell(day.precip, ' in'), verdict);
+            body.appendChild(row);
+        });
+        const notes = [`${data.models_used.length} models compared`];
+        const failed = Object.keys(data.models_failed);
+        if (failed.length) notes.push(`unavailable: ${failed.join(', ')}`);
+        if (data.models_skipped.length) notes.push(`out of domain: ${data.models_skipped.join(', ')}`);
+        status.textContent = notes.join(' \u00b7 ');
+        table.classList.remove('d-none');
+    } catch (error) {
+        console.warn('Could not load model spread:', error);
+        status.textContent = 'Model agreement is unavailable right now.';
+    }
 }
 
 function displayModelComparison(modelData) {
