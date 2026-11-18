@@ -11,12 +11,6 @@ from rest_framework.test import APIClient
 from weather.models import CurrentConditions, DailyForecast, Location, WeatherAlert
 
 
-def add_location_to_session(client, location):
-    session = client.session
-    session["location_ids"] = [str(location.id)]
-    session.save()
-
-
 @pytest.mark.django_db
 class TestGeocodingActions:
     def test_geocode_search_valid_and_empty_results(self):
@@ -147,36 +141,11 @@ class TestCurrentConditionsActions:
 
 @pytest.mark.django_db
 class TestForecastAndExportBranches:
-    def test_ensure_browser_location_requires_coordinates(self):
-        response = APIClient().post(
-            "/api/locations/ensure_browser_location/",
-            {"name": "Missing"},
-            format="json",
-        )
-
-        assert response.status_code == 400
-        assert "required" in response.data["message"]
-
-    def test_ensure_browser_location_falls_back_when_tasks_fail(self):
-        with (
-            patch("weather.tasks.enqueue_current_conditions", side_effect=RuntimeError),
-            patch("weather.views._refresh_forecasts_for_location") as refresh,
-        ):
-            response = APIClient().post(
-                "/api/locations/ensure_browser_location/",
-                {"latitude": 30.1, "longitude": -97.7},
-                format="json",
-            )
-
-        assert response.status_code == 200
-        refresh.assert_called_once()
-
     def test_update_forecast_reports_external_request_error(self):
         location = Location.objects.create(
             name="Request failure", latitude=30, longitude=-97
         )
         client = APIClient()
-        add_location_to_session(client, location)
 
         with patch(
             "requests.get", side_effect=__import__("requests").RequestException("down")
@@ -191,7 +160,6 @@ class TestForecastAndExportBranches:
             name="Forecast only", latitude=30, longitude=-97
         )
         client = APIClient()
-        add_location_to_session(client, location)
         grid = Mock()
         grid.json.return_value = {
             "properties": {
@@ -223,70 +191,9 @@ class TestForecastAndExportBranches:
         assert response.status_code == 200
         assert response.data["periods_created"] == 0
 
-    def test_clear_all_deletes_active_locations(self):
-        Location.objects.create(name="Active", is_active=True)
-        Location.objects.create(name="Inactive", is_active=False)
-
-        response = APIClient().post("/api/locations/clear_all/")
-
-        assert response.status_code == 200
-        assert response.data["deleted"] == 1
-        assert not Location.objects.filter(is_active=True).exists()
-
-    def test_ensure_browser_location_updates_existing_current_location(self):
-        location = Location.objects.create(
-            name="Old", latitude=1, longitude=2, is_current_location=True
-        )
-        client = APIClient()
-        add_location_to_session(client, location)
-
-        with (
-            patch("weather.tasks.enqueue_current_conditions"),
-            patch("weather.tasks.enqueue_forecasts"),
-            patch("weather.tasks.enqueue_alerts"),
-        ):
-            response = client.post(
-                "/api/locations/ensure_browser_location/",
-                {"name": "New", "latitude": 30.1, "longitude": -97.7},
-                format="json",
-            )
-
-        location.refresh_from_db()
-        assert response.status_code == 200
-        assert response.data["location_id"] == str(location.id)
-        assert location.name == "New"
-        assert float(location.latitude) == 30.1
-
-    def test_location_actions_set_current_toggle_and_reorder(self):
-        first = Location.objects.create(name="First", is_current_location=True)
-        second = Location.objects.create(name="Second", is_enabled=True)
-        client = APIClient()
-        add_location_to_session(client, second)
-
-        current = client.post(f"/api/locations/{second.id}/set_current/")
-        toggled = client.post(f"/api/locations/{second.id}/toggle_enabled/")
-        reordered = client.post(
-            "/api/locations/reorder/",
-            {"location_order": [str(first.id), str(second.id)]},
-            format="json",
-        )
-
-        assert current.status_code == 200
-        assert toggled.data["is_enabled"] is False
-        assert reordered.status_code == 200
-        second.refresh_from_db()
-        assert second.is_current_location is True
-        assert second.display_order == 1
-
-    def test_reorder_requires_location_order(self):
-        response = APIClient().post("/api/locations/reorder/", {}, format="json")
-
-        assert response.status_code == 400
-
     def test_update_forecast_rejects_location_without_coordinates_or_zip(self):
         location = Location.objects.create(name="Missing coordinates")
         client = APIClient()
-        add_location_to_session(client, location)
 
         response = client.post(f"/api/locations/{location.id}/update_forecast/")
 
@@ -296,7 +203,6 @@ class TestForecastAndExportBranches:
     def test_update_forecast_reports_geocoding_failure(self):
         location = Location.objects.create(name="Unknown", zip_code="00000")
         client = APIClient()
-        add_location_to_session(client, location)
         geocode = Mock()
         geocode.json.return_value = []
         geocode.raise_for_status.return_value = None
@@ -310,7 +216,6 @@ class TestForecastAndExportBranches:
     def test_update_forecast_reports_missing_forecast_url(self):
         location = Location.objects.create(name="Grid only", latitude=30, longitude=-97)
         client = APIClient()
-        add_location_to_session(client, location)
         grid = Mock()
         grid.json.return_value = {"properties": {"gridId": "FWD"}}
         grid.raise_for_status.return_value = None
@@ -324,7 +229,6 @@ class TestForecastAndExportBranches:
     def test_update_forecast_stores_conditions_forecast_and_alert(self):
         location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
         client = APIClient()
-        add_location_to_session(client, location)
 
         grid = Mock()
         grid.json.return_value = {
@@ -410,9 +314,6 @@ class TestForecastAndExportBranches:
     def test_forecasts_post_validates_payload(self):
         location = Location.objects.create(name="Austin")
         client = APIClient()
-        session = client.session
-        session["location_ids"] = [str(location.id)]
-        session.save()
         base = f"/api/locations/{location.id}/forecasts/"
 
         missing_date = client.post(base, {}, format="json")

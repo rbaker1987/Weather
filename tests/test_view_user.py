@@ -12,20 +12,10 @@ from weather.views import (
 )
 
 
-class SessionDict(dict):
-    modified = False
-
-
 @pytest.mark.django_db
-def test_models_view_selects_current_location_and_normals():
-    location = Location.objects.create(
-        name="Current",
-        is_current_location=True,
-        avg_high_temp=85,
-        avg_low_temp=65,
-    )
+def test_models_view_does_not_offer_stored_locations():
+    Location.objects.create(name="Current", is_current_location=True)
     request = RequestFactory().get("/models")
-    request.session = SessionDict(location_ids=[str(location.id)])
     view = ModelsView()
     view.request = request
     view.args = ()
@@ -33,9 +23,9 @@ def test_models_view_selects_current_location_and_normals():
 
     context = view.get_context_data()
 
-    assert context["default_location_id"] == location.id
-    assert context["avg_high_temp"] == 85
-    assert context["avg_low_temp"] == 65
+    assert context["page_title"] == "Weather Models"
+    assert "locations" not in context
+    assert "default_location_id" not in context
 
 
 @pytest.mark.django_db

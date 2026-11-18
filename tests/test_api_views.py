@@ -12,18 +12,6 @@ from rest_framework.test import APIClient
 from weather.models import DailyForecast, Location, WeatherAlert
 
 
-def add_location_to_session(client, location):
-    """Helper to add location to session so it's visible in queryset."""
-    session = client.session
-    ids = session.get("location_ids", [])
-    ids = [str(x) for x in ids]
-    lid = str(location.id)
-    if lid not in ids:
-        ids.append(lid)
-    session["location_ids"] = ids
-    session.save()
-
-
 @pytest.fixture
 def api_client():
     return APIClient()
@@ -31,38 +19,27 @@ def api_client():
 
 @pytest.mark.django_db
 class TestLocationAPI:
-    def test_list_filters_by_session_location_ids(self, client):
-        l1 = Location.objects.create(name="A")
-        l2 = Location.objects.create(name="B")
-        Location.objects.create(name="C")
-        sess = client.session
-        sess["location_ids"] = [str(l1.id), str(l2.id)]
-        sess.save()
+    def test_location_list_and_create_are_not_exposed(self, client):
+        Location.objects.create(name="Someone Else")
 
-        resp = client.get("/api/locations/")
-        assert resp.status_code == 200
-        data = resp.json()
-        # Only A and B present
-        names = {item["name"] for item in data}
-        assert names == {"A", "B"}
-
-    def test_ensure_browser_location_creates_and_sets_session(self, client):
-        payload = {
-            "name": "My Location",
-            "latitude": 30.1,
-            "longitude": -97.7,
-        }
-        resp = client.post(
-            "/api/locations/ensure_browser_location/",
-            data=json.dumps(payload),
-            content_type="application/json",
+        assert client.get("/api/locations/").status_code == 404
+        assert (
+            client.post(
+                "/api/locations/",
+                data=json.dumps({"name": "New"}),
+                content_type="application/json",
+            ).status_code
+            == 404
         )
+
+    def test_retrieve_existing_location_without_session(self, client):
+        location = Location.objects.create(name="Stored")
+
+        resp = client.get(f"/api/locations/{location.id}/")
         assert resp.status_code == 200
-        body = resp.json()
-        assert body.get("status") == "success"
-        # Confirm the new id is in session
-        sess_ids = client.session.get("location_ids", [])
-        assert body["location_id"] in sess_ids
+        assert resp.json()["name"] == "Stored"
+        assert client.delete(f"/api/locations/{location.id}/").status_code == 405
+        assert Location.objects.filter(id=location.id).exists()
 
 
 @pytest.mark.django_db
@@ -287,7 +264,6 @@ class TestLocationActions:
         loc = Location.objects.create(
             name="L1", latitude=Decimal("1.0"), longitude=Decimal("2.0")
         )
-        add_location_to_session(api_client, loc)
         today = timezone.now().date()
         DailyForecast.objects.create(
             location=loc,
@@ -306,7 +282,6 @@ class TestLocationActions:
 
     def test_forecasts_post_create_custom(self, api_client):
         loc = Location.objects.create(name="L2")
-        add_location_to_session(api_client, loc)
         payload = {
             "date": timezone.now().date().isoformat(),
             "is_daytime": True,
@@ -321,7 +296,6 @@ class TestLocationActions:
 
     def test_alerts_list(self, api_client):
         loc = Location.objects.create(name="L3")
-        add_location_to_session(api_client, loc)
         WeatherAlert.objects.create(
             location=loc,
             event="Heat Advisory",
@@ -337,87 +311,6 @@ class TestLocationActions:
         r = api_client.get(f"/api/locations/{loc.pk}/alerts/")
         assert r.status_code == 200 and len(r.data) == 1
 
-    def test_ensure_browser_location_success(self, api_client):
-        payload = {"name": "Here", "latitude": 10.0, "longitude": 20.0}
-        with (
-            patch("weather.tasks.enqueue_current_conditions"),
-            patch("weather.tasks.enqueue_forecasts"),
-            patch("weather.tasks.enqueue_alerts"),
-        ):
-            r = api_client.post(
-                "/api/locations/ensure_browser_location/", payload, format="json"
-            )
-        assert r.status_code == 200 and r.data["status"] == "success"
-        assert "location_ids" in api_client.session
-
-    def test_ensure_browser_location_updates_existing_current(self, api_client):
-        """Test updating an existing current location with new coords."""
-        Location.objects.create(
-            name="Old",
-            latitude=Decimal("30.0"),
-            longitude=Decimal("-95.0"),
-            is_current_location=True,
-        )
-        payload = {"name": "Updated", "latitude": 35.0, "longitude": -90.0}
-        with (
-            patch("weather.tasks.enqueue_current_conditions"),
-            patch("weather.tasks.enqueue_forecasts"),
-            patch("weather.tasks.enqueue_alerts"),
-        ):
-            r = api_client.post(
-                "/api/locations/ensure_browser_location/", payload, format="json"
-            )
-        assert r.status_code == 200
-
-    def test_ensure_browser_location_missing_coords(self, api_client):
-        r = api_client.post(
-            "/api/locations/ensure_browser_location/", {"name": "bad"}, format="json"
-        )
-        assert r.status_code == 400
-
-    def test_reorder_success(self, api_client):
-        l1, l2 = Location.objects.create(name="A"), Location.objects.create(name="B")
-        order = [str(l2.id), str(l1.id)]
-        r = api_client.post(
-            "/api/locations/reorder/", {"location_order": order}, format="json"
-        )
-        assert r.status_code == 200
-        l1.refresh_from_db()
-        l2.refresh_from_db()
-        assert l2.display_order == 0 and l1.display_order == 1
-
-    def test_reorder_missing_order(self, api_client):
-        r = api_client.post("/api/locations/reorder/", {}, format="json")
-        assert r.status_code == 400
-
-    def test_reorder_exception_handling(self, api_client):
-        """Trigger exception in reorder to hit error branch."""
-        with patch(
-            "weather.models.Location.objects.filter", side_effect=Exception("db error")
-        ):
-            r = api_client.post(
-                "/api/locations/reorder/",
-                {"location_order": ["bad-uuid"]},
-                format="json",
-            )
-        assert r.status_code == 500
-
-    def test_clear_all(self, api_client):
-        Location.objects.create(name="X")
-        Location.objects.create(name="Y")
-        r = api_client.post("/api/locations/clear_all/", {}, format="json")
-        assert r.status_code == 200 and r.data["status"] == "success"
-
-    def test_set_current_and_toggle(self, api_client):
-        loc = Location.objects.create(name="Home")
-        add_location_to_session(api_client, loc)
-        r1 = api_client.post(f"/api/locations/{loc.pk}/set_current/")
-        assert r1.status_code == 200
-        loc.refresh_from_db()
-        assert loc.is_current_location and loc.is_enabled
-        r2 = api_client.post(f"/api/locations/{loc.pk}/toggle_enabled/")
-        assert r2.status_code == 200
-
 
 @pytest.mark.django_db
 class TestUpdateForecastAction:
@@ -426,7 +319,6 @@ class TestUpdateForecastAction:
     def test_update_forecast_no_coordinates_no_zip(self, api_client):
         """Test update_forecast when location has no coordinates and no zip code."""
         location = Location.objects.create(name="No Coords")
-        add_location_to_session(api_client, location)
         response = api_client.post(f"/api/locations/{location.pk}/update_forecast/")
         assert response.status_code == 400
         assert "coordinates or zip code" in str(response.data).lower()
@@ -438,7 +330,6 @@ class TestUpdateForecastAction:
             latitude=Decimal("45.5152"),
             longitude=Decimal("-122.6784"),
         )
-        add_location_to_session(api_client, location)
 
         mock_grid = Mock(status_code=200)
         mock_grid.json.return_value = {
@@ -485,7 +376,6 @@ class TestUpdateForecastAction:
         location = Location.objects.create(
             name="Alerts Loc", latitude=Decimal("35.0"), longitude=Decimal("-90.0")
         )
-        add_location_to_session(api_client, location)
 
         mock_grid = Mock(status_code=200)
         mock_grid.json.return_value = {
@@ -550,7 +440,6 @@ class TestUpdateForecastAction:
         location = Location.objects.create(
             name="Err Loc", latitude=Decimal("40.0"), longitude=Decimal("-80.0")
         )
-        add_location_to_session(api_client, location)
 
         grid = Mock(status_code=200)
         grid.json.return_value = {
@@ -569,7 +458,6 @@ class TestUpdateForecastAction:
         location = Location.objects.create(
             name="Periods Loc", latitude=Decimal("41.0"), longitude=Decimal("-81.0")
         )
-        add_location_to_session(api_client, location)
         today = timezone.now().date()
 
         mock_grid = Mock(status_code=200)
@@ -629,7 +517,6 @@ class TestUpdateForecastAction:
     def test_update_forecast_geocodes_zip(self, api_client):
         """Test update_forecast geocodes location with zip code but no coords."""
         location = Location.objects.create(name="Zip Loc", zip_code="10001")
-        add_location_to_session(api_client, location)
 
         mock_geo = Mock(status_code=200)
         mock_geo.json.return_value = [{"lat": "40.75", "lon": "-73.99"}]

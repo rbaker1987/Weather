@@ -204,17 +204,6 @@ class TestPlaceView:
         assert len(response.context["daily_forecasts"]) == 1
         assert Location.objects.count() == 0
 
-    def test_place_page_lists_session_locations_for_selector(self, client):
-        saved = Location.objects.create(name="Saved", is_active=True)
-        session = client.session
-        session["location_ids"] = [str(saved.id)]
-        session.save()
-
-        with patch("requests.get", side_effect=_nws_get):
-            response = client.get("/weather/35.0,-97.0/")
-
-        assert list(response.context["locations"]) == [saved]
-
     def test_place_page_rejects_out_of_range_coordinates(self, client):
         response = client.get("/weather/95.0,-97.0/")
 
@@ -224,17 +213,14 @@ class TestPlaceView:
     def test_non_coordinate_path_is_not_matched(self, client):
         assert client.get("/weather/abc/").status_code == 404
 
-    def test_selector_failure_falls_back_to_empty_list(self, client):
-        with (
-            patch("requests.get", side_effect=_nws_get),
-            patch(
-                "weather.views.Location.objects.filter", side_effect=RuntimeError("db")
-            ),
-        ):
+    def test_place_page_does_not_list_stored_locations(self, client):
+        Location.objects.create(name="Someone Else", latitude=30, longitude=-97)
+
+        with patch("requests.get", side_effect=_nws_get):
             response = client.get("/weather/35.0,-97.0/")
 
         assert response.status_code == 200
-        assert list(response.context["locations"]) == []
+        assert "Someone Else" not in response.content.decode()
 
 
 @pytest.mark.django_db

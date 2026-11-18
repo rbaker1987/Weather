@@ -12,7 +12,7 @@ from django.db.models import Avg, Count, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from django.views.generic import DetailView, TemplateView
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -59,162 +59,20 @@ def fetch_current_conditions(location):
         return False
 
 
-class LocationViewSet(viewsets.ModelViewSet):
-    """API ViewSet for managing locations."""
+class LocationViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Read-only API for existing Location rows, addressed by id.
+
+    Places are carried in the URL now, so there is no list, create, update, or
+    delete: without accounts or per-visitor ownership those would expose or let
+    anyone change every stored row. The table itself is removed in a later step.
+    """
 
     queryset = Location.objects.filter(is_active=True)
     serializer_class = LocationSerializer
     permission_classes = [permissions.AllowAny]
-    search_fields = ["name", "zip_code"]
-    ordering_fields = ["name", "created_at", "last_forecast_update"]
-    ordering = ["name"]
 
     def get_queryset(self):
-        """Filter locations by session."""
-        queryset = super().get_queryset()
-        location_ids = self.request.session.get("location_ids", [])
-        queryset = queryset.filter(id__in=location_ids)
-
-        return queryset.annotate(forecast_count=Count("forecasts"))
-
-    def perform_create(self, serializer):
-        """Save location and add to session."""
-        location = serializer.save()
-
-        # Save location ID in session (convert UUID to string)
-        if "location_ids" not in self.request.session:
-            self.request.session["location_ids"] = []
-        self.request.session["location_ids"].append(str(location.id))
-        self.request.session.modified = True
-
-        # If location doesn't have coordinates, try to geocode
-        if not location.latitude or not location.longitude:
-            try:
-                import requests
-
-                headers = {"User-Agent": "WeatherApp/1.0"}
-
-                # Try zip code first if available
-                if location.zip_code:
-                    geocode_url = (
-                        "https://nominatim.openstreetmap.org/search?"
-                        f"postalcode={location.zip_code}&country=US&format=json&limit=1"
-                    )
-                else:
-                    # Otherwise geocode the name
-                    geocode_url = (
-                        "https://nominatim.openstreetmap.org/search?"
-                        f"q={location.name}&format=json&limit=1"
-                    )
-
-                geo_response = requests.get(geocode_url, headers=headers, timeout=10)
-                geo_response.raise_for_status()
-                geo_data = geo_response.json()
-
-                if geo_data and len(geo_data) > 0:
-                    location.latitude = float(geo_data[0]["lat"])
-                    location.longitude = float(geo_data[0]["lon"])
-                    location.save()
-            except Exception as e:
-                # Log error but don't fail the creation
-                logger.warning(f"Geocoding error: {str(e)}")
-
-        # Kick off background refreshes (best-effort)
-        if location.latitude and location.longitude:
-            try:
-                from .tasks import (
-                    enqueue_alerts,
-                    enqueue_current_conditions,
-                    enqueue_forecasts,
-                )
-
-                enqueue_current_conditions(str(location.id))
-                enqueue_forecasts(str(location.id))
-                enqueue_alerts(str(location.id))
-            except Exception:
-                fetch_current_conditions(location)
-                _refresh_forecasts_for_location(location)
-
-    @action(detail=False, methods=["post"])
-    def ensure_browser_location(self, request):
-        """Create or update a 'current' location from browser coordinates.
-        Payload: { name: str, latitude: float, longitude: float }
-        Ensures the location is enabled, marked current, and added to session.
-        Returns the location id.
-        """
-        try:
-            data = request.data or {}
-            name = data.get("name") or "My Location"
-            lat = data.get("latitude")
-            lon = data.get("longitude")
-            if lat is None or lon is None:
-                return Response(
-                    {
-                        "status": "error",
-                        "message": "latitude and longitude are required",
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # If a current location exists, update its coordinates and name
-            location = Location.objects.filter(is_current_location=True).first()
-            if location is None:
-                location = Location.objects.create(
-                    name=name,
-                    latitude=lat,
-                    longitude=lon,
-                    is_active=True,
-                    is_enabled=True,
-                    is_current_location=True,
-                )
-            else:
-                location.name = name or location.name
-                location.latitude = lat
-                location.longitude = lon
-                location.is_active = True
-                location.is_enabled = True
-                location.is_current_location = True
-                location.save(
-                    update_fields=[
-                        "name",
-                        "latitude",
-                        "longitude",
-                        "is_active",
-                        "is_enabled",
-                        "is_current_location",
-                    ]
-                )
-
-            # Ensure in session (store as strings)
-            session_ids = request.session.get("location_ids", [])
-            session_ids_str = [str(x) for x in session_ids]
-            loc_id_str = str(location.id)
-            if loc_id_str not in session_ids_str:
-                session_ids_str.append(loc_id_str)
-                request.session["location_ids"] = session_ids_str
-                request.session.modified = True
-
-            # Kick off background refreshes (best-effort)
-            try:
-                from .tasks import (
-                    enqueue_alerts,
-                    enqueue_current_conditions,
-                    enqueue_forecasts,
-                )
-
-                enqueue_current_conditions(str(location.id))
-                enqueue_forecasts(str(location.id))
-                enqueue_alerts(str(location.id))
-            except Exception:
-                _refresh_forecasts_for_location(location)
-
-            return Response({"status": "success", "location_id": str(location.id)})
-        except Exception as e:
-            logger.exception("ensure_browser_location failed: %s", e)
-            return Response(
-                {"status": "error", "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return super().get_queryset().annotate(forecast_count=Count("forecasts"))
 
     @action(detail=True, methods=["post"])
     def update_forecast(self, request, pk=None):
@@ -558,91 +416,6 @@ class LocationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=False, methods=["post"])
-    def clear_all(self, request):
-        """Clear all locations."""
-        try:
-            count = Location.objects.filter(is_active=True).count()
-            Location.objects.filter(is_active=True).delete()
-            return Response(
-                {
-                    "status": "success",
-                    "deleted": count,
-                    "message": f"Removed {count} location(s)",
-                }
-            )
-        except Exception as e:
-            return Response(
-                {"status": "error", "message": f"Error clearing locations: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    # Removed favorite support; reordering replaces this feature.
-
-    @action(detail=True, methods=["post"])
-    def set_current(self, request, pk=None):
-        """Set this location as current/home location."""
-        location = self.get_object()
-
-        try:
-            # Unset any existing current location
-            Location.objects.filter(is_current_location=True).update(
-                is_current_location=False
-            )
-
-            # Set this location as current and ensure it's enabled
-            location.is_current_location = True
-            location.is_enabled = True
-            location.save(update_fields=["is_current_location", "is_enabled"])
-
-            # Ensure this location is tracked in session
-            session_ids = request.session.get("location_ids", [])
-            # Normalize all IDs to strings
-            session_ids_str = [str(x) for x in session_ids]
-            loc_id_str = str(location.id)
-            if loc_id_str not in session_ids_str:
-                session_ids_str.append(loc_id_str)
-                request.session["location_ids"] = session_ids_str
-                request.session.modified = True
-
-            return Response(
-                {
-                    "status": "success",
-                    "message": f"{location.display_name} set as current location",
-                }
-            )
-        except Exception as e:
-            return Response(
-                {
-                    "status": "error",
-                    "message": f"Error setting current location: {str(e)}",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    @action(detail=True, methods=["post"])
-    def toggle_enabled(self, request, pk=None):
-        """Toggle location enabled/disabled state."""
-        location = self.get_object()
-
-        try:
-            # Toggle the is_enabled field
-            location.is_enabled = not location.is_enabled
-            location.save()
-
-            return Response(
-                {
-                    "status": "success",
-                    "is_enabled": location.is_enabled,
-                    "message": f"{location.display_name} {'enabled' if location.is_enabled else 'disabled'}",
-                }
-            )
-        except Exception as e:
-            return Response(
-                {"status": "error", "message": f"Error toggling location: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
     @action(detail=True, methods=["get", "post"])
     def forecasts(self, request, pk=None):
         """Return or create forecasts for a location."""
@@ -726,30 +499,6 @@ class LocationViewSet(viewsets.ModelViewSet):
         alerts = WeatherAlert.objects.filter(location=location).order_by("-onset")
         serializer = WeatherAlertSerializer(alerts, many=True)
         return Response(serializer.data)
-
-    @action(detail=False, methods=["post"])
-    def reorder(self, request):
-        """Reorder locations by provided list of ids."""
-        location_order = request.data.get("location_order")
-        if not location_order:
-            return Response(
-                {"status": "error", "message": "location_order is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            for index, location_id in enumerate(location_order):
-                Location.objects.filter(id=location_id).update(display_order=index)
-            return Response({"status": "success"})
-        except Exception as e:
-            logger.error("Error reordering locations: %s", e)
-            return Response(
-                {
-                    "status": "error",
-                    "message": "Internal server error while reordering locations.",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
 
     @action(detail=False, methods=["get"])
     def geocode_search(self, request):
@@ -1310,32 +1059,12 @@ class HomeView(TemplateView):
 
 
 class ModelsView(TemplateView):
-    """View for comparing weather models."""
+    """View for comparing weather models (place chosen by URL or map picker)."""
 
     template_name = "weather/models.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        location_ids = self.request.session.get("location_ids", [])
-        locations_qs = Location.objects.filter(
-            is_active=True, id__in=location_ids
-        ).order_by("-is_current_location", "display_order", "name")
-        locations = list(locations_qs)
-        context["locations"] = locations
-        # Default to current location if no location is set
-        current_location = next(
-            (loc for loc in locations if getattr(loc, "is_current_location", False)),
-            None,
-        )
-        context["default_location_id"] = (
-            current_location.id
-            if current_location
-            else (locations[0].id if locations else None)
-        )
-        # Include climate normals for the current location
-        if current_location:
-            context["avg_high_temp"] = current_location.avg_high_temp
-            context["avg_low_temp"] = current_location.avg_low_temp
         context["page_title"] = "Weather Models"
         return context
 
@@ -1363,18 +1092,6 @@ def _place_context(context, lat, lon, name=None):
     context["hourly_forecasts"] = []
     context["active_alerts"] = data["alerts"]
     context["is_temp_location"] = True
-
-    # Locations list for the selector (removed once locations are stateless)
-    try:
-        location_ids = context["view"].request.session.get("location_ids", [])
-        locations_qs = Location.objects.filter(is_active=True)
-        if location_ids:
-            locations_qs = locations_qs.filter(id__in=location_ids)
-        context["locations"] = locations_qs.order_by(
-            "-is_current_location", "display_order", "name"
-        )
-    except Exception:
-        context["locations"] = Location.objects.none()
     return context
 
 
@@ -2191,17 +1908,6 @@ class ModelDetailView(TemplateView):
         valid_ens = {"det", "control", "mean"} | {f"p{i:02d}" for i in range(1, 31)}
         if ensemble not in valid_ens:
             ensemble = "det"
-        location_obj = None
-        if not (lat and lon):
-            location_ids = request.session.get("location_ids", [])
-            location_obj = (
-                Location.objects.filter(is_active=True, id__in=location_ids)
-                .order_by("-is_current_location", "display_order", "name")
-                .first()
-            )
-            if location_obj:
-                lat = location_obj.latitude
-                lon = location_obj.longitude
 
         data = None
         error = None
@@ -2431,22 +2137,9 @@ class ModelDetailView(TemplateView):
                         f"Open-Meteo {model_name} failed in {om_elapsed:.2f}s: {exc}"
                     )
         else:
-            error = "Latitude/longitude not provided and no fallback location available"
+            error = "Latitude/longitude not provided. Choose a place on the map."
 
         import json
-
-        # Get locations from session if available, otherwise show all active locations
-        location_ids = request.session.get("location_ids", [])
-        if location_ids:
-            locations_qs = Location.objects.filter(
-                is_active=True,
-                id__in=location_ids,
-            ).order_by("-is_current_location", "display_order", "name")
-        else:
-            # Fallback: show all active locations if session is empty
-            locations_qs = Location.objects.filter(is_active=True).order_by(
-                "-is_current_location", "display_order", "name"
-            )
 
         # Trim hourly data to requested forecast_days window to reduce JSON payload
         if data and data.get("hourly") and data["hourly"].get("time"):
@@ -2790,21 +2483,6 @@ class ModelDetailView(TemplateView):
                 "elevation"
             )  # preserve existing elevation if present
 
-        # Convert to list to ensure it's always a renderable object
-        locations_list = list(locations_qs)
-        locations_payload = [
-            {
-                "id": str(loc.id),
-                "display_name": loc.display_name,
-                "latitude": float(loc.latitude) if loc.latitude is not None else None,
-                "longitude": float(loc.longitude)
-                if loc.longitude is not None
-                else None,
-                "is_current_location": loc.is_current_location,
-            }
-            for loc in locations_list
-        ]
-
         context.update(
             {
                 "model_name": model_name,
@@ -2820,8 +2498,8 @@ class ModelDetailView(TemplateView):
                 "latitude": lat,
                 "longitude": lon,
                 "forecast_days": forecast_days,
-                "locations": locations_list,
-                "locations_json": json.dumps(locations_payload),
+                "locations": [],
+                "locations_json": "[]",
                 "available_models": list(self.MODEL_CONFIGS.keys()),
                 "page_title": f"{model_name} Model Details",
             }
@@ -2844,13 +2522,6 @@ class LocationDetailView(DetailView):
     def get(self, request, *args, **kwargs):
         """Override get to trigger forecast update on page load."""
         self.object = self.get_object()
-
-        location_ids = [
-            str(location_id) for location_id in request.session.get("location_ids", [])
-        ]
-        if str(self.object.id) not in location_ids:
-            location_ids.append(str(self.object.id))
-            request.session["location_ids"] = location_ids
 
         # Check if forecast needs updating (older than 15 minutes or doesn't exist)
         from datetime import timedelta
@@ -2934,20 +2605,6 @@ class LocationDetailView(DetailView):
                 "active_alerts": location.alerts.filter(is_active=True),
             }
         )
-
-        # Add active locations list for location toggle dropdown (similar to model detail page)
-        try:
-            location_ids = self.request.session.get("location_ids", [])
-            locations_qs = Location.objects.filter(is_active=True)
-            if location_ids:
-                locations_qs = locations_qs.filter(id__in=location_ids)
-            context["locations"] = locations_qs.order_by(
-                "-is_current_location", "display_order", "name"
-            )
-        except Exception:
-            # Fallback: empty list if any error occurs
-            context["locations"] = Location.objects.none()
-
         return context
 
 

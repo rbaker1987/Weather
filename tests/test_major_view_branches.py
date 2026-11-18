@@ -6,6 +6,8 @@ import pytest
 from django.core.cache import cache
 from django.urls import reverse
 
+from weather.models import Location
+
 
 @pytest.mark.django_db
 class TestModelDetailBranches:
@@ -36,13 +38,17 @@ class TestModelDetailBranches:
         assert response.context["cycle"] == "12Z"
 
     def test_model_detail_reports_missing_coordinates_without_fallback(self, client):
+        # Stored rows are never used as a fallback place or listed in the selector.
+        Location.objects.create(name="Stored", latitude=30, longitude=-97)
         response = client.get(
             reverse("weather:model-detail", kwargs={"model_name": "GFS"})
         )
 
         assert response.status_code == 200
-        assert "no fallback location" in response.context["error"]
+        assert "Choose a place on the map" in response.context["error"]
         assert response.context["data"] is None
+        assert response.context["locations"] == []
+        assert response.context["locations_json"] == "[]"
 
     def test_model_detail_handles_open_meteo_failure(self, client):
         with patch("requests.get", side_effect=RuntimeError("service down")):
