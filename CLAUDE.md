@@ -8,7 +8,7 @@ Production is a Render **free** web service with **no permanent database** (free
 
 - The database is a disposable cache. SQLite is rebuilt by `migrate` on every start (`render-release.sh`); data is lost on deploy and restart. Do not add models that must persist.
 - User accounts are removed (signup/login/profile, `Location.owner`); only Django admin keeps `django.contrib.auth`. Session locations (`request.session["location_ids"]`) and the location/forecast/alert list pages are removed; the home page offers "use my location" or "enter a location", with the place carried in the URL, not the session or DB.
-- Celery/Redis are being dropped; data is fetched on demand. `CELERY_ENABLED` is false in production already.
+- Celery/Redis are removed; data is fetched on demand and the cache is process-local memory.
 - The custom forecast builder is removed.
 - Places are carried in the URL: `/weather/<lat>,<lon>/?name=` (`PlaceView`, `place_service.py`, no DB rows); `/api/geocode/?q=` powers the search box. The `Location` table is being removed entirely (decision: no cache rows); until then `/locations/<uuid>/` and the read-only `/api/locations/<uuid>/` serve existing rows, and climate analysis takes a `location_id` without a session check.
 - Work is split into small PRs (accounts removal, place-from-URL, remove session locations and list pages, Celery/Redis removal and on-demand climate data, drop the Location table, deploy config cleanup).
@@ -48,9 +48,9 @@ cd weather_app && python manage.py runserver 8000
 
 ## Layout
 
-- `weather_app/weather/`: models, `views.py` (large, ~2.7k lines), `services.py`, `tasks.py` (Celery), `noaa_service.py`, `noaa_nomads.py`, `climate_analysis.py`.
+- `weather_app/weather/`: models, `views.py` (large, ~2.7k lines), `services.py`, `noaa_service.py`, `noaa_nomads.py`, `climate_analysis.py`.
 - `weather_app/weather/api/`: DRF views (climate analysis and normals, hourly forecast, model comparison, NWS client, summarize).
-- `weather_app/weather/core/`: non-Django core logic. `weather_app/config/`: settings, urls, celery, wsgi.
+- `weather_app/weather/core/`: non-Django core logic. `weather_app/config/`: settings, urls, wsgi.
 - `weather_app/weather/management/commands/`: importers (`import_climate_data` has `--indices-only`), `update_forecasts`.
 - `tests/` at repo root (pytest-django, `config.settings`). Templates in `weather_app/templates/weather/`.
 - Settings fall back to SQLite when `DATABASE_URL` is unset; `DJANGO_SECRET_KEY` and allowed hosts are enforced in production.
@@ -60,7 +60,7 @@ cd weather_app && python manage.py runserver 8000
 - UI: `location_detail.html`; API: `api/climate_analysis_api.py`; stats in `climate_analysis.py`; importer in `import_climate_data.py`.
 - Weather source: Open-Meteo Archive (daily, F/mph/in, per-location timezone). Indices: NAO/AO/PNA from CPC CDAS daily files; EPO/WPO from PSL core files standardized per calendar month (1991-2020); ENSO (internal key `oni`) is monthly. Never label monthly indices as daily.
 - The user selects month/day and clicks Run (no request on page load). Completed years only; centered 7-day average; events are warm/cool/dry/wet at the top/bottom 10%.
-- Missing indices load synchronously when Celery is off. The endpoint is rate-limited per IP and rejects inactive locations.
+- Missing indices load synchronously on request. The endpoint is rate-limited per IP and rejects inactive locations.
 
 ## Deploy (Render)
 

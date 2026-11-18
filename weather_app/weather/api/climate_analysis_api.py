@@ -8,8 +8,6 @@ import uuid
 from datetime import date, timedelta
 from math import ceil
 
-from django.conf import settings
-from django.core.cache import cache
 from django.core.management.base import CommandError
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
@@ -111,22 +109,17 @@ class ClimateAnalysisAPIView(APIView):
                 missing_weather_years.append(year)
         if missing_weather_years:
             if (
-                not getattr(settings, "CELERY_ENABLED", False)
-                and not existing_weather_dates
+                not existing_weather_dates
                 and len(missing_weather_years) > self.max_sync_weather_backfill_years
             ):
                 return Response(
                     {
                         "error": (
                             "historical weather data is missing for too many years; "
-                            "enable Celery and retry"
+                            "select fewer years and retry"
                         )
                     },
                     status=503,
-                )
-            if getattr(settings, "CELERY_ENABLED", False):
-                return self._queue_backfill(
-                    location, month, day, missing_weather_years, index_keys
                 )
             try:
                 importer = ImportClimateDataCommand()
@@ -162,8 +155,6 @@ class ClimateAnalysisAPIView(APIView):
 
         available_index_count = count_available_indices()
         if available_index_count < len(years) * len(supported_index_keys):
-            if getattr(settings, "CELERY_ENABLED", False):
-                return self._queue_backfill(location, month, day, years, index_keys)
             try:
                 ImportClimateDataCommand().import_noaa_calendar_day(
                     month, day, years, index_keys, half_window
@@ -233,28 +224,6 @@ class ClimateAnalysisAPIView(APIView):
             "wind_speed": observation.wind_speed,
             "snowfall": observation.snowfall,
         }
-
-    def _queue_backfill(self, location, month, day, years, index_keys):
-        year_key = ",".join(str(year) for year in sorted(set(years)))
-        index_key = ",".join(sorted(set(index_keys)))
-        cache_key = (
-            f"climate-backfill:{location.id}:{month:02d}-{day:02d}:"
-            f"{year_key}:{index_key}"
-        )
-        if cache.add(cache_key, True, timeout=600):
-            from weather.tasks import load_historical_climate_data
-
-            load_historical_climate_data.delay(
-                str(location.id), month, day, years, index_keys
-            )
-        return Response(
-            {
-                "status": "loading",
-                "calendar_day": f"{month:02d}-{day:02d}",
-                "message": "Historical climate data is being loaded. Run the analysis again shortly.",
-            },
-            status=202,
-        )
 
     def _weekly_weather(self, weather_by_date, years, month, day):
         weekly = {}

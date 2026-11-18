@@ -2532,20 +2532,8 @@ class LocationDetailView(DetailView):
         )
 
         if needs_update and self.object.latitude and self.object.longitude:
-            try:
-                from .tasks import (
-                    enqueue_alerts,
-                    enqueue_current_conditions,
-                    enqueue_forecasts,
-                )
-
-                enqueue_current_conditions(str(self.object.id))
-                enqueue_forecasts(str(self.object.id))
-                enqueue_alerts(str(self.object.id))
-            except Exception as e:
-                logger.warning(f"Failed to enqueue refresh for {self.object.name}: {e}")
-                fetch_current_conditions(self.object)
-                _refresh_forecasts_for_location(self.object)
+            fetch_current_conditions(self.object)
+            _refresh_forecasts_for_location(self.object)
 
         context = self.get_context_data(object=self.object)
         return self.render_to_response(context)

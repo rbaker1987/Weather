@@ -192,22 +192,6 @@ python manage.py update_forecasts --locations uuid1 uuid2
 - **Production**: PostgreSQL/MySQL recommended
 - **Persistence**: Disposable cache only; places are carried in the URL
 
-## Optional: Background Tasks
-
-Enable automatic forecast updates with Celery:
-
-```bash
-# Install and start Redis
-redis-server
-
-# Start Celery worker (terminal 1)
-cd weather_app
-celery -A config worker --loglevel=info
-
-# Start Celery beat scheduler (terminal 2)
-celery -A config beat --loglevel=info
-```
-
 ## Configuration
 
 Environment variables (optional):
@@ -216,7 +200,6 @@ Environment variables (optional):
 DJANGO_SECRET_KEY=your-secret-key
 DJANGO_DEBUG=False
 DATABASE_URL=postgresql://user:pass@localhost/weather
-REDIS_URL=redis://localhost:6379/0
 ```
 
 ## Render Deployment

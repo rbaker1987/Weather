@@ -53,7 +53,7 @@ class TestRefreshForecasts:
 
 @pytest.mark.django_db
 class TestLocationDetailView:
-    def test_location_detail_triggers_update_and_alerts(self, client, monkeypatch):
+    def test_location_detail_refreshes_stale_forecasts(self, client, monkeypatch):
         loc = Location.objects.create(
             name="Needs Update", latitude=Decimal("10.0"), longitude=Decimal("20.0")
         )
@@ -61,19 +61,15 @@ class TestLocationDetailView:
         loc.last_forecast_update = None
         loc.save(update_fields=["last_forecast_update"])
 
-        flags = {"conditions": False, "forecasts": False, "alerts": False}
+        flags = {"conditions": False, "forecasts": False}
 
         monkeypatch.setattr(
-            "weather.tasks.enqueue_current_conditions",
+            "weather.views.fetch_current_conditions",
             lambda *_: flags.__setitem__("conditions", True),
         )
         monkeypatch.setattr(
-            "weather.tasks.enqueue_forecasts",
+            "weather.views._refresh_forecasts_for_location",
             lambda *_: flags.__setitem__("forecasts", True),
-        )
-        monkeypatch.setattr(
-            "weather.tasks.enqueue_alerts",
-            lambda *_: flags.__setitem__("alerts", True),
         )
 
         r = client.get(f"/locations/{loc.pk}/")
@@ -81,4 +77,3 @@ class TestLocationDetailView:
         assert "daily_forecasts" in r.context
         assert flags["conditions"] is True
         assert flags["forecasts"] is True
-        assert flags["alerts"] is True

@@ -146,7 +146,6 @@ def test_climate_analysis_validates_required_parameters():
 def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, settings):
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
-    settings.CELERY_ENABLED = False
 
     def fail_if_called(*args, **kwargs):
         raise AssertionError(
@@ -164,7 +163,7 @@ def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, setti
     )
 
     assert response.status_code == 503
-    assert "enable Celery" in response.data["error"]
+    assert "select fewer years" in response.data["error"]
 
 
 @pytest.mark.django_db
@@ -266,8 +265,7 @@ def test_climate_analysis_serializes_index_observations():
 
 
 @pytest.mark.django_db
-def test_climate_analysis_loads_missing_indices_without_celery(monkeypatch, settings):
-    settings.CELERY_ENABLED = False
+def test_climate_analysis_loads_missing_indices_synchronously(monkeypatch, settings):
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
     monkeypatch.setattr(

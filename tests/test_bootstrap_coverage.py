@@ -1,6 +1,5 @@
 """Targeted coverage tests for Django bootstrap modules."""
 
-import builtins
 import runpy
 from pathlib import Path
 from unittest.mock import patch
@@ -35,19 +34,3 @@ def test_config_wsgi_module_sets_application():
         namespace = runpy.run_path(str(wsgi_path), run_name="__main__")
 
     assert namespace["application"] == "wsgi-app"
-
-
-def test_config_init_handles_missing_celery_dependency():
-    config_init = APP_ROOT / "config" / "__init__.py"
-    real_import = builtins.__import__
-
-    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "config.celery":
-            raise ImportError("simulated missing celery")
-        return real_import(name, globals, locals, fromlist, level)
-
-    with patch("builtins.__import__", side_effect=guarded_import):
-        namespace = runpy.run_path(str(config_init), run_name="__main__")
-
-    assert namespace["celery_app"] is None
-    assert namespace["__all__"] == ()
