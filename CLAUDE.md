@@ -7,10 +7,10 @@ Django weather app: NWS forecasts plus raw model data (GFS, ICON, ECMWF, AIFS, G
 Production is a Render **free** web service with **no permanent database** (free Postgres expires every 30 days, and we do not pay for hosting). Design accordingly:
 
 - The database is a disposable cache. SQLite is rebuilt by `migrate` on every start (`render-release.sh`); data is lost on deploy and restart. Do not add models that must persist.
-- User accounts are removed (signup/login/profile, `Location.owner`); only Django admin keeps `django.contrib.auth`. Saved locations are still being removed. The target is "use my location" or "enter a location", with location carried in the URL/request, not the session or DB.
+- User accounts are removed (signup/login/profile, `Location.owner`); only Django admin keeps `django.contrib.auth`. Session locations (`request.session["location_ids"]`) and the location/forecast/alert list pages are removed; the home page offers "use my location" or "enter a location", with the place carried in the URL, not the session or DB.
 - Celery/Redis are being dropped; data is fetched on demand. `CELERY_ENABLED` is false in production already.
 - The custom forecast builder is removed.
-- Places are carried in the URL: `/weather/<lat>,<lon>/?name=` (`PlaceView`, `place_service.py`, no DB rows); `/api/geocode/?q=` powers the search box. The `Location` table is being removed entirely (decision: no cache rows).
+- Places are carried in the URL: `/weather/<lat>,<lon>/?name=` (`PlaceView`, `place_service.py`, no DB rows); `/api/geocode/?q=` powers the search box. The `Location` table is being removed entirely (decision: no cache rows); until then `/locations/<uuid>/` and the read-only `/api/locations/<uuid>/` serve existing rows, and climate analysis takes a `location_id` without a session check.
 - Work is split into small PRs (accounts removal, place-from-URL, remove session locations and list pages, Celery/Redis removal and on-demand climate data, drop the Location table, deploy config cleanup).
 
 ## Commands
@@ -48,7 +48,7 @@ cd weather_app && python manage.py runserver 8000
 
 ## Layout
 
-- `weather_app/weather/`: models, `views.py` (large, ~3.8k lines), `web_views.py`, `services.py`, `tasks.py` (Celery), `noaa_service.py`, `noaa_nomads.py`, `climate_analysis.py`.
+- `weather_app/weather/`: models, `views.py` (large, ~2.7k lines), `services.py`, `tasks.py` (Celery), `noaa_service.py`, `noaa_nomads.py`, `climate_analysis.py`.
 - `weather_app/weather/api/`: DRF views (climate analysis and normals, hourly forecast, model comparison, NWS client, summarize).
 - `weather_app/weather/core/`: non-Django core logic. `weather_app/config/`: settings, urls, celery, wsgi.
 - `weather_app/weather/management/commands/`: importers (`import_climate_data` has `--indices-only`), `update_forecasts`.
