@@ -30,7 +30,9 @@ class TestCurrentConditionsService:
         location = Location.objects.create(name="Unknown")
 
         with patch("weather.services.logger.warning") as warning:
-            result = CurrentConditionsService.fetch_and_cache_current_conditions(location)
+            result = CurrentConditionsService.fetch_and_cache_current_conditions(
+                location
+            )
 
         assert result is None
         warning.assert_called_once()
@@ -93,10 +95,10 @@ class TestCurrentConditionsService:
             }
         )
 
-        with patch(
-            "requests.get", side_effect=[points, stations, observation]
-        ):
-            result = CurrentConditionsService.fetch_and_cache_current_conditions(location)
+        with patch("requests.get", side_effect=[points, stations, observation]):
+            result = CurrentConditionsService.fetch_and_cache_current_conditions(
+                location
+            )
 
         assert result.temperature == 68
         assert result.feels_like_temperature == 64
@@ -116,6 +118,8 @@ class TestCurrentConditionsService:
             "requests.get",
             side_effect=requests.RequestException("offline"),
         ):
-            result = CurrentConditionsService.fetch_and_cache_current_conditions(location)
+            result = CurrentConditionsService.fetch_and_cache_current_conditions(
+                location
+            )
 
         assert result is None

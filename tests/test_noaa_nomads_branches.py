@@ -150,7 +150,9 @@ def test_fetch_gfs_nomads_stops_when_timeout_is_exceeded():
         patch("time.time", side_effect=chain([0, 100], repeat(100))),
         patch.object(noaa_nomads, "_download_grib") as download,
     ):
-        assert noaa_nomads.fetch_gfs_nomads(30, -97, forecast_hours=[0], timeout=1) is None
+        assert (
+            noaa_nomads.fetch_gfs_nomads(30, -97, forecast_hours=[0], timeout=1) is None
+        )
 
     download.assert_not_called()
 

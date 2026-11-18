@@ -66,9 +66,7 @@ def test_models_view_selects_current_location_and_normals():
 
 @pytest.mark.django_db
 def test_refresh_forecasts_stores_nws_periods():
-    location = Location.objects.create(
-        name="Refresh", latitude=30, longitude=-97
-    )
+    location = Location.objects.create(name="Refresh", latitude=30, longitude=-97)
     grid_response = Mock()
     grid_response.json.return_value = {
         "properties": {
@@ -126,4 +124,3 @@ def test_forecast_list_includes_current_location_outside_session(client):
 
     assert response.status_code == 200
     assert response.context["forecasts"][0].location_id == current.id
-

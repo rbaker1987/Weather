@@ -30,7 +30,11 @@ def calculate_pearson_correlation(
     values: Iterable[tuple[float | None, float | None]],
 ) -> CorrelationResult:
     """Calculate Pearson correlation using only pairs with values on both dates."""
-    pairs = [(left, right) for left, right in values if left is not None and right is not None]
+    pairs = [
+        (left, right)
+        for left, right in values
+        if left is not None and right is not None
+    ]
     sample_count = len(pairs)
     if sample_count < MINIMUM_CORRELATION_SAMPLES:
         return CorrelationResult(value=None, sample_count=sample_count)
@@ -58,7 +62,9 @@ def _ranks(values: list[float]) -> list[float]:
     position = 0
     while position < len(order):
         end = position
-        while end + 1 < len(order) and values[order[end + 1]] == values[order[position]]:
+        while (
+            end + 1 < len(order) and values[order[end + 1]] == values[order[position]]
+        ):
             end += 1
         average = (position + end) / 2 + 1
         for item in order[position : end + 1]:
@@ -71,7 +77,11 @@ def calculate_spearman_correlation(
     values: Iterable[tuple[float | None, float | None]],
 ) -> CorrelationResult:
     """Rank correlation, robust to outliers and non-linear monotonic links."""
-    pairs = [(left, right) for left, right in values if left is not None and right is not None]
+    pairs = [
+        (left, right)
+        for left, right in values
+        if left is not None and right is not None
+    ]
     if len(pairs) < MINIMUM_CORRELATION_SAMPLES:
         return CorrelationResult(value=None, sample_count=len(pairs))
     left_ranks = _ranks([float(left) for left, _ in pairs])
@@ -94,8 +104,17 @@ def detrend_by_year(
         mean = sum(series) / len(series)
         if spread == 0:
             return [value - mean for value in series]
-        slope = sum((year - year_mean) * (value - mean) for year, value in zip(years, series, strict=True)) / spread
-        return [value - (mean + slope * (year - year_mean)) for year, value in zip(years, series, strict=True)]
+        slope = (
+            sum(
+                (year - year_mean) * (value - mean)
+                for year, value in zip(years, series, strict=True)
+            )
+            / spread
+        )
+        return [
+            value - (mean + slope * (year - year_mean))
+            for year, value in zip(years, series, strict=True)
+        ]
 
     return list(
         zip(

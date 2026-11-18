@@ -63,24 +63,27 @@ class ClimateAnalysisAPIView(APIView):
             calendar.monthrange(2000, month)[1]
             date(2000, month, day)
         except (KeyError, TypeError, ValueError):
-            return Response({"error": "month and day must be a valid calendar date"}, status=400)
+            return Response(
+                {"error": "month and day must be a valid calendar date"}, status=400
+            )
 
         index_keys = [
-            index.strip().lower()
-            for index in request.query_params.getlist("index")
+            index.strip().lower() for index in request.query_params.getlist("index")
         ] or list(self.supported_index_keys)
         unsupported = set(index_keys) - set(self.supported_index_keys)
         if unsupported:
             return Response({"error": "unsupported climate index"}, status=400)
 
-        session_location_ids = {str(item) for item in request.session.get("location_ids", [])}
+        session_location_ids = {
+            str(item) for item in request.session.get("location_ids", [])
+        }
         if location_id not in session_location_ids:
-            return Response({"error": "location is not available in this session"}, status=404)
+            return Response(
+                {"error": "location is not available in this session"}, status=404
+            )
         location = get_object_or_404(Location, id=location_id, is_active=True)
         if location.latitude is None or location.longitude is None:
-            return Response(
-                {"error": "location does not have coordinates"}, status=400
-            )
+            return Response({"error": "location does not have coordinates"}, status=400)
 
         # Use completed years only so every sample has a complete centered window.
         last_year = date.today().year - 1
@@ -101,11 +104,16 @@ class ClimateAnalysisAPIView(APIView):
             location=location, observation_date__in=required_dates
         )
         weather_loaded = False
-        existing_weather_dates = set(weather_queryset.values_list("observation_date", flat=True))
+        existing_weather_dates = set(
+            weather_queryset.values_list("observation_date", flat=True)
+        )
         missing_weather_years = []
         for year, calendar_date in zip(years, calendar_dates, strict=True):
             window_dates = self._window_dates(calendar_date)
-            if any(window_date not in existing_weather_dates for window_date in window_dates):
+            if any(
+                window_date not in existing_weather_dates
+                for window_date in window_dates
+            ):
                 missing_weather_years.append(year)
         if missing_weather_years:
             if (
@@ -144,13 +152,19 @@ class ClimateAnalysisAPIView(APIView):
             weather_loaded = True
 
         supported_index_keys = set(index_keys)
+
         def count_available_indices():
-            return TeleconnectionObservation.objects.filter(
-                index_key__in=supported_index_keys,
-                observation_date__month=month,
-                observation_date__day=day,
-                observation_date__year__in=years,
-            ).values("index_key", "observation_date").distinct().count()
+            return (
+                TeleconnectionObservation.objects.filter(
+                    index_key__in=supported_index_keys,
+                    observation_date__month=month,
+                    observation_date__day=day,
+                    observation_date__year__in=years,
+                )
+                .values("index_key", "observation_date")
+                .distinct()
+                .count()
+            )
 
         available_index_count = count_available_indices()
         if available_index_count < len(years) * len(supported_index_keys):
@@ -175,12 +189,16 @@ class ClimateAnalysisAPIView(APIView):
         for observation in observations:
             existing = weather_by_date.get(observation.observation_date)
             if existing is None or (
-                observation.source_kind == HistoricalWeatherObservation.SourceKind.NCEI_STATION
+                observation.source_kind
+                == HistoricalWeatherObservation.SourceKind.NCEI_STATION
             ):
                 weather_by_date[observation.observation_date] = observation
 
         weekly_weather = self._weekly_weather(weather_by_date, years, month, day)
-        daily_weather = [self._serialize_weather(observation) for observation in weekly_weather.values()]
+        daily_weather = [
+            self._serialize_weather(observation)
+            for observation in weekly_weather.values()
+        ]
         index_observations = TeleconnectionObservation.objects.filter(
             index_key__in=index_keys,
             observation_date__in=required_dates,
@@ -258,8 +276,14 @@ class ClimateAnalysisAPIView(APIView):
                 continue
             values = {}
             for field in self.weather_fields:
-                field_values = [getattr(row, field) for row in rows if getattr(row, field) is not None]
-                values[field] = sum(field_values) / len(field_values) if field_values else None
+                field_values = [
+                    getattr(row, field)
+                    for row in rows
+                    if getattr(row, field) is not None
+                ]
+                values[field] = (
+                    sum(field_values) / len(field_values) if field_values else None
+                )
             weekly[center] = {
                 "date": center.isoformat(),
                 "source_kind": "weekly_average",
@@ -290,7 +314,9 @@ class ClimateAnalysisAPIView(APIView):
         """Average each index over the same centered window used for weather."""
         by_index = {}
         for observation in observations:
-            by_index.setdefault(observation.index_key, {})[observation.observation_date] = observation
+            by_index.setdefault(observation.index_key, {})[
+                observation.observation_date
+            ] = observation
         results = []
         for index_key in sorted(by_index):
             rows = by_index[index_key]
@@ -331,7 +357,9 @@ class ClimateAnalysisAPIView(APIView):
                         for date_key, (x, y) in zip(index_values, pairs, strict=True)
                     )
                 )
-                significance = correlation_significance(result.value, result.sample_count)
+                significance = correlation_significance(
+                    result.value, result.sample_count
+                )
                 results.append(
                     {
                         "index": index_key,
@@ -345,6 +373,7 @@ class ClimateAnalysisAPIView(APIView):
                     }
                 )
         return results
+
     def _event_correlations(self, indices, weekly_weather):
         event_definitions = {
             "warm": ("mean_temperature", "high"),
@@ -400,7 +429,9 @@ class ClimateAnalysisAPIView(APIView):
                         "event": event_name,
                         "value": result.value,
                         "sample_count": result.sample_count,
-                        "event_count": sum(1 for is_event in year_events.values() if is_event),
+                        "event_count": sum(
+                            1 for is_event in year_events.values() if is_event
+                        ),
                         **correlation_significance(result.value, result.sample_count),
                     }
                 )

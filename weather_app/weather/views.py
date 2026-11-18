@@ -3429,7 +3429,10 @@ class LocationDetailView(DetailView):
         self.object = self.get_object()
 
         if not request.user.is_authenticated and self.object.owner_id is None:
-            location_ids = [str(location_id) for location_id in request.session.get("location_ids", [])]
+            location_ids = [
+                str(location_id)
+                for location_id in request.session.get("location_ids", [])
+            ]
             if str(self.object.id) not in location_ids:
                 location_ids.append(str(self.object.id))
                 request.session["location_ids"] = location_ids

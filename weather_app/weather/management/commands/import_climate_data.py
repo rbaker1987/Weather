@@ -20,7 +20,9 @@ _TIMEZONE_CACHE = {}
 
 
 class Command(BaseCommand):
-    help = "Import historical weather from Open-Meteo and optional teleconnection CSV data"
+    help = (
+        "Import historical weather from Open-Meteo and optional teleconnection CSV data"
+    )
     weather_url = "https://archive-api.open-meteo.com/v1/archive"
     index_urls = {
         "nao": "https://psl.noaa.gov/data/correlation/nao.data",
@@ -146,9 +148,13 @@ class Command(BaseCommand):
                 defaults={
                     "source_identifier": "open-meteo-archive",
                     "source_url": self.weather_url,
-                    "high_temperature": self._value(values["temperature_2m_max"], index),
+                    "high_temperature": self._value(
+                        values["temperature_2m_max"], index
+                    ),
                     "low_temperature": self._value(values["temperature_2m_min"], index),
-                    "mean_temperature": self._value(values["temperature_2m_mean"], index),
+                    "mean_temperature": self._value(
+                        values["temperature_2m_mean"], index
+                    ),
                     "precipitation": self._value(values["precipitation_sum"], index),
                     "wind_speed": self._value(values["wind_speed_10m_max"], index),
                     "snowfall": self._value(values["snowfall_sum"], index),
@@ -166,8 +172,7 @@ class Command(BaseCommand):
         if key not in _TIMEZONE_CACHE:
             try:
                 _TIMEZONE_CACHE[key] = (
-                    TimezoneFinder().timezone_at(lat=latitude, lng=longitude)
-                    or "UTC"
+                    TimezoneFinder().timezone_at(lat=latitude, lng=longitude) or "UTC"
                 )
             except Exception:
                 _TIMEZONE_CACHE[key] = "UTC"
@@ -181,7 +186,9 @@ class Command(BaseCommand):
             reader = csv.DictReader(stream)
             required = {"index", "date", "value"}
             if not reader.fieldnames or not required.issubset(reader.fieldnames):
-                raise CommandError("teleconnection CSV must contain index,date,value columns")
+                raise CommandError(
+                    "teleconnection CSV must contain index,date,value columns"
+                )
             for row in reader:
                 index_key = row["index"].strip().lower()
                 if index_key not in TeleconnectionObservation.IndexKey.values:
@@ -326,14 +333,19 @@ class Command(BaseCommand):
                     center = date(year, month, day)
                 except ValueError:
                     continue
-                offsets = range(-half_window, half_window + 1) if cadence == "daily" else [0]
+                offsets = (
+                    range(-half_window, half_window + 1) if cadence == "daily" else [0]
+                )
                 for offset in offsets:
                     observation_date = center + timedelta(days=offset)
                     value = self._day_values(cadence, values, observation_date)
                     if value is not None:
-                        self._save_index(index_key, observation_date, value, url, cadence)
+                        self._save_index(
+                            index_key, observation_date, value, url, cadence
+                        )
                         count += 1
         return count
+
     @staticmethod
     def _as_date(value):
         return date.fromisoformat(value) if isinstance(value, str) else value

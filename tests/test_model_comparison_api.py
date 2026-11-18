@@ -332,13 +332,15 @@ class TestModelDetailView:
             ["not-a-time", "2026-08-25T12:00:00+00:00"],
         )
 
-        assert result == {"2026-08-25T12:00:00+00:00": {
-            "snow": 0.0,
-            "sleet": 0.0,
-            "freezing_rain": 0.0,
-            "rain": 0.0,
-            "total": 0.0,
-        }}
+        assert result == {
+            "2026-08-25T12:00:00+00:00": {
+                "snow": 0.0,
+                "sleet": 0.0,
+                "freezing_rain": 0.0,
+                "rain": 0.0,
+                "total": 0.0,
+            }
+        }
 
     def test_aggregate_precip_by_6hour_uses_types_and_default_slrs(self):
         from weather.views import ModelDetailView
@@ -442,7 +444,9 @@ class TestModelDetailView:
         ]
         assert hourly["snow_liquid_ratio"] == [10.0, 1.0, 1.0, 10.0, 0.5, 2.5]
 
-    def test_model_detail_uses_surface_temperature_fallback_without_levels(self, client):
+    def test_model_detail_uses_surface_temperature_fallback_without_levels(
+        self, client
+    ):
         cache.clear()
 
         with patch("requests.get") as mock_get:

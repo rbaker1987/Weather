@@ -93,7 +93,12 @@ def test_fetch_all_models_preserves_requested_order(view):
 
 @pytest.mark.parametrize(
     ("temperature", "expected_type", "expected_slr"),
-    [(20, "snow", 15.0), (30, "sleet", 2.0), (35, "freezing_rain", 0.3), (40, "rain", 1.0)],
+    [
+        (20, "snow", 15.0),
+        (30, "sleet", 2.0),
+        (35, "freezing_rain", 0.3),
+        (40, "rain", 1.0),
+    ],
 )
 def test_get_classifies_precipitation_by_surface_temperature(
     view, temperature, expected_type, expected_slr

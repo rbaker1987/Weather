@@ -105,9 +105,7 @@ class TestClimateNormalsAPIView:
         assert response.data["status"] == "cached"
 
     def test_get_fetches_and_saves_normals(self, request_factory):
-        location = Location.objects.create(
-            name="Fetched", latitude=30, longitude=-97
-        )
+        location = Location.objects.create(name="Fetched", latitude=30, longitude=-97)
         request = request_factory.get("/climate", {"location_id": str(location.id)})
 
         with patch.object(
@@ -124,7 +122,9 @@ class TestClimateNormalsAPIView:
         assert location.avg_low_temp == 64.5
 
     def test_get_returns_error_when_normals_unavailable(self, request_factory):
-        location = Location.objects.create(name="Unavailable", latitude=30, longitude=-97)
+        location = Location.objects.create(
+            name="Unavailable", latitude=30, longitude=-97
+        )
         request = request_factory.get("/climate", {"location_id": str(location.id)})
 
         with patch.object(
@@ -173,7 +173,9 @@ class TestClimateNormalsAPIView:
         response = Mock()
         response.json.return_value = payload
 
-        with patch("weather.api.climate_normals_api.requests.get", return_value=response):
+        with patch(
+            "weather.api.climate_normals_api.requests.get", return_value=response
+        ):
             result = ClimateNormalsAPIView()._fetch_climate_normals(30, -97)
 
         assert result == (None, None)

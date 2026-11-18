@@ -57,7 +57,9 @@ def test_should_show_feels_like_accepts_separate_values(actual, apparent, expect
 
 
 def test_should_show_feels_like_accepts_forecast_object():
-    assert should_show_feels_like(Forecast("Sunny", temperature=70, apparent_temperature=60))
+    assert should_show_feels_like(
+        Forecast("Sunny", temperature=70, apparent_temperature=60)
+    )
 
 
 @pytest.mark.parametrize(

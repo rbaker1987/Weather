@@ -106,6 +106,9 @@ class TestPrecipitationLogic:
 
     def test_aggregate_precipitation_handles_empty_inputs(self):
         assert ModelDetailView.aggregate_precip_by_6hour({}, []) == {}
-        assert ModelDetailView.aggregate_precip_by_6hour(
-            {"precipitation": [1], "precip_type": ["rain"]}, ["bad"]
-        ) == {}
+        assert (
+            ModelDetailView.aggregate_precip_by_6hour(
+                {"precipitation": [1], "precip_type": ["rain"]}, ["bad"]
+            )
+            == {}
+        )

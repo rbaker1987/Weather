@@ -20,9 +20,7 @@ def make_forecast(location, forecast_date, temperature=70):
     return DailyForecast.objects.create(
         location=location,
         forecast_date=forecast_date,
-        period_start=timezone.make_aware(
-            datetime.combine(forecast_date, time(6, 0))
-        ),
+        period_start=timezone.make_aware(datetime.combine(forecast_date, time(6, 0))),
         period_end=timezone.make_aware(datetime.combine(forecast_date, time(18, 0))),
         is_daytime=True,
         temperature=temperature,

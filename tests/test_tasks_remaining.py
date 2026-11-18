@@ -102,7 +102,10 @@ class TestSingleLocationTasks:
             "status": "success",
             "temperature": 72,
         }
-        assert tasks.update_current_conditions_for_location.run(str(uuid4()))["status"] == "not_found"
+        assert (
+            tasks.update_current_conditions_for_location.run(str(uuid4()))["status"]
+            == "not_found"
+        )
 
     def test_update_forecasts_and_alerts_success_and_not_found(self):
         location = Location.objects.create(name="Austin")
@@ -114,8 +117,14 @@ class TestSingleLocationTasks:
         alerts.count.return_value = 1
 
         with (
-            patch("weather.services.ForecastService.get_or_fetch_hourly_forecasts", return_value=hourly),
-            patch("weather.services.ForecastService.get_or_fetch_daily_forecasts", return_value=daily),
+            patch(
+                "weather.services.ForecastService.get_or_fetch_hourly_forecasts",
+                return_value=hourly,
+            ),
+            patch(
+                "weather.services.ForecastService.get_or_fetch_daily_forecasts",
+                return_value=daily,
+            ),
         ):
             forecast_result = tasks.update_forecasts_for_location.run(str(location.id))
         with patch(
@@ -125,8 +134,13 @@ class TestSingleLocationTasks:
 
         assert forecast_result["hourly_count"] == 3
         assert alert_result["alert_count"] == 1
-        assert tasks.update_forecasts_for_location.run(str(uuid4()))["status"] == "not_found"
-        assert tasks.update_alerts_for_location.run(str(uuid4()))["status"] == "not_found"
+        assert (
+            tasks.update_forecasts_for_location.run(str(uuid4()))["status"]
+            == "not_found"
+        )
+        assert (
+            tasks.update_alerts_for_location.run(str(uuid4()))["status"] == "not_found"
+        )
 
 
 @pytest.mark.django_db
