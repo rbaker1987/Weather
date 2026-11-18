@@ -25,8 +25,7 @@
 body {
   font-family: var(--font-body);
   color: var(--weather-ink);
-  background:
-    radial-gradient(1200px 600px at -10% -20%, #dbe7ff 0%, transparent 60%),
+  background: radial-gradient(1200px 600px at -10% -20%, #dbe7ff 0%, transparent 60%),
     radial-gradient(900px 500px at 110% -10%, #ffe7c2 0%, transparent 55%),
     linear-gradient(180deg, var(--weather-bg) 0%, var(--weather-bg-2) 100%);
 }
