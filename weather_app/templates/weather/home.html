@@ -1,0 +1,42 @@
+{% extends "weather/base.html" %}
+{% block title %}Weather Home{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-9">
+    <div class="text-center mb-4">
+      <h1 class="display-5">Find a forecast</h1>
+      <p class="lead text-muted">
+        Use your current location or enter a city, ZIP code, or coordinates to see the
+        NWS forecast, alerts, and raw model data side by side.
+      </p>
+    </div>
+
+    {% include "weather/components/place_search.html" %}
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card weather-card h-100">
+          <div class="card-body">
+            <h5 class="card-title"><i class="fas fa-location-arrow text-primary"></i> Use my location</h5>
+            <p class="card-text text-muted mb-0">
+              Your browser shares your coordinates only to build the forecast link.
+              Nothing is saved on the server.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card weather-card h-100">
+          <div class="card-body">
+            <h5 class="card-title"><i class="fas fa-chart-line text-primary"></i> Compare models</h5>
+            <p class="card-text text-muted mb-0">
+              See GFS, ICON, ECMWF, AIFS, GEM, HRRR, NAM, and RGEM output for any place on the
+              <a href="{% url 'weather:models' %}">Models</a> page.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

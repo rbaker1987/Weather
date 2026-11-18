@@ -11,54 +11,21 @@ from weather.models import CurrentConditions, DailyForecast, Location, WeatherAl
 
 
 @pytest.mark.django_db
-class TestDashboardView:
-    def test_dashboard_renders_with_locations_and_forecasts(self, client):
-        session = client.session
-        # Create locations
-        loc1 = Location.objects.create(
-            name="Home City",
-            latitude=Decimal("30.0"),
-            longitude=Decimal("-97.0"),
-            is_current_location=True,
-        )
-        loc2 = Location.objects.create(
-            name="Work City", latitude=Decimal("31.0"), longitude=Decimal("-98.0")
-        )
-        session["location_ids"] = [str(loc1.id), str(loc2.id)]
-        session.save()
+class TestHomeView:
+    def test_home_offers_search_and_my_location_without_session(self, client):
+        Location.objects.create(name="Someone Else", latitude=30, longitude=-97)
 
-        # Create forecasts for favorite (current) location
-        for i in range(3):
-            day = timezone.now().date() + timedelta(days=i)
-            DailyForecast.objects.create(
-                location=loc1,
-                forecast_date=day,
-                period_start=timezone.make_aware(datetime.combine(day, time(6, 0))),
-                period_end=timezone.make_aware(datetime.combine(day, time(18, 0))),
-                is_daytime=True,
-                temperature=70 + i,
-                short_forecast="Sunny",
-                wind_speed=5,
-                nws_data_url="https://api.weather.gov/gridpoints/TEST/1,1/forecast",
-            )
-            DailyForecast.objects.create(
-                location=loc1,
-                forecast_date=day,
-                period_start=timezone.make_aware(datetime.combine(day, time(18, 0))),
-                period_end=timezone.make_aware(datetime.combine(day, time(23, 59))),
-                is_daytime=False,
-                temperature=60 + i,
-                short_forecast="Clear",
-                wind_speed=3,
-                nws_data_url="https://api.weather.gov/gridpoints/TEST/1,1/forecast",
-            )
+        resp = client.get(reverse("weather:home"))
 
-        resp = client.get(reverse("weather:dashboard"))
         assert resp.status_code == 200
-        assert "favorite_location" in resp.context
-        assert resp.context["favorite_location"].id == loc1.id
-        # 3 grouped days
-        assert len(resp.context["daily_forecasts"]) >= 1
+        assert resp.context["page_title"] == "Weather"
+        content = resp.content.decode()
+        assert 'id="placeSearch"' in content
+        assert 'id="placeUseMyLocation"' in content
+        assert reverse("weather:geocode") in content
+        # Stored locations are never listed on the home page.
+        assert "Someone Else" not in content
+        assert "location_ids" not in client.session
 
 
 @pytest.mark.django_db

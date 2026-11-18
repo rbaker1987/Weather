@@ -64,7 +64,7 @@ urlpatterns = [
         name="climate-analysis",
     ),
     # Web interface
-    path("", views.DashboardView.as_view(), name="dashboard"),
+    path("", views.HomeView.as_view(), name="home"),
     path("locations/", views.LocationListView.as_view(), name="location-list"),
     path(
         "locations/<uuid:pk>/",

@@ -1332,138 +1332,14 @@ class AlertListView(ListView):
 # =============================================================================
 
 
-class DashboardView(TemplateView):
-    """Main dashboard view with weather overview."""
+class HomeView(TemplateView):
+    """Home page: use my location or enter a location (nothing is stored)."""
 
-    template_name = "weather/dashboard.html"
+    template_name = "weather/home.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-
-        # Get recent locations (ordered same as location list page)
-        # Order: current-location flag first (for saved entries), then by location_type priority, then display_order/name
-        type_priority = Case(
-            When(location_type="home", then=1),
-            When(location_type="work", then=2),
-            When(location_type="school", then=3),
-            default=4,
-            output_field=IntegerField(),
-        )
-
-        # Filter locations by session
-        location_filter = Q(is_active=True, is_enabled=True)
-        location_ids = self.request.session.get("location_ids", [])
-        location_filter &= Q(id__in=location_ids)
-
-        locations = (
-            Location.objects.filter(location_filter)
-            .annotate(type_priority=type_priority)
-            .order_by("-is_current_location", "type_priority", "display_order", "name")[
-                :8
-            ]
-        )
-
-        # Ensure forecasts and current conditions for displayed locations
-        for location in locations:
-            # Check if we need to refresh data (older than 15 minutes or no data)
-            try:
-                cc = location.current_conditions_cache
-                current_stale = timezone.now() - cc.last_observation_time > timedelta(
-                    minutes=15
-                )
-            except (AttributeError, CurrentConditions.DoesNotExist):
-                current_stale = True
-
-            needs_refresh = (
-                location.last_forecast_update is None
-                or (
-                    timezone.now() - location.last_forecast_update
-                    > timedelta(minutes=15)
-                )
-                or current_stale
-            )
-            if needs_refresh:
-                try:
-                    from .tasks import (
-                        enqueue_current_conditions,
-                        enqueue_forecasts,
-                    )
-
-                    enqueue_current_conditions(str(location.id))
-                    enqueue_forecasts(str(location.id))
-                except Exception as e:
-                    logger.warning(f"Failed to refresh data for {location.name}: {e}")
-
-        # Get locations with current conditions
-        locations_with_current = (
-            Location.objects.filter(location_filter)
-            .annotate(type_priority=type_priority)
-            .order_by("-is_current_location", "type_priority", "display_order", "name")
-        )
-
-        # Select primary location as first in ordered list
-        favorite_location = locations[0] if locations else None
-
-        # Get 3-day forecast grouped by date (NWS forecasts only)
-        daily_forecasts = []
-        if favorite_location:
-            from collections import defaultdict
-
-            forecasts = (
-                DailyForecast.objects.filter(
-                    location=favorite_location,
-                    forecast_date__gte=timezone.now().date(),
-                )
-                .exclude(nws_data_url="")  # Only show NWS forecasts on dashboard
-                .order_by("forecast_date", "-is_daytime")[:6]
-            )  # Get up to 6 periods (3 days x 2 periods)
-            grouped = defaultdict(lambda: {"date": None, "day": None, "night": None})
-            for forecast in forecasts:
-                date = forecast.forecast_date
-                grouped[date]["date"] = date
-                if forecast.is_daytime:
-                    grouped[date]["day"] = forecast
-                else:
-                    grouped[date]["night"] = forecast
-                daily_forecasts = [grouped[date] for date in sorted(grouped.keys())[:3]]
-
-        # Get active alerts ordered by location order
-        active_alerts = (
-            WeatherAlert.objects.filter(is_active=True, expires__gt=timezone.now())
-            .select_related("location")
-            .annotate(
-                type_priority=Case(
-                    When(location__location_type="home", then=1),
-                    When(location__location_type="work", then=2),
-                    When(location__location_type="school", then=3),
-                    default=4,
-                    output_field=IntegerField(),
-                )
-            )
-            .order_by(
-                "-location__is_current_location",
-                "type_priority",
-                "location__display_order",
-                "location__name",
-                "-severity",
-                "-onset",
-            )[:10]
-        )
-
-        # Dashboard statistics
-        context.update(
-            {
-                "locations": locations,
-                "locations_with_current": locations_with_current,
-                "favorite_location": favorite_location,
-                "daily_forecasts": daily_forecasts,
-                "active_alerts": active_alerts,
-                "total_locations": Location.objects.filter(location_filter).count(),
-                "total_forecasts": DailyForecast.objects.count(),
-                "recent_alerts": active_alerts,
-                "page_title": "Weather Dashboard",
-            }
-        )
+        context["page_title"] = "Weather"
         return context
 
 
