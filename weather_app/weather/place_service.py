@@ -7,20 +7,27 @@ the place entirely in the request URL.
 
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from itertools import groupby
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-import requests
 from django.utils import timezone
 from timezonefinder import TimezoneFinder
+
+from .upstream import get_json
 
 logger = logging.getLogger("weather")
 
 NWS_HEADERS = {"User-Agent": "(Weather App, contact@example.com)"}
 NWS_TIMEOUT = 10
 MAX_DAILY_PERIODS = 14
+# Cache lifetimes (seconds): grid lookups never change, the rest follow NWS cadence.
+TTL_GRID = 24 * 60 * 60
+TTL_FORECAST = 10 * 60
+TTL_OBSERVATION = 5 * 60
+TTL_ALERTS = 2 * 60
 _COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 _timezone_finder = None
 
@@ -86,10 +93,8 @@ def build_place(latitude, longitude, name=None):
     return place
 
 
-def _get_json(url):
-    response = requests.get(url, headers=NWS_HEADERS, timeout=NWS_TIMEOUT)
-    response.raise_for_status()
-    return response.json()
+def _get_json(url, ttl=0):
+    return get_json(url, headers=NWS_HEADERS, timeout=NWS_TIMEOUT, ttl=ttl)
 
 
 def _celsius_to_fahrenheit(value):
@@ -133,14 +138,15 @@ def _fetch_current_conditions(place, properties):
     stations_url = properties.get("observationStations")
     if not stations_url:
         return
-    stations = _get_json(stations_url).get("features", [])
+    stations = _get_json(stations_url, TTL_GRID).get("features", [])
     if not stations:
         return
     station_id = stations[0].get("properties", {}).get("stationIdentifier")
     if not station_id:
         return
     observation = _get_json(
-        f"https://api.weather.gov/stations/{station_id}/observations/latest"
+        f"https://api.weather.gov/stations/{station_id}/observations/latest",
+        TTL_OBSERVATION,
     )
     _apply_observation(place, observation.get("properties", {}))
 
@@ -150,7 +156,9 @@ def _parse_iso(value):
 
 
 def _daily_periods(forecast_url, tz):
-    periods = _get_json(forecast_url).get("properties", {}).get("periods", [])
+    periods = (
+        _get_json(forecast_url, TTL_FORECAST).get("properties", {}).get("periods", [])
+    )
     daily = []
     for period in periods[:MAX_DAILY_PERIODS]:
         start = _parse_iso(period["startTime"]).astimezone(tz)
@@ -197,7 +205,8 @@ def _group_by_day(daily):
 
 def _fetch_alerts(latitude, longitude):
     features = _get_json(
-        f"https://api.weather.gov/alerts/active?point={latitude},{longitude}"
+        f"https://api.weather.gov/alerts/active?point={latitude},{longitude}",
+        TTL_ALERTS,
     ).get("features", [])
     alerts = []
     for feature in features:
@@ -217,40 +226,50 @@ def _fetch_alerts(latitude, longitude):
     return alerts
 
 
+def _safe_alerts(latitude, longitude):
+    try:
+        return _fetch_alerts(latitude, longitude)
+    except Exception as exc:
+        logger.warning("Failed to fetch alerts: %s", exc)
+        return []
+
+
+def _safe_current_conditions(place, properties):
+    try:
+        _fetch_current_conditions(place, properties)
+    except Exception as exc:
+        logger.warning("Could not fetch current conditions: %s", exc)
+
+
 def fetch_place_weather(latitude, longitude, name=None):
     """Fetch current conditions, daily forecast and alerts for a point.
 
     Returns a dict with ``place``, ``daily_forecasts`` (grouped by day) and
     ``alerts``. Upstream failures are logged and leave the affected parts empty
-    so the page can still render.
+    so the page can still render. Alerts, observations and the forecast are
+    fetched in parallel once the NWS grid point is known.
     """
     place = build_place(latitude, longitude, name)
-    daily, alerts = [], []
-    try:
-        properties = _get_json(
-            f"https://api.weather.gov/points/{latitude},{longitude}"
-        ).get("properties", {})
-        place.nws_office = properties.get("gridId", "")
-        place.grid_x = properties.get("gridX")
-        place.grid_y = properties.get("gridY")
-
+    daily = []
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        alerts_future = pool.submit(_safe_alerts, latitude, longitude)
         try:
-            _fetch_current_conditions(place, properties)
+            properties = _get_json(
+                f"https://api.weather.gov/points/{latitude},{longitude}", TTL_GRID
+            ).get("properties", {})
+            place.nws_office = properties.get("gridId", "")
+            place.grid_x = properties.get("gridX")
+            place.grid_y = properties.get("gridY")
+
+            conditions_future = pool.submit(_safe_current_conditions, place, properties)
+            forecast_url = properties.get("forecast")
+            if forecast_url:
+                daily = _daily_periods(forecast_url, _timezone_for(latitude, longitude))
+            conditions_future.result()
+            place.last_forecast_update = timezone.now()
         except Exception as exc:
-            logger.warning("Could not fetch current conditions: %s", exc)
-
-        forecast_url = properties.get("forecast")
-        if forecast_url:
-            daily = _daily_periods(forecast_url, _timezone_for(latitude, longitude))
-
-        try:
-            alerts = _fetch_alerts(latitude, longitude)
-        except Exception as exc:
-            logger.warning("Failed to fetch alerts: %s", exc)
-
-        place.last_forecast_update = timezone.now()
-    except Exception as exc:
-        logger.warning("Failed to fetch forecast data: %s", exc)
+            logger.warning("Failed to fetch forecast data: %s", exc)
+        alerts = alerts_future.result()
 
     return {
         "place": place,

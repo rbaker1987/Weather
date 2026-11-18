@@ -285,34 +285,11 @@ async function loadModelData() {
         for (const model of result.models) {
             const modelName = model.name;
             if (model.skipped) {
-                // Mark card as out of domain
-                const cardIdMap = {
-                    'GFS': 'model-gfs',
-                    'ICON': 'model-icon',
-                    'ECMWF': 'model-ecmwf',
-                    'AIFS': 'model-aifs',
-                    'GEM': 'model-gem',
-                    'HRRR': 'model-hrrr',
-                    'NAM': 'model-nam',
-                    'RGEM': 'model-gem-regional',
-                    'NBM': 'model-nbm'
-                };
-                const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-                const cardId = cardIdMap[modelName] || fallbackId;
-                const card = document.getElementById(cardId);
-                if (card) {
-                    let timeSpan = card.querySelector('.model-run-time');
-                    if (!timeSpan) {
-                        timeSpan = document.createElement('small');
-                        timeSpan.className = 'model-run-time text-muted d-block mt-1';
-                        const header = card.querySelector('h6');
-                        if (header) header.appendChild(timeSpan); else card.appendChild(timeSpan);
-                    }
-                    timeSpan.innerHTML = `<i class="fas fa-ban"></i> Out of domain`;
-                }
+                setModelCardStatus(modelName, '<i class="fas fa-ban"></i> Out of domain');
                 continue;
             } else if (model.error || !model.data) {
                 console.error(`Error from ${modelName}:`, model.error);
+                setModelCardStatus(modelName, `<i class="fas fa-exclamation-triangle"></i> Unavailable${model.error ? ': ' + escapeHtml(String(model.error)) : ''}`);
                 modelData[modelName] = null;
             } else {
                 modelData[modelName] = model.data;
@@ -373,6 +350,39 @@ function getSelectedModels() {
 // Helper function to check if array has valid (non-null) data
 function hasValidData(arr) {
     return arr && arr.length > 0 && arr.some(v => v !== null && v !== undefined);
+}
+
+const MODEL_CARD_IDS = {
+    'GFS': 'model-gfs',
+    'ICON': 'model-icon',
+    'ECMWF': 'model-ecmwf',
+    'AIFS': 'model-aifs',
+    'GEM': 'model-gem',
+    'HRRR': 'model-hrrr',
+    'NAM': 'model-nam',
+    'RGEM': 'model-gem-regional',
+    'NBM': 'model-nbm'
+};
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Show a status line (out of domain, unavailable...) on a model's card.
+function setModelCardStatus(modelName, html) {
+    const fallbackId = `model-${modelName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    const card = document.getElementById(MODEL_CARD_IDS[modelName] || fallbackId);
+    if (!card) return;
+    let timeSpan = card.querySelector('.model-run-time');
+    if (!timeSpan) {
+        timeSpan = document.createElement('small');
+        timeSpan.className = 'model-run-time text-muted d-block mt-1';
+        const header = card.querySelector('h6');
+        if (header) header.appendChild(timeSpan); else card.appendChild(timeSpan);
+    }
+    timeSpan.innerHTML = html;
 }
 
 function displayModelComparison(modelData) {
