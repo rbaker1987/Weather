@@ -5,6 +5,7 @@ from django.urls import include, path, register_converter
 from . import views
 from .api.climate_analysis_api import ClimateAnalysisAPIView, ClimateIndicesAPIView
 from .api.climate_normals_api import ClimateNormalsAPIView
+from .api.forecast_verification_api import ForecastVerificationAPIView
 from .api.geocode_api import GeocodeAPIView
 from .api.hourly_forecast_api import HourlyForecastForLocationAPIView
 from .api.model_comparison_api import ModelComparisonAPIView
@@ -32,6 +33,11 @@ urlpatterns = [
         "api/model-comparison/",
         ModelComparisonAPIView.as_view(),
         name="model-comparison",
+    ),
+    path(
+        "api/forecast-verification/",
+        ForecastVerificationAPIView.as_view(),
+        name="forecast-verification",
     ),
     path(
         "api/model-spread/",

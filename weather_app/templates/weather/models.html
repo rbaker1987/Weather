@@ -173,6 +173,22 @@
         </div>
     </div>
 
+    <!-- Recent accuracy: past forecasts scored against the nearest station -->
+    <div class="chart-container mb-3" id="modelAccuracyPanel">
+        <h4 class="mb-1"><i class="fas fa-bullseye"></i> Recent Accuracy</h4>
+        <p class="text-muted small mb-3">Average miss (&deg;F) of each model's past day-1 and day-3 forecasts for the high and low, over the last week, compared with the nearest weather station. Lower is better; the best model in each column is highlighted.</p>
+        <div id="modelAccuracyStatus" class="text-muted small"></div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 d-none" id="modelAccuracyTable">
+                <thead>
+                    <tr><th rowspan="2">Model</th><th colspan="2" class="text-center">1 day ahead</th><th colspan="2" class="text-center">3 days ahead</th></tr>
+                    <tr><th>High</th><th>Low</th><th>High</th><th>Low</th></tr>
+                </thead>
+                <tbody id="modelAccuracyBody"></tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- Temperature and Precipitation Comparison Chart -->
     <div class="chart-container">
         <h4 class="mb-3" id="chartTitle"><i class="fas fa-temperature-high"></i> Model Comparison — Temperature & Precipitation</h4>
@@ -347,6 +363,7 @@ async function loadModelData() {
         currentModelData = modelData;
         displayModelComparison(modelData);
         loadModelSpread(lat, lon, models, forecastDays);
+        loadModelAccuracy(lat, lon, models);
     } catch (error) {
         console.error('Error loading model data:', error);
         alert('Error loading model data. Please try again.');
@@ -463,6 +480,62 @@ async function loadModelSpread(lat, lon, models, forecastDays) {
     } catch (error) {
         console.warn('Could not load model spread:', error);
         status.textContent = 'Model agreement is unavailable right now.';
+    }
+}
+
+function accuracyCell(score, key, best, modelName, lead) {
+    const cell = document.createElement('td');
+    if (!score) {
+        cell.textContent = '\u2014';
+        return cell;
+    }
+    const miss = document.createElement('strong');
+    miss.textContent = score[`${key}_mae`].toFixed(1);
+    const bias = score[`${key}_bias`];
+    const detail = document.createElement('small');
+    detail.className = 'text-muted ms-1';
+    detail.textContent = bias === 0 ? 'no bias' : `${bias > 0 ? 'runs warm' : 'runs cold'} ${Math.abs(bias).toFixed(1)}`;
+    cell.append(miss, detail);
+    cell.title = `${score.days} days compared`;
+    if (best && best[lead] && best[lead][key] === modelName) cell.className = 'table-success';
+    return cell;
+}
+
+async function loadModelAccuracy(lat, lon, models) {
+    const status = document.getElementById('modelAccuracyStatus');
+    const table = document.getElementById('modelAccuracyTable');
+    const body = document.getElementById('modelAccuracyBody');
+    if (!status || !table || !body) return;
+    status.textContent = 'Checking past forecasts against observations...';
+    table.classList.add('d-none');
+    body.replaceChildren();
+    try {
+        const params = new URLSearchParams({ latitude: lat, longitude: lon, models });
+        const response = await fetch(`/api/forecast-verification/?${params}`);
+        const data = await response.json();
+        if (!response.ok || data.status !== 'success') throw new Error(data.error || 'failed');
+        if (!data.models.length) {
+            status.textContent = 'Not enough recent observations to score the models.';
+            return;
+        }
+        data.models.forEach((model) => {
+            const row = document.createElement('tr');
+            const name = document.createElement('td');
+            name.textContent = model.name;
+            row.append(name);
+            ['1', '3'].forEach((lead) => {
+                row.append(
+                    accuracyCell(model.scores[lead], 'high', data.best, model.name, lead),
+                    accuracyCell(model.scores[lead], 'low', data.best, model.name, lead)
+                );
+            });
+            body.appendChild(row);
+        });
+        status.textContent = `Station ${data.station.id} (${data.station.name}) \u00b7 last ${data.lookback_days} days. Station readings are hourly, so highs and lows can be about 1\u00b0F off.`;
+        table.classList.remove('d-none');
+    } catch (error) {
+        console.warn('Could not load model accuracy:', error);
+        status.textContent = 'Recent accuracy is unavailable for this place right now.';
     }
 }
 
