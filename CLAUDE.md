@@ -22,7 +22,7 @@ PYTHONPATH=weather_app DJANGO_SETTINGS_MODULE=config.settings .venv/Scripts/pyth
 # Single test
 ... -m pytest tests/test_view_user.py::test_name -q
 # Lint / format
-.venv/Scripts/ruff.exe check .        # ruff format . is NOT clean repo-wide (legacy drift); format only files you touch
+.venv/Scripts/ruff.exe check .        # also run `ruff format .` (repo-wide clean; CI checks it)
 npm run lint:js                       # JS in weather_app/static/weather/js
 # Django checks CI runs
 cd weather_app && python manage.py check --deploy && python manage.py makemigrations --check --dry-run
@@ -64,7 +64,7 @@ cd weather_app && python manage.py runserver 8000
 ## Deploy (Render)
 
 - Service `Weather` (`srv-d65khre3jp1c73athqbg`), `master`, build `render-build.sh`, start `render-release.sh && render-start.sh` (migrate, then gunicorn). Dashboard-managed; `render.yaml` is stale (describes services and a database that do not exist).
-- Auto-deploy has not been firing on merges; trigger deploys manually until that is fixed.
+- Auto-deploy fires on merge to `master` once all GitHub checks pass (`checksPass`). Master Lint runs on the whole repo, so a failure there silently blocks deploys. Build uses the Python in `.python-version`.
 
 ## Editing gotchas
 
