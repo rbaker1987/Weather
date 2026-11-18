@@ -30,7 +30,7 @@ cd weather_app && python manage.py check --deploy && python manage.py makemigrat
 cd weather_app && python manage.py runserver 8000
 ```
 
-`make test` runs `manage.py test`, which is not what CI uses; prefer pytest. mypy (`mypy weather_app/weather --ignore-missing-imports`) is in CI lint but fails locally on numpy stubs under Python 3.10.
+`make test` runs `manage.py test`, which is not what CI uses; prefer pytest. mypy (`mypy weather_app/weather --ignore-missing-imports`) is in CI lint but was failing locally on numpy stubs under Python 3.10; the project now targets Python 3.14 (CI, mypy, `.python-version` for Render).
 
 ## CI gates (all must be green before merge)
 
