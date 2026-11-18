@@ -116,9 +116,12 @@ def test_location_viewset_perform_create_handles_empty_geocode_result():
 
     view = LocationViewSet()
     view.request = request
-    with patch("requests.get", return_value=response), patch(
-        "weather.tasks.enqueue_current_conditions"
-    ), patch("weather.tasks.enqueue_forecasts"), patch("weather.tasks.enqueue_alerts"):
+    with (
+        patch("requests.get", return_value=response),
+        patch("weather.tasks.enqueue_current_conditions"),
+        patch("weather.tasks.enqueue_forecasts"),
+        patch("weather.tasks.enqueue_alerts"),
+    ):
         view.perform_create(serializer)
 
     location.refresh_from_db()

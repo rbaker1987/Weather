@@ -35,7 +35,9 @@ class TestEnqueueHelpers:
         location_id = str(uuid4())
         with (
             patch("weather.tasks._celery_enabled", return_value=True),
-            patch.object(tasks.update_current_conditions_for_location, "delay") as current,
+            patch.object(
+                tasks.update_current_conditions_for_location, "delay"
+            ) as current,
             patch.object(tasks.update_forecasts_for_location, "delay") as forecast,
             patch.object(tasks.update_alerts_for_location, "delay") as alert,
         ):

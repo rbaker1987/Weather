@@ -48,7 +48,9 @@ async def test_pydantic_location_conversion_creates_with_coordinates():
     service = WeatherIntegrationService()
 
     result = await service.pydantic_to_django_location(
-        PydanticLocation(name="Dallas", latitude=32.8, longitude=-96.8, zip_code="75201")
+        PydanticLocation(
+            name="Dallas", latitude=32.8, longitude=-96.8, zip_code="75201"
+        )
     )
 
     assert result.name == "Dallas"

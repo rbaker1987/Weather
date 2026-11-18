@@ -94,7 +94,9 @@ class TestAlertsService:
             900,
         )
 
-        with patch.object(AlertsService, "fetch_and_cache_alerts", return_value=[]) as fetch:
+        with patch.object(
+            AlertsService, "fetch_and_cache_alerts", return_value=[]
+        ) as fetch:
             result = AlertsService.get_or_fetch_alerts(location)
 
         fetch.assert_called_once_with(location)

@@ -35,9 +35,7 @@ async def test_geocode_with_retry_returns_none_without_result():
 async def test_geocode_with_retry_retries_then_raises():
     geocoder = AsyncGeocoder()
     geocoder.max_retries = 2
-    geocoder._run_in_executor = AsyncMock(
-        side_effect=GeocoderTimedOut("timeout")
-    )
+    geocoder._run_in_executor = AsyncMock(side_effect=GeocoderTimedOut("timeout"))
 
     with (
         patch("weather.utils.geocoding.asyncio.sleep", new=AsyncMock()) as sleep,
@@ -108,9 +106,7 @@ async def test_create_location_from_string_parses_coordinates():
     ):
         location = await create_location_from_string("30.2, -97.7")
 
-    assert location == Location(
-        name="Austin, TX", latitude=30.2, longitude=-97.7
-    )
+    assert location == Location(name="Austin, TX", latitude=30.2, longitude=-97.7)
 
 
 @pytest.mark.asyncio

@@ -196,9 +196,7 @@ class HourlyForecastForLocationAPIView(APIView):
                                 wind_speed_mph=wind_speed,
                             )
                     except Exception as e:
-                        logger.debug(
-                            f"Could not calculate apparent temperature: {e}"
-                        )
+                        logger.debug(f"Could not calculate apparent temperature: {e}")
 
                 # Determine is_daytime using that hour's date-specific sunrise/sunset
                 # Use local timezone date to match sun_events keys

@@ -172,7 +172,9 @@ class WeatherIntegrationService:
         count = 0
         with transaction.atomic():
             for forecast in pydantic_forecasts:
-                first_hourly = forecast.hourly_forecasts[0] if forecast.hourly_forecasts else None
+                first_hourly = (
+                    forecast.hourly_forecasts[0] if forecast.hourly_forecasts else None
+                )
                 temperature = first_hourly.temperature if first_hourly else None
                 wind = first_hourly.wind_condition if first_hourly else None
                 django_forecast, created = DailyForecast.objects.update_or_create(
@@ -183,7 +185,9 @@ class WeatherIntegrationService:
                     defaults={
                         "is_daytime": getattr(forecast, "is_daytime", True),
                         "temperature": temperature.value if temperature else 0,
-                        "temperature_unit": temperature.unit.value if temperature else "F",
+                        "temperature_unit": temperature.unit.value
+                        if temperature
+                        else "F",
                         "high_temperature": forecast.high_temperature,
                         "low_temperature": forecast.low_temperature,
                         "short_forecast": forecast.primary_weather or "",

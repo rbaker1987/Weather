@@ -46,9 +46,7 @@ def test_import_climate_data_upserts_weather_and_csv_indices(monkeypatch, tmp_pa
         lambda *_args, **_kwargs: MockResponse(),
     )
     csv_path = Path(tmp_path) / "indices.csv"
-    csv_path.write_text(
-        "index,date,value\nnao,2025-09-01,1.2\n", encoding="utf-8"
-    )
+    csv_path.write_text("index,date,value\nnao,2025-09-01,1.2\n", encoding="utf-8")
 
     call_command(
         "import_climate_data",
@@ -144,9 +142,7 @@ def test_importer_reads_noaa_monthly_rows(monkeypatch):
         "weather.management.commands.import_climate_data.requests.get",
         lambda *_args, **_kwargs: IndexResponse(),
     )
-    count = Command().import_noaa_indices(
-        date(2025, 1, 1), date(2025, 1, 3), ["nao"]
-    )
+    count = Command().import_noaa_indices(date(2025, 1, 1), date(2025, 1, 3), ["nao"])
     assert count == 3
 
 
@@ -211,9 +207,12 @@ def test_importer_reads_calendar_day_from_noaa_feeds(monkeypatch):
     )
 
     assert count == 5
-    assert TeleconnectionObservation.objects.filter(
-        observation_date=date(2024, 2, 29)
-    ).count() == 5
+    assert (
+        TeleconnectionObservation.objects.filter(
+            observation_date=date(2024, 2, 29)
+        ).count()
+        == 5
+    )
 
 
 @pytest.mark.django_db
@@ -247,9 +246,7 @@ def test_importer_skips_invalid_noaa_calendar_day_rows(monkeypatch):
 @pytest.mark.django_db
 def test_importer_prefers_daily_feeds_and_imports_window(monkeypatch):
     class DailyResponse:
-        text = "\n".join(
-            f"2024 03 {day:02d} {day / 10}" for day in range(1, 31)
-        )
+        text = "\n".join(f"2024 03 {day:02d} {day / 10}" for day in range(1, 31))
 
         def raise_for_status(self):
             return None
@@ -267,10 +264,13 @@ def test_importer_prefers_daily_feeds_and_imports_window(monkeypatch):
     assert observation.value == 1.2
     assert observation.source_metadata["cadence"] == "daily"
 
+
 def test_psl_indices_are_standardized_by_calendar_month():
     values = {date(year, 3, 1): float(year - 1990) for year in range(1991, 2021)}
     values[date(2026, 3, 1)] = 15.5
     standardized = Command._standardize(values)
 
     assert standardized[date(2026, 3, 1)] == pytest.approx(0.0)
-    assert sum(standardized[date(y, 3, 1)] for y in range(1991, 2021)) == pytest.approx(0.0)
+    assert sum(standardized[date(y, 3, 1)] for y in range(1991, 2021)) == pytest.approx(
+        0.0
+    )

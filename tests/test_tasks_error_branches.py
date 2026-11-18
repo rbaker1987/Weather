@@ -87,7 +87,9 @@ class TestTaskErrorBranches:
                 "weather.services.CurrentConditionsService.fetch_and_cache_current_conditions",
                 return_value=None,
             ),
-            patch.object(tasks.update_current_conditions_for_location, "retry", side_effect=Retry),
+            patch.object(
+                tasks.update_current_conditions_for_location, "retry", side_effect=Retry
+            ),
             pytest.raises(Retry),
         ):
             tasks.update_current_conditions_for_location.run(str(location.id))
@@ -99,7 +101,9 @@ class TestTaskErrorBranches:
                 "weather.services.ForecastService.get_or_fetch_hourly_forecasts",
                 side_effect=RuntimeError("forecast error"),
             ),
-            patch.object(tasks.update_forecasts_for_location, "retry", side_effect=Retry),
+            patch.object(
+                tasks.update_forecasts_for_location, "retry", side_effect=Retry
+            ),
             pytest.raises(Retry),
         ):
             tasks.update_forecasts_for_location.run(str(location.id))
@@ -122,7 +126,10 @@ class TestTaskErrorBranches:
             tasks.cache_weather_statistics.run()
 
         with (
-            patch("weather.tasks.Location.objects.filter", side_effect=RuntimeError("db down")),
+            patch(
+                "weather.tasks.Location.objects.filter",
+                side_effect=RuntimeError("db down"),
+            ),
             pytest.raises(RuntimeError, match="db down"),
         ):
             tasks.generate_forecast_report.run()

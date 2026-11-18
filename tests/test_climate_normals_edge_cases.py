@@ -12,9 +12,7 @@ from weather.api.climate_normals_api import ClimateNormalsAPIView
 @pytest.mark.django_db
 class TestClimateNormalsEdgeCases:
     def test_get_returns_error_for_missing_location(self):
-        request = RequestFactory().get(
-            "/climate", {"location_id": str(uuid4())}
-        )
+        request = RequestFactory().get("/climate", {"location_id": str(uuid4())})
 
         response = ClimateNormalsAPIView.as_view()(request)
 

@@ -36,7 +36,8 @@ def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypat
         lambda *_args, **_kwargs: 0,
     )
     monkeypatch.setattr(
-        "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year", 2019,
+        "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year",
+        2019,
     )
 
     class FakeDate(date):
@@ -115,9 +116,7 @@ def test_climate_analysis_rejects_inactive_location_in_session():
 def test_climate_analysis_throttles_anonymous_backfill_requests(monkeypatch):
     cache.clear()
     monkeypatch.setattr(ClimateAnalysisThrottle, "rate", "1/minute")
-    monkeypatch.setattr(
-        ClimateAnalysisAPIView, "first_year", date.today().year - 1
-    )
+    monkeypatch.setattr(ClimateAnalysisAPIView, "first_year", date.today().year - 1)
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
     session = client.session
@@ -134,9 +133,7 @@ def test_climate_analysis_throttles_anonymous_backfill_requests(monkeypatch):
 def test_climate_analysis_throttles_authenticated_backfill_requests(monkeypatch):
     cache.clear()
     monkeypatch.setattr(ClimateAnalysisUserThrottle, "rate", "1/minute")
-    monkeypatch.setattr(
-        ClimateAnalysisAPIView, "first_year", date.today().year - 1
-    )
+    monkeypatch.setattr(ClimateAnalysisAPIView, "first_year", date.today().year - 1)
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
     client.force_authenticate(user=get_user_model().objects.create_user("climate-user"))
@@ -154,13 +151,19 @@ def test_climate_analysis_throttles_authenticated_backfill_requests(monkeypatch)
 def test_climate_analysis_validates_required_parameters():
     client = APIClient()
     assert client.get("/api/climate-analysis/").status_code == 400
-    assert client.get(
-        "/api/climate-analysis/", {"location_id": "x", "month": "13", "day": "1"}
-    ).status_code == 400
-    assert client.get(
-        "/api/climate-analysis/",
-        {"location_id": "x", "month": "1", "day": "1", "index": "bad"},
-    ).status_code == 400
+    assert (
+        client.get(
+            "/api/climate-analysis/", {"location_id": "x", "month": "13", "day": "1"}
+        ).status_code
+        == 400
+    )
+    assert (
+        client.get(
+            "/api/climate-analysis/",
+            {"location_id": "x", "month": "1", "day": "1", "index": "bad"},
+        ).status_code
+        == 400
+    )
 
 
 @pytest.mark.django_db
@@ -184,7 +187,9 @@ def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, setti
     settings.CELERY_ENABLED = False
 
     def fail_if_called(*args, **kwargs):
-        raise AssertionError("synchronous weather import should not run for large backfill")
+        raise AssertionError(
+            "synchronous weather import should not run for large backfill"
+        )
 
     monkeypatch.setattr(
         "weather.api.climate_analysis_api.ImportClimateDataCommand._import_weather",
@@ -244,14 +249,18 @@ def test_climate_analysis_helpers_average_complete_windows_and_events():
     averaged = view._weekly_weather(rows, range(2015, 2025), 6, 15)
     assert len(averaged) == 10
     correlations = view._correlations(
-        [{"index": "nao", "date": center.isoformat(), "value": float(index)}
-         for index, center in enumerate(weekly)],
+        [
+            {"index": "nao", "date": center.isoformat(), "value": float(index)}
+            for index, center in enumerate(weekly)
+        ],
         weekly,
     )
     assert len(correlations) == 4
     events, thresholds = view._event_correlations(
-        [{"index": "nao", "date": center.isoformat(), "value": float(index)}
-         for index, center in enumerate(weekly)],
+        [
+            {"index": "nao", "date": center.isoformat(), "value": float(index)}
+            for index, center in enumerate(weekly)
+        ],
         weekly,
     )
     assert len(events) == 4
@@ -306,7 +315,8 @@ def test_climate_analysis_loads_missing_indices_without_celery(monkeypatch, sett
     session["location_ids"] = [str(location.id)]
     session.save()
     monkeypatch.setattr(
-        "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year", 2019,
+        "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year",
+        2019,
     )
 
     class FakeDate(date):

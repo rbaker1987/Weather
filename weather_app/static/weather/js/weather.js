@@ -48,37 +48,80 @@ function getWeatherIcon(conditions, isDaytime = true, pop = null) {
 
     if (popVal >= 45) {
       // High chance: show precipitation type
-      if (isStorm) return 'bolt';
-      if (isMixed) return 'cloud-meatball';
-      if (isSnow) return 'snowflake';
-      if (isIce) return 'cloud-meatball';
-      if (isRain) return 'tint';
+      if (isStorm) {
+        return 'bolt';
+      }
+      if (isMixed) {
+        return 'cloud-meatball';
+      }
+      if (isSnow) {
+        return 'snowflake';
+      }
+      if (isIce) {
+        return 'cloud-meatball';
+      }
+      if (isRain) {
+        return 'tint';
+      }
     } else if (popVal >= 15) {
       // Medium chance: show cloud + precipitation
-      if (isStorm) return 'cloud-bolt';
-      if (isMixed) return 'cloud-meatball';
-      if (isSnow) return 'cloud-snow';
-      if (isIce) return 'cloud-meatball';
-      if (isRain) return 'cloud-rain';
+      if (isStorm) {
+        return 'cloud-bolt';
+      }
+      if (isMixed) {
+        return 'cloud-meatball';
+      }
+      if (isSnow) {
+        return 'cloud-snow';
+      }
+      if (isIce) {
+        return 'cloud-meatball';
+      }
+      if (isRain) {
+        return 'cloud-rain';
+      }
     } else {
       // Low chance: show just sky type
-      if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
-      if (c.includes('sunny') || c.includes('clear')) return isDaytime ? 'sun' : 'moon';
-      if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
+      if (c.includes('partly')) {
+        return isDaytime ? 'cloud-sun' : 'cloud-moon';
+      }
+      if (c.includes('sunny') || c.includes('clear')) {
+        return isDaytime ? 'sun' : 'moon';
+      }
+      if (c.includes('cloud') || c.includes('overcast')) {
+        return 'cloud';
+      }
     }
   }
 
   // Default behavior (no PoP or couldn't parse it)
-  if (isStorm) return 'bolt';
-  if (isIce) return 'cloud-meatball';
-  if (isSnow) return 'snowflake';
-  if (c.includes('fog') || c.includes('mist') || c.includes('haze')) return 'smog';
-  if (isRain) return 'cloud-rain';
-  if (c.includes('wind') && !c.includes('cloudy')) return 'wind';
-  if (c.includes('partly')) return isDaytime ? 'cloud-sun' : 'cloud-moon';
-  if (c.includes('sunny') || c.includes('clear') || c.includes('fair'))
+  if (isStorm) {
+    return 'bolt';
+  }
+  if (isIce) {
+    return 'cloud-meatball';
+  }
+  if (isSnow) {
+    return 'snowflake';
+  }
+  if (c.includes('fog') || c.includes('mist') || c.includes('haze')) {
+    return 'smog';
+  }
+  if (isRain) {
+    return 'cloud-rain';
+  }
+  if (c.includes('wind') && !c.includes('cloudy')) {
+    return 'wind';
+  }
+  if (c.includes('partly')) {
+    return isDaytime ? 'cloud-sun' : 'cloud-moon';
+  }
+  if (c.includes('sunny') || c.includes('clear') || c.includes('fair')) {
     return isDaytime ? 'sun' : 'moon';
-  if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
+  }
+  if (c.includes('cloud') || c.includes('overcast')) {
+    return 'cloud';
+  }
   return isDaytime ? 'cloud-sun' : 'cloud-moon';
 }
 
@@ -535,7 +578,9 @@ function formatTime(timeString) {
 
 // Calculate apparent temperature (feels like) in JS
 function calculateApparentTemperature(tempF, humidityPct, windSpeedMph) {
-  if (tempF === null || tempF === undefined) return null;
+  if (tempF === null || tempF === undefined) {
+    return null;
+  }
   // Heat Index for hot conditions (≥80°F)
   if (tempF >= 80 && humidityPct !== null && humidityPct !== undefined) {
     const rh = humidityPct;

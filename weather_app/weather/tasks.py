@@ -58,6 +58,7 @@ def load_historical_climate_data(location_id, month, day, years, index_keys):
         }
     return {"location_id": str(location.id), "status": "complete"}
 
+
 logger = logging.getLogger("weather")
 
 
@@ -292,8 +293,7 @@ def generate_forecast_report(location_ids=None, report_type="daily"):
                 )[:7]
             else:
                 forecasts = HourlyForecast.objects.filter(
-                    location=location,
-                    period_start__gte=timezone.now()
+                    location=location, period_start__gte=timezone.now()
                 )[:24]
 
             report_data.append(

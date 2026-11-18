@@ -28,12 +28,8 @@ class TestGeocodingActions:
         response.raise_for_status.return_value = None
 
         with patch("requests.get", return_value=response):
-            found = APIClient().get(
-                "/api/locations/geocode_search/", {"q": "Austin"}
-            )
-            empty = APIClient().get(
-                "/api/locations/geocode_search/", {"q": "Nowhere"}
-            )
+            found = APIClient().get("/api/locations/geocode_search/", {"q": "Austin"})
+            empty = APIClient().get("/api/locations/geocode_search/", {"q": "Nowhere"})
 
         assert found.status_code == 200
         assert found.data["results"][0]["lat"] == 30.2
@@ -162,9 +158,10 @@ class TestForecastAndExportBranches:
         assert "required" in response.data["message"]
 
     def test_ensure_browser_location_falls_back_when_tasks_fail(self):
-        with patch(
-            "weather.tasks.enqueue_current_conditions", side_effect=RuntimeError
-        ), patch("weather.views._refresh_forecasts_for_location") as refresh:
+        with (
+            patch("weather.tasks.enqueue_current_conditions", side_effect=RuntimeError),
+            patch("weather.views._refresh_forecasts_for_location") as refresh,
+        ):
             response = APIClient().post(
                 "/api/locations/ensure_browser_location/",
                 {"latitude": 30.1, "longitude": -97.7},
@@ -175,7 +172,9 @@ class TestForecastAndExportBranches:
         refresh.assert_called_once()
 
     def test_update_forecast_reports_external_request_error(self):
-        location = Location.objects.create(name="Request failure", latitude=30, longitude=-97)
+        location = Location.objects.create(
+            name="Request failure", latitude=30, longitude=-97
+        )
         client = APIClient()
         add_location_to_session(client, location)
 
@@ -188,7 +187,9 @@ class TestForecastAndExportBranches:
         assert "internal error" in response.data["message"]
 
     def test_update_forecast_continues_when_observation_fetch_fails(self):
-        location = Location.objects.create(name="Forecast only", latitude=30, longitude=-97)
+        location = Location.objects.create(
+            name="Forecast only", latitude=30, longitude=-97
+        )
         client = APIClient()
         add_location_to_session(client, location)
         grid = Mock()
@@ -203,7 +204,9 @@ class TestForecastAndExportBranches:
             "features": [{"properties": {"stationIdentifier": "KATT"}}]
         }
         failed_observation = Mock()
-        failed_observation.raise_for_status.side_effect = RuntimeError("bad observation")
+        failed_observation.raise_for_status.side_effect = RuntimeError(
+            "bad observation"
+        )
         forecast = Mock()
         forecast.json.return_value = {"properties": {"periods": []}}
         alerts = Mock()
@@ -237,9 +240,11 @@ class TestForecastAndExportBranches:
         client = APIClient()
         add_location_to_session(client, location)
 
-        with patch("weather.tasks.enqueue_current_conditions"), patch(
-            "weather.tasks.enqueue_forecasts"
-        ), patch("weather.tasks.enqueue_alerts"):
+        with (
+            patch("weather.tasks.enqueue_current_conditions"),
+            patch("weather.tasks.enqueue_forecasts"),
+            patch("weather.tasks.enqueue_alerts"),
+        ):
             response = client.post(
                 "/api/locations/ensure_browser_location/",
                 {"name": "New", "latitude": 30.1, "longitude": -97.7},
@@ -261,7 +266,9 @@ class TestForecastAndExportBranches:
         current = client.post(f"/api/locations/{second.id}/set_current/")
         toggled = client.post(f"/api/locations/{second.id}/toggle_enabled/")
         reordered = client.post(
-            "/api/locations/reorder/", {"location_order": [str(first.id), str(second.id)]}, format="json"
+            "/api/locations/reorder/",
+            {"location_order": [str(first.id), str(second.id)]},
+            format="json",
         )
 
         assert current.status_code == 200
@@ -295,17 +302,13 @@ class TestForecastAndExportBranches:
         geocode.raise_for_status.return_value = None
 
         with patch("requests.get", return_value=geocode):
-            response = client.post(
-                f"/api/locations/{location.id}/update_forecast/"
-            )
+            response = client.post(f"/api/locations/{location.id}/update_forecast/")
 
         assert response.status_code == 400
         assert "Could not geocode zip code" in response.data["message"]
 
     def test_update_forecast_reports_missing_forecast_url(self):
-        location = Location.objects.create(
-            name="Grid only", latitude=30, longitude=-97
-        )
+        location = Location.objects.create(name="Grid only", latitude=30, longitude=-97)
         client = APIClient()
         add_location_to_session(client, location)
         grid = Mock()
@@ -313,17 +316,13 @@ class TestForecastAndExportBranches:
         grid.raise_for_status.return_value = None
 
         with patch("requests.get", return_value=grid):
-            response = client.post(
-                f"/api/locations/{location.id}/update_forecast/"
-            )
+            response = client.post(f"/api/locations/{location.id}/update_forecast/")
 
         assert response.status_code == 500
         assert response.data["message"] == "Forecast URL not found."
 
     def test_update_forecast_stores_conditions_forecast_and_alert(self):
-        location = Location.objects.create(
-            name="Austin", latitude=30, longitude=-97
-        )
+        location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
         client = APIClient()
         add_location_to_session(client, location)
 
@@ -397,9 +396,7 @@ class TestForecastAndExportBranches:
             "requests.get",
             side_effect=[grid, stations, observation, forecast, alerts],
         ):
-            response = client.post(
-                f"/api/locations/{location.id}/update_forecast/"
-            )
+            response = client.post(f"/api/locations/{location.id}/update_forecast/")
 
         assert response.status_code == 200
         assert response.data["periods_created"] == 1

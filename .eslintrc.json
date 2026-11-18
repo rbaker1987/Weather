@@ -16,7 +16,7 @@
     "browserLocationCoords": "readonly"
   },
   "rules": {
-    "indent": ["error", 4],
+    "indent": ["error", 2, { "ignoredNodes": ["TemplateLiteral *"] }],
     "linebreak-style": ["error", "unix"],
     "quotes": [
       "error",
@@ -31,7 +31,7 @@
     "eqeqeq": ["error", "always"],
     "curly": ["error", "all"],
     "brace-style": ["error", "1tbs"],
-    "comma-dangle": ["error", "never"],
+    "comma-dangle": "off",
     "arrow-spacing": "error",
     "no-multiple-empty-lines": ["error", { "max": 2 }]
   },

@@ -188,7 +188,9 @@ class TestBulkForecastAPI:
 
         assert response.status_code == 400
 
-    def test_bulk_forecast_marks_request_failed_on_processing_error(self, client, monkeypatch):
+    def test_bulk_forecast_marks_request_failed_on_processing_error(
+        self, client, monkeypatch
+    ):
         location = Location.objects.create(name="Bulk failure")
         monkeypatch.setattr(
             "weather.views.BulkForecastAPIView._get_forecast_data",

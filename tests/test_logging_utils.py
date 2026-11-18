@@ -30,7 +30,9 @@ def test_setup_logging_adds_file_handler_and_creates_parent(tmp_path):
         patch.object(logging_utils.logger, "add") as add,
         patch.object(logging_utils.logger, "info"),
     ):
-        logging_utils.setup_logging(log_file=str(log_path), rotation="daily", retention="1 week")
+        logging_utils.setup_logging(
+            log_file=str(log_path), rotation="daily", retention="1 week"
+        )
 
     assert log_path.parent.is_dir()
     assert add.call_count == 2
@@ -76,9 +78,10 @@ def test_log_calls_logs_success_and_reraises_errors():
     def fail():
         raise RuntimeError("broken")
 
-    with patch.object(logging_utils.logger, "debug") as debug, patch.object(
-        logging_utils.logger, "error"
-    ) as error:
+    with (
+        patch.object(logging_utils.logger, "debug") as debug,
+        patch.object(logging_utils.logger, "error") as error,
+    ):
         assert succeed(4) == 5
         try:
             fail()
@@ -101,9 +104,10 @@ def test_log_async_calls_logs_success_and_reraises_errors():
         raise RuntimeError("broken")
 
     async def run():
-        with patch.object(logging_utils.logger, "debug") as debug, patch.object(
-            logging_utils.logger, "error"
-        ) as error:
+        with (
+            patch.object(logging_utils.logger, "debug") as debug,
+            patch.object(logging_utils.logger, "error") as error,
+        ):
             assert await succeed(3) == 6
             try:
                 await fail()

@@ -116,7 +116,10 @@ def test_current_conditions_returns_none_for_missing_station_data():
     ]
 
     with patch("requests.get", side_effect=responses):
-        assert CurrentConditionsService.fetch_and_cache_current_conditions(location) is None
+        assert (
+            CurrentConditionsService.fetch_and_cache_current_conditions(location)
+            is None
+        )
 
 
 @pytest.mark.django_db
@@ -129,7 +132,10 @@ def test_current_conditions_returns_none_for_unexpected_response_error():
     ]
 
     with patch("requests.get", side_effect=responses):
-        assert CurrentConditionsService.fetch_and_cache_current_conditions(location) is None
+        assert (
+            CurrentConditionsService.fetch_and_cache_current_conditions(location)
+            is None
+        )
 
 
 @pytest.mark.django_db
@@ -200,7 +206,9 @@ def test_alert_service_force_refreshes_and_cache_can_be_cleared():
     cache_key = f"alerts:last_fetch:{location.id}"
     cache.set(cache_key, timezone.now(), 900)
 
-    with patch.object(AlertsService, "fetch_and_cache_alerts", return_value=[]) as fetch:
+    with patch.object(
+        AlertsService, "fetch_and_cache_alerts", return_value=[]
+    ) as fetch:
         result = AlertsService.get_or_fetch_alerts(location, force_refresh=True)
 
     fetch.assert_called_once_with(location)

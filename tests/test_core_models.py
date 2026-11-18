@@ -96,7 +96,9 @@ def test_weather_report_filters_forecasts_case_insensitively():
         location=Location(name="Austin"),
         hourly_forecasts=[],
     )
-    report = WeatherReport(locations=[Location(name="Austin")], daily_forecasts=[forecast])
+    report = WeatherReport(
+        locations=[Location(name="Austin")], daily_forecasts=[forecast]
+    )
 
     assert report.get_forecasts_for_location("AUSTIN") == [forecast]
     assert report.get_forecasts_for_location("Dallas") == []

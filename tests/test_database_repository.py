@@ -53,7 +53,9 @@ async def test_save_location_creates_then_updates_existing(repository):
 
 
 @pytest.mark.asyncio
-async def test_save_forecasts_creates_location_and_preserves_forecast_fields(repository):
+async def test_save_forecasts_creates_location_and_preserves_forecast_fields(
+    repository,
+):
     location = Location(name="Dallas", latitude=32.8, longitude=-96.8)
     forecast_time = datetime(2026, 8, 22, 12, tzinfo=timezone.utc)
 

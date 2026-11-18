@@ -383,7 +383,7 @@ def fetch_gfs_nomads(
             logger.debug(f"Downloaded GRIB to {grib_path}, decoding...")
             point = _decode_point(grib_path, latitude, longitude)
             logger.debug(
-                f"Decoded f{fhr:03d}: time={len(point.get('time',[]))}, t2m={len(point.get('temperature_2m',[]))}"
+                f"Decoded f{fhr:03d}: time={len(point.get('time', []))}, t2m={len(point.get('temperature_2m', []))}"
             )
             for k, v in point.items():
                 if k not in merged:

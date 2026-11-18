@@ -20,7 +20,14 @@ def response(payload):
 
 def test_fetch_noaa_forecast_converts_supported_model_response():
     points = response(
-        {"properties": {"gridX": 10, "gridY": 20, "cwa": "OUN", "elevation": {"value": 300}}}
+        {
+            "properties": {
+                "gridX": 10,
+                "gridY": 20,
+                "cwa": "OUN",
+                "elevation": {"value": 300},
+            }
+        }
     )
     forecast = response(
         {
@@ -110,7 +117,12 @@ def test_nomads_bbox_clamps_coordinates():
 
 @pytest.mark.parametrize(
     "ensemble, expected",
-    [("det", "filter_gfs_0p25.pl"), ("control", "c00"), ("mean", "mean"), ("p01", "p01")],
+    [
+        ("det", "filter_gfs_0p25.pl"),
+        ("control", "c00"),
+        ("mean", "mean"),
+        ("p01", "p01"),
+    ],
 )
 def test_nomads_filter_url_supports_ensemble_modes(ensemble, expected):
     url = noaa_nomads._gfs_filter_url(
