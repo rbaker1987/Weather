@@ -3,11 +3,11 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from django.core.cache import cache
 from rest_framework.test import APIRequestFactory
 
 from weather.api.climate_normals_api import ClimateNormalsAPIView
 from weather.api.summarize_api import SummarizeForecastAPIView
-from weather.models import Location
 
 
 @pytest.fixture
@@ -77,62 +77,57 @@ class TestSummarizeForecastAPIView:
         assert response.data["error"] == "Summarization failed"
 
 
-@pytest.mark.django_db
 class TestClimateNormalsAPIView:
-    def test_get_requires_location_id(self, request_factory):
-        response = ClimateNormalsAPIView.as_view()(request_factory.get("/climate"))
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        cache.clear()
+        yield
+        cache.clear()
 
-        assert response.status_code == 400
-        assert response.data["error"] == "location_id parameter is required"
-
-    def test_get_rejects_custom_location(self, request_factory):
-        request = request_factory.get("/climate", {"location_id": "custom"})
-
-        response = ClimateNormalsAPIView.as_view()(request)
-
-        assert response.status_code == 400
-        assert response.data["status"] == "custom_location"
-
-    def test_get_returns_cached_normals(self, request_factory):
-        location = Location.objects.create(
-            name="Cached", avg_high_temp=80, avg_low_temp=60
+    @pytest.mark.parametrize(
+        "params",
+        [{}, {"lat": "x", "lon": "1"}, {"lat": "95", "lon": "1"}, {"lat": "30"}],
+    )
+    def test_get_requires_valid_coordinates(self, request_factory, params):
+        response = ClimateNormalsAPIView.as_view()(
+            request_factory.get("/climate", params)
         )
-        request = request_factory.get("/climate", {"location_id": str(location.id)})
 
-        response = ClimateNormalsAPIView.as_view()(request)
+        assert response.status_code == 400
+        assert "lat and lon" in response.data["error"]
 
-        assert response.status_code == 200
-        assert response.data["status"] == "cached"
-
-    def test_get_fetches_and_saves_normals(self, request_factory):
-        location = Location.objects.create(name="Fetched", latitude=30, longitude=-97)
-        request = request_factory.get("/climate", {"location_id": str(location.id)})
-
+    def test_get_fetches_then_serves_from_cache(self, request_factory):
         with patch.object(
             ClimateNormalsAPIView,
             "_fetch_climate_normals",
             return_value=(85.5, 64.5),
-        ):
-            response = ClimateNormalsAPIView.as_view()(request)
+        ) as fetch:
+            first = ClimateNormalsAPIView.as_view()(
+                request_factory.get("/climate", {"lat": "30", "lon": "-97"})
+            )
+            second = ClimateNormalsAPIView.as_view()(
+                request_factory.get("/climate", {"lat": "30", "lon": "-97"})
+            )
 
-        location.refresh_from_db()
-        assert response.status_code == 200
-        assert response.data["status"] == "success"
-        assert location.avg_high_temp == 85.5
-        assert location.avg_low_temp == 64.5
+        assert first.status_code == 200
+        assert first.data == {
+            "status": "success",
+            "avg_high_temp": 85.5,
+            "avg_low_temp": 64.5,
+        }
+        assert second.data["status"] == "cached"
+        assert second.data["avg_high_temp"] == 85.5
+        assert fetch.call_count == 1
 
     def test_get_returns_error_when_normals_unavailable(self, request_factory):
-        location = Location.objects.create(
-            name="Unavailable", latitude=30, longitude=-97
-        )
-        request = request_factory.get("/climate", {"location_id": str(location.id)})
-
         with patch.object(
             ClimateNormalsAPIView,
             "_fetch_climate_normals",
             return_value=(None, None),
         ):
-            response = ClimateNormalsAPIView.as_view()(request)
+            response = ClimateNormalsAPIView.as_view()(
+                request_factory.get("/climate", {"lat": "30", "lon": "-97"})
+            )
 
         assert response.status_code == 500
         assert response.data["status"] == "error"

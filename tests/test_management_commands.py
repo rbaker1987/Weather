@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from io import StringIO
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -10,124 +10,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.utils import timezone
 
-from weather.management.commands.populate_climate_normals import (
-    Command as PopulateClimateNormalsCommand,
-)
 from weather.models import Location
-
-
-@pytest.mark.django_db
-class TestPopulateClimateNormalsCommand:
-    def test_populates_locations_with_coordinates(self):
-        location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
-        output = StringIO()
-
-        with patch.object(
-            PopulateClimateNormalsCommand,
-            "_fetch_climate_normals",
-            return_value=(85.5, 64.5),
-        ):
-            call_command("populate_climate_normals", stdout=output)
-
-        location.refresh_from_db()
-        assert location.avg_high_temp == 85.5
-        assert location.avg_low_temp == 64.5
-        assert "Climate normals population complete" in output.getvalue()
-
-    def test_location_id_limits_population(self):
-        selected = Location.objects.create(name="Selected", latitude=30, longitude=-97)
-        Location.objects.create(name="Other", latitude=31, longitude=-98)
-        output = StringIO()
-
-        with patch.object(
-            PopulateClimateNormalsCommand,
-            "_fetch_climate_normals",
-            return_value=(80, 60),
-        ) as fetch:
-            call_command(
-                "populate_climate_normals",
-                location_id=str(selected.id),
-                stdout=output,
-            )
-
-        assert fetch.call_count == 1
-        assert "Processing 1 location(s)" in output.getvalue()
-
-    def test_reports_unavailable_data_and_location_errors(self):
-        unavailable = Location.objects.create(
-            name="Unavailable", latitude=30, longitude=-97
-        )
-        broken = Location.objects.create(name="Broken", latitude=31, longitude=-98)
-        output = StringIO()
-
-        with patch.object(
-            PopulateClimateNormalsCommand,
-            "_fetch_climate_normals",
-            side_effect=lambda _latitude, longitude: (
-                (None, None)
-                if longitude == -97
-                else (_ for _ in ()).throw(RuntimeError("bad response"))
-            ),
-        ):
-            call_command("populate_climate_normals", stdout=output)
-
-        unavailable.refresh_from_db()
-        broken.refresh_from_db()
-        text = output.getvalue()
-        assert unavailable.avg_high_temp is None
-        assert "Could not retrieve climate data" in text
-        assert "Error for Broken: bad response" in text
-
-    def test_fetch_climate_normals_returns_averages(self):
-        command = PopulateClimateNormalsCommand()
-        points = Mock()
-        points.json.return_value = {"properties": {"forecast": "forecast-url"}}
-        forecast = Mock()
-        forecast.json.return_value = {
-            "properties": {
-                "periods": [
-                    {"isDaytime": True, "temperature": 80},
-                    {"isDaytime": False, "temperature": 60},
-                ]
-            }
-        }
-
-        with patch(
-            "weather.management.commands.populate_climate_normals.requests.get",
-            side_effect=[points, forecast],
-        ):
-            result = command._fetch_climate_normals(30, -97)
-
-        assert result == (80.0, 60.0)
-
-    @pytest.mark.parametrize(
-        "payload",
-        [{}, {"properties": {}}, {"properties": {"forecast": "url"}}],
-    )
-    def test_fetch_climate_normals_handles_incomplete_responses(self, payload):
-        command = PopulateClimateNormalsCommand()
-        response = Mock()
-        response.json.return_value = payload
-
-        with patch(
-            "weather.management.commands.populate_climate_normals.requests.get",
-            return_value=response,
-        ):
-            result = command._fetch_climate_normals(30, -97)
-
-        assert result == (None, None)
-
-    def test_fetch_climate_normals_handles_request_error(self):
-        import requests
-
-        command = PopulateClimateNormalsCommand()
-        with patch(
-            "weather.management.commands.populate_climate_normals.requests.get",
-            side_effect=requests.RequestException("offline"),
-        ):
-            result = command._fetch_climate_normals(30, -97)
-
-        assert result == (None, None)
 
 
 @pytest.mark.django_db

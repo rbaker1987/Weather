@@ -246,10 +246,10 @@ async function loadModelData() {
     const lon = selectedOption.dataset.lon;
     const locationId = selectedOption.value;
 
-    // Fetch climate normals for this location if not already set
-    if (locationId !== 'custom') {
-        console.log(`Fetching climate normals for location ${locationId}`);
-        fetch(`/api/climate-normals/?location_id=${locationId}`)
+    // Fetch climate normals for these coordinates
+    if (lat && lon) {
+        console.log(`Fetching climate normals for ${lat},${lon}`);
+        fetch(`/api/climate-normals/?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
             .then(r => {
                 console.log(`Climate normals API response status: ${r.status}`);
                 return r.json();
@@ -382,15 +382,16 @@ function displayModelComparison(modelData) {
     // Fetch fresh climate normals for the current location
     const locationSelect = document.getElementById('locationSelect');
     const selectedOption = locationSelect?.options[locationSelect.selectedIndex];
-    const locationId = selectedOption?.value;
+    const normalsLat = selectedOption?.dataset?.lat;
+    const normalsLon = selectedOption?.dataset?.lon;
 
     let avgHighTemp = null;
     let avgLowTemp = null;
 
-    // Fetch climate normals if we have a real location
-    if (locationId && locationId !== 'custom') {
-        console.log(`displayModelComparison: Fetching normals for location ${locationId}`);
-        fetch(`/api/climate-normals/?location_id=${locationId}`)
+    // Fetch climate normals for the selected coordinates
+    if (normalsLat && normalsLon) {
+        console.log(`displayModelComparison: Fetching normals for ${normalsLat},${normalsLon}`);
+        fetch(`/api/climate-normals/?lat=${encodeURIComponent(normalsLat)}&lon=${encodeURIComponent(normalsLon)}`)
             .then(r => {
                 console.log(`displayModelComparison: API response status: ${r.status}`);
                 return r.json();
@@ -494,14 +495,14 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
 
     // Note: avgHighTemp and avgLowTemp are passed as function parameters, not from template context
 
-    // Store current location ID for climate normals refresh
-    const locationSelect = document.getElementById('locationSelect');
-    const selectedOption = locationSelect?.options[locationSelect.selectedIndex];
-    window.currentLocationId = selectedOption?.value;
+    // Refresh climate normals for the currently selected coordinates
     window.updateClimateNormals = function() {
-        // Fetch updated climate normals and refresh the chart
-        if (window.currentLocationId && window.currentLocationId !== 'custom') {
-            fetch(`/api/climate-normals/?location_id=${window.currentLocationId}`)
+        const locationSelect = document.getElementById('locationSelect');
+        const selectedOption = locationSelect?.options[locationSelect.selectedIndex];
+        const normalsLat = selectedOption?.dataset?.lat;
+        const normalsLon = selectedOption?.dataset?.lon;
+        if (normalsLat && normalsLon) {
+            fetch(`/api/climate-normals/?lat=${encodeURIComponent(normalsLat)}&lon=${encodeURIComponent(normalsLon)}`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.status === 'success' && currentModelData) {
@@ -664,7 +665,6 @@ function showModelDetails(modelName) {
     const params = new URLSearchParams();
     if (lat) params.set('latitude', lat);
     if (lon) params.set('longitude', lon);
-    if (locationId) params.set('location_id', locationId);
     if (days) params.set('forecast_days', days);
 
     const qs = params.toString();

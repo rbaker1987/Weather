@@ -1,71 +1,42 @@
-"""API endpoint for fetching and populating climate normals."""
+"""API endpoint for the average high/low of the NWS forecast at a place."""
 
 import logging
 
 import requests
-from django.shortcuts import get_object_or_404
+from django.core.cache import cache
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from weather.models import Location
+from weather.place_service import validate_coordinates
 
 logger = logging.getLogger("weather")
 
+NORMALS_CACHE_SECONDS = 6 * 60 * 60
+
 
 class ClimateNormalsAPIView(APIView):
-    """API view to fetch and populate climate normals for a location."""
+    """API view returning average high/low temperatures for coordinates."""
 
     permission_classes = []  # Public endpoint
 
     def get(self, request, *args, **kwargs):
-        """Fetch climate normals for a location from NWS and update the database."""
-        location_id = request.query_params.get("location_id")
-
-        if not location_id:
-            return Response({"error": "location_id parameter is required"}, status=400)
-
-        # Don't fetch for custom locations (from map picker)
-        if location_id == "custom":
-            return Response(
-                {
-                    "error": "Cannot fetch climate normals for custom locations",
-                    "status": "custom_location",
-                },
-                status=400,
-            )
-
+        """Fetch average high/low for ``?lat=&lon=`` from NWS, cached in memory."""
         try:
-            location = get_object_or_404(Location, id=location_id)
-
-            # Check if already populated
-            if location.avg_high_temp is not None and location.avg_low_temp is not None:
-                return Response(
-                    {
-                        "status": "cached",
-                        "location_id": str(location.id),
-                        "avg_high_temp": location.avg_high_temp,
-                        "avg_low_temp": location.avg_low_temp,
-                    }
-                )
-
-            # Fetch from NWS
-            avg_high, avg_low = self._fetch_climate_normals(
-                float(location.latitude), float(location.longitude)
+            latitude, longitude = validate_coordinates(
+                request.query_params.get("lat"), request.query_params.get("lon")
+            )
+        except ValueError:
+            return Response(
+                {"error": "lat and lon must be valid coordinates"}, status=400
             )
 
-            if avg_high is not None and avg_low is not None:
-                location.avg_high_temp = avg_high
-                location.avg_low_temp = avg_low
-                location.save(update_fields=["avg_high_temp", "avg_low_temp"])
+        cache_key = f"climate-normals:{latitude:.2f}:{longitude:.2f}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response({"status": "cached", **cached})
 
-                return Response(
-                    {
-                        "status": "success",
-                        "location_id": str(location.id),
-                        "avg_high_temp": avg_high,
-                        "avg_low_temp": avg_low,
-                    }
-                )
+        avg_high, avg_low = self._fetch_climate_normals(latitude, longitude)
+        if avg_high is None or avg_low is None:
             return Response(
                 {
                     "status": "error",
@@ -73,10 +44,9 @@ class ClimateNormalsAPIView(APIView):
                 },
                 status=500,
             )
-
-        except Exception as e:
-            logger.error(f"Error fetching climate normals: {str(e)}")
-            return Response({"status": "error", "error": str(e)}, status=500)
+        values = {"avg_high_temp": avg_high, "avg_low_temp": avg_low}
+        cache.set(cache_key, values, NORMALS_CACHE_SECONDS)
+        return Response({"status": "success", **values})
 
     def _fetch_climate_normals(self, latitude, longitude):
         """
