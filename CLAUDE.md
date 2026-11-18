@@ -7,7 +7,7 @@ Django weather app: NWS forecasts plus raw model data (GFS, ICON, ECMWF, AIFS, G
 Production is a Render **free** web service with **no permanent database** (free Postgres expires every 30 days, and we do not pay for hosting). Design accordingly:
 
 - The database is a disposable cache. SQLite is rebuilt by `migrate` on every start (`render-release.sh`); data is lost on deploy and restart. Do not add models that must persist.
-- Accounts and saved locations are being removed. The target is "use my location" or "enter a location", with location carried in the URL/request, not the session or DB.
+- User accounts are removed (signup/login/profile, `Location.owner`); only Django admin keeps `django.contrib.auth`. Saved locations are still being removed. The target is "use my location" or "enter a location", with location carried in the URL/request, not the session or DB.
 - Celery/Redis are being dropped; data is fetched on demand. `CELERY_ENABLED` is false in production already.
 - The custom forecast builder is removed.
 - Work is split into small PRs (accounts removal, location-from-request, Celery/Redis removal and on-demand climate data, deploy config cleanup).
