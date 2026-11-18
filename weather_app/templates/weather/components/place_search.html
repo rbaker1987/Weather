@@ -1,0 +1,29 @@
+<div class="card weather-card mb-4" id="placeSearch" data-geocode-url="{% url 'weather:geocode' %}">
+  <div class="card-body">
+    <form id="placeSearchForm" class="row g-2 align-items-center" role="search">
+      <div class="col-12 col-md">
+        <label for="placeSearchInput" class="visually-hidden">Search for a place</label>
+        <input
+          id="placeSearchInput"
+          type="search"
+          class="form-control"
+          placeholder="City, ZIP code, or latitude, longitude"
+          autocomplete="off"
+          required
+        />
+      </div>
+      <div class="col-6 col-md-auto">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="fas fa-search"></i> Search
+        </button>
+      </div>
+      <div class="col-6 col-md-auto">
+        <button type="button" id="placeUseMyLocation" class="btn btn-outline-primary w-100">
+          <i class="fas fa-location-arrow"></i> Use my location
+        </button>
+      </div>
+    </form>
+    <div id="placeSearchStatus" class="small mt-2" role="status" aria-live="polite"></div>
+    <ul id="placeSearchResults" class="list-group mt-2"></ul>
+  </div>
+</div>

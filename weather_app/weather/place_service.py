@@ -1,0 +1,259 @@
+"""On-demand weather for a point, fetched from NWS with no database access.
+
+A "place" is just coordinates plus an optional display name. Nothing here
+reads or writes the database, so it works with a disposable cache and carries
+the place entirely in the request URL.
+"""
+
+import logging
+import re
+from datetime import datetime, timedelta
+from itertools import groupby
+from types import SimpleNamespace
+from zoneinfo import ZoneInfo
+
+import requests
+from django.utils import timezone
+from timezonefinder import TimezoneFinder
+
+logger = logging.getLogger("weather")
+
+NWS_HEADERS = {"User-Agent": "(Weather App, contact@example.com)"}
+NWS_TIMEOUT = 10
+MAX_DAILY_PERIODS = 14
+_COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+_timezone_finder = None
+
+
+def validate_coordinates(lat, lon):
+    """Return (latitude, longitude) floats, or raise ValueError if invalid."""
+    try:
+        latitude = float(lat)
+        longitude = float(lon)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid coordinates") from exc
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        raise ValueError("Coordinates out of range")
+    return latitude, longitude
+
+
+def parse_wind_speed(wind_speed_str):
+    """Extract a numeric wind speed from text like '10 to 15 mph' or '10 mph'."""
+    numbers = re.findall(r"\d+", str(wind_speed_str or ""))
+    if not numbers:
+        return 0
+    if len(numbers) > 1:
+        return int((int(numbers[0]) + int(numbers[1])) / 2)
+    return int(numbers[0])
+
+
+def _timezone_for(latitude, longitude):
+    global _timezone_finder
+    try:
+        if _timezone_finder is None:
+            _timezone_finder = TimezoneFinder()
+        name = _timezone_finder.timezone_at(lat=latitude, lng=longitude)
+        return ZoneInfo(name) if name else timezone.get_current_timezone()
+    except Exception:
+        return timezone.get_current_timezone()
+
+
+def build_place(latitude, longitude, name=None):
+    """Create a template-compatible stand-in for a Location (no database row)."""
+    label = name or f"{latitude:.2f}, {longitude:.2f}"
+    place = SimpleNamespace(
+        id=None,
+        name=label,
+        display_name=label,
+        latitude=latitude,
+        longitude=longitude,
+        zip_code=None,
+        nws_office="",
+        grid_x=None,
+        grid_y=None,
+        last_forecast_update=None,
+        last_observation_time=None,
+        current_temp=None,
+        current_conditions="",
+        current_humidity=None,
+        current_wind_speed=None,
+        current_wind_gust=None,
+        current_wind_direction="",
+        current_apparent_temp=None,
+        is_current_location=False,
+    )
+    place.alerts = SimpleNamespace(filter=lambda **_kwargs: [])
+    return place
+
+
+def _get_json(url):
+    response = requests.get(url, headers=NWS_HEADERS, timeout=NWS_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+def _celsius_to_fahrenheit(value):
+    return int(value * 9 / 5 + 32)
+
+
+def _apply_observation(place, props):
+    """Copy a latest-observation payload onto the place's current_* fields."""
+    temp_c = (props.get("temperature") or {}).get("value")
+    place.current_temp = _celsius_to_fahrenheit(temp_c) if temp_c is not None else None
+    place.current_conditions = props.get("textDescription") or "Unknown"
+
+    humidity = (props.get("relativeHumidity") or {}).get("value")
+    place.current_humidity = int(humidity) if humidity is not None else None
+
+    wind_kmh = (props.get("windSpeed") or {}).get("value")
+    place.current_wind_speed = int(wind_kmh * 0.621371) if wind_kmh is not None else 0
+    gust_kmh = (props.get("windGust") or {}).get("value")
+    place.current_wind_gust = int(gust_kmh * 0.621371) if gust_kmh is not None else None
+
+    degrees = (props.get("windDirection") or {}).get("value")
+    place.current_wind_direction = (
+        _COMPASS[int((float(degrees) + 22.5) / 45) % 8] if degrees is not None else ""
+    )
+
+    for key in ("heatIndex", "windChill"):
+        apparent_c = (props.get(key) or {}).get("value")
+        if apparent_c is not None:
+            place.current_apparent_temp = _celsius_to_fahrenheit(apparent_c)
+            break
+
+    stamp = props.get("timestamp")
+    place.last_observation_time = (
+        datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        if stamp
+        else timezone.now()
+    )
+
+
+def _fetch_current_conditions(place, properties):
+    stations_url = properties.get("observationStations")
+    if not stations_url:
+        return
+    stations = _get_json(stations_url).get("features", [])
+    if not stations:
+        return
+    station_id = stations[0].get("properties", {}).get("stationIdentifier")
+    if not station_id:
+        return
+    observation = _get_json(
+        f"https://api.weather.gov/stations/{station_id}/observations/latest"
+    )
+    _apply_observation(place, observation.get("properties", {}))
+
+
+def _parse_iso(value):
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _daily_periods(forecast_url, tz):
+    periods = _get_json(forecast_url).get("properties", {}).get("periods", [])
+    daily = []
+    for period in periods[:MAX_DAILY_PERIODS]:
+        start = _parse_iso(period["startTime"]).astimezone(tz)
+        end = _parse_iso(period["endTime"]).astimezone(tz)
+        is_daytime = period.get("isDaytime", True)
+        # A night period that starts after midnight belongs to the previous day.
+        if is_daytime or start.hour >= 18:
+            forecast_date = start.date()
+        else:
+            forecast_date = (start - timedelta(days=1)).date()
+        daily.append(
+            SimpleNamespace(
+                forecast_date=forecast_date,
+                period_start=start,
+                period_end=end,
+                is_daytime=is_daytime,
+                temperature=period.get("temperature"),
+                temperature_unit=period.get("temperatureUnit", "F"),
+                wind_speed=parse_wind_speed(period.get("windSpeed", "")),
+                wind_direction=period.get("windDirection", ""),
+                short_forecast=period.get("shortForecast", ""),
+                detailed_forecast=period.get("detailedForecast", ""),
+                precipitation_probability=(
+                    period.get("probabilityOfPrecipitation") or {}
+                ).get("value"),
+            )
+        )
+    return daily
+
+
+def _group_by_day(daily):
+    grouped = []
+    for date, periods in groupby(daily, key=lambda f: f.forecast_date):
+        periods = list(periods)
+        grouped.append(
+            {
+                "date": date,
+                "day": next((p for p in periods if p.is_daytime), None),
+                "night": next((p for p in periods if not p.is_daytime), None),
+            }
+        )
+    return grouped
+
+
+def _fetch_alerts(latitude, longitude):
+    features = _get_json(
+        f"https://api.weather.gov/alerts/active?point={latitude},{longitude}"
+    ).get("features", [])
+    alerts = []
+    for feature in features:
+        props = feature.get("properties", {})
+        onset, expires = props.get("onset"), props.get("expires")
+        alerts.append(
+            SimpleNamespace(
+                event=props.get("event", "Unknown"),
+                headline=props.get("headline", ""),
+                description=props.get("description", ""),
+                severity=(props.get("severity") or "unknown").lower(),
+                urgency=(props.get("urgency") or "unknown").lower(),
+                onset=_parse_iso(onset) if onset else None,
+                expires=_parse_iso(expires) if expires else None,
+            )
+        )
+    return alerts
+
+
+def fetch_place_weather(latitude, longitude, name=None):
+    """Fetch current conditions, daily forecast and alerts for a point.
+
+    Returns a dict with ``place``, ``daily_forecasts`` (grouped by day) and
+    ``alerts``. Upstream failures are logged and leave the affected parts empty
+    so the page can still render.
+    """
+    place = build_place(latitude, longitude, name)
+    daily, alerts = [], []
+    try:
+        properties = _get_json(
+            f"https://api.weather.gov/points/{latitude},{longitude}"
+        ).get("properties", {})
+        place.nws_office = properties.get("gridId", "")
+        place.grid_x = properties.get("gridX")
+        place.grid_y = properties.get("gridY")
+
+        try:
+            _fetch_current_conditions(place, properties)
+        except Exception as exc:
+            logger.warning("Could not fetch current conditions: %s", exc)
+
+        forecast_url = properties.get("forecast")
+        if forecast_url:
+            daily = _daily_periods(forecast_url, _timezone_for(latitude, longitude))
+
+        try:
+            alerts = _fetch_alerts(latitude, longitude)
+        except Exception as exc:
+            logger.warning("Failed to fetch alerts: %s", exc)
+
+        place.last_forecast_update = timezone.now()
+    except Exception as exc:
+        logger.warning("Failed to fetch forecast data: %s", exc)
+
+    return {
+        "place": place,
+        "daily_forecasts": _group_by_day(daily),
+        "alerts": alerts,
+    }
