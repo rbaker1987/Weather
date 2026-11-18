@@ -22,9 +22,6 @@ from weather.models import (
 def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypatch):
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
-    session = client.session
-    session["location_ids"] = [str(location.id)]
-    session.save()
     monkeypatch.setattr(
         "weather.api.climate_analysis_api.ImportClimateDataCommand._import_weather",
         lambda *_args, **_kwargs: 0,
@@ -81,26 +78,28 @@ def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypat
 
 
 @pytest.mark.django_db
-def test_climate_analysis_rejects_location_not_in_session():
-    location = Location.objects.create(name="Hidden")
+def test_climate_analysis_rejects_unknown_or_malformed_location_id():
+    client = APIClient()
+    params = {"month": "1", "day": "1"}
 
-    response = APIClient().get(
+    missing = client.get(
         "/api/climate-analysis/",
-        {"location_id": str(location.id), "month": "1", "day": "1"},
+        {**params, "location_id": "00000000-0000-0000-0000-000000000000"},
+    )
+    malformed = client.get(
+        "/api/climate-analysis/", {**params, "location_id": "not-a-uuid"}
     )
 
-    assert response.status_code == 404
+    assert missing.status_code == 404
+    assert malformed.status_code == 400
 
 
 @pytest.mark.django_db
-def test_climate_analysis_rejects_inactive_location_in_session():
+def test_climate_analysis_rejects_inactive_location():
     location = Location.objects.create(
         name="Inactive", latitude=30, longitude=-97, is_active=False
     )
     client = APIClient()
-    session = client.session
-    session["location_ids"] = [str(location.id)]
-    session.save()
 
     response = client.get(
         "/api/climate-analysis/",
@@ -117,9 +116,6 @@ def test_climate_analysis_throttles_anonymous_backfill_requests(monkeypatch):
     monkeypatch.setattr(ClimateAnalysisAPIView, "first_year", date.today().year - 1)
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
-    session = client.session
-    session["location_ids"] = [str(location.id)]
-    session.save()
     params = {"location_id": str(location.id), "month": "1", "day": "1"}
 
     assert client.get("/api/climate-analysis/", params).status_code == 200
@@ -147,23 +143,9 @@ def test_climate_analysis_validates_required_parameters():
 
 
 @pytest.mark.django_db
-def test_location_detail_registers_anonymous_location_for_climate_analysis():
-    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
-    client = APIClient()
-
-    detail_response = client.get(f"/locations/{location.id}/")
-
-    assert detail_response.status_code == 200
-    assert str(location.id) in client.session["location_ids"]
-
-
-@pytest.mark.django_db
 def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, settings):
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
-    session = client.session
-    session["location_ids"] = [str(location.id)]
-    session.save()
     settings.CELERY_ENABLED = False
 
     def fail_if_called(*args, **kwargs):
@@ -189,9 +171,6 @@ def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, setti
 def test_climate_analysis_rejects_location_without_coordinates():
     location = Location.objects.create(name="No Coordinates")
     client = APIClient()
-    session = client.session
-    session["location_ids"] = [str(location.id)]
-    session.save()
 
     response = client.get(
         "/api/climate-analysis/",
@@ -291,9 +270,6 @@ def test_climate_analysis_loads_missing_indices_without_celery(monkeypatch, sett
     settings.CELERY_ENABLED = False
     location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
     client = APIClient()
-    session = client.session
-    session["location_ids"] = [str(location.id)]
-    session.save()
     monkeypatch.setattr(
         "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year",
         2019,

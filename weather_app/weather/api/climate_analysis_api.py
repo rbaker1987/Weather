@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import uuid
 from datetime import date, timedelta
 from math import ceil
 
@@ -70,14 +71,11 @@ class ClimateAnalysisAPIView(APIView):
         if unsupported:
             return Response({"error": "unsupported climate index"}, status=400)
 
-        session_location_ids = {
-            str(item) for item in request.session.get("location_ids", [])
-        }
-        if location_id not in session_location_ids:
-            return Response(
-                {"error": "location is not available in this session"}, status=404
-            )
-        location = get_object_or_404(Location, id=location_id, is_active=True)
+        try:
+            location_uuid = uuid.UUID(location_id)
+        except ValueError:
+            return Response({"error": "location_id must be a valid UUID"}, status=400)
+        location = get_object_or_404(Location, id=location_uuid, is_active=True)
         if location.latitude is None or location.longitude is None:
             return Response({"error": "location does not have coordinates"}, status=400)
 
