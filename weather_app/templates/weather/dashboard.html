@@ -21,6 +21,8 @@
 </style>
 {% endblock %} {% block content %}
 
+{% include "weather/components/place_search.html" %}
+
 <!-- Active Alerts (moved to very top) -->
 <!-- Hidden element holding favorite location forecast timestamp for dynamic headers -->
 {% if favorite_location and favorite_location.last_forecast_update %}

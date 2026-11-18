@@ -10,7 +10,8 @@ Production is a Render **free** web service with **no permanent database** (free
 - User accounts are removed (signup/login/profile, `Location.owner`); only Django admin keeps `django.contrib.auth`. Saved locations are still being removed. The target is "use my location" or "enter a location", with location carried in the URL/request, not the session or DB.
 - Celery/Redis are being dropped; data is fetched on demand. `CELERY_ENABLED` is false in production already.
 - The custom forecast builder is removed.
-- Work is split into small PRs (accounts removal, location-from-request, Celery/Redis removal and on-demand climate data, deploy config cleanup).
+- Places are carried in the URL: `/weather/<lat>,<lon>/?name=` (`PlaceView`, `place_service.py`, no DB rows); `/api/geocode/?q=` powers the search box. The `Location` table is being removed entirely (decision: no cache rows).
+- Work is split into small PRs (accounts removal, place-from-URL, remove session locations and list pages, Celery/Redis removal and on-demand climate data, drop the Location table, deploy config cleanup).
 
 ## Commands
 
@@ -59,7 +60,7 @@ cd weather_app && python manage.py runserver 8000
 - UI: `location_detail.html`; API: `api/climate_analysis_api.py`; stats in `climate_analysis.py`; importer in `import_climate_data.py`.
 - Weather source: Open-Meteo Archive (daily, F/mph/in, per-location timezone). Indices: NAO/AO/PNA from CPC CDAS daily files; EPO/WPO from PSL core files standardized per calendar month (1991-2020); ENSO (internal key `oni`) is monthly. Never label monthly indices as daily.
 - The user selects month/day and clicks Run (no request on page load). Completed years only; centered 7-day average; events are warm/cool/dry/wet at the top/bottom 10%.
-- Missing indices load synchronously when Celery is off. The endpoint is rate-limited (anon per IP, authenticated per user) and rejects inactive locations.
+- Missing indices load synchronously when Celery is off. The endpoint is rate-limited per IP and rejects inactive locations.
 
 ## Deploy (Render)
 
