@@ -1,7 +1,6 @@
 """URL configuration for weather app."""
 
 from django.urls import include, path, register_converter
-from rest_framework.routers import DefaultRouter
 
 from . import views
 from .api.climate_analysis_api import ClimateAnalysisAPIView, ClimateIndicesAPIView
@@ -14,29 +13,9 @@ from .converters import CoordinatesConverter
 
 register_converter(CoordinatesConverter, "coords")
 
-# DRF Router for ViewSets
-router = DefaultRouter()
-router.register(r"locations", views.LocationViewSet, basename="location")
-router.register(
-    r"hourly-forecasts", views.HourlyForecastViewSet, basename="hourlyforecast"
-)
-router.register(
-    r"daily-forecasts", views.DailyForecastViewSet, basename="dailyforecast"
-)
-router.register(r"alerts", views.WeatherAlertViewSet, basename="weatheralert")
-router.register(
-    r"current-conditions", views.CurrentConditionsViewSet, basename="currentconditions"
-)
-
 # URL patterns
 urlpatterns = [
     # API endpoints
-    path("api/", include(router.urls)),
-    path(
-        "api/bulk-forecast/", views.BulkForecastAPIView.as_view(), name="bulk-forecast"
-    ),
-    path("api/stats/", views.WeatherStatsAPIView.as_view(), name="weather-stats"),
-    path("api/export/", views.ExportAPIView.as_view(), name="weather-export"),
     path(
         "api/hourly_forecast/",
         HourlyForecastForLocationAPIView.as_view(),
@@ -70,11 +49,6 @@ urlpatterns = [
     ),
     # Web interface
     path("", views.HomeView.as_view(), name="home"),
-    path(
-        "locations/<uuid:pk>/",
-        views.LocationDetailView.as_view(),
-        name="location-detail",
-    ),
     path("temp-location/", views.TempLocationView.as_view(), name="temp-location"),
     path("weather/<coords:coords>/", views.PlaceView.as_view(), name="place"),
     path("models/", views.ModelsView.as_view(), name="models"),

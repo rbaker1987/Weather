@@ -6,7 +6,6 @@ import pytest
 from django.urls import reverse
 
 from weather import place_service
-from weather.models import Location
 
 POINTS = {
     "properties": {
@@ -140,7 +139,6 @@ def test_fetch_place_weather_builds_place_without_database():
     assert days[0]["night"].short_forecast == "Clear"
     assert [a.event for a in data["alerts"]] == ["Wind Advisory", "Unknown"]
     assert data["alerts"][0].severity == "moderate"
-    assert Location.objects.count() == 0
 
 
 def test_fetch_place_weather_survives_upstream_failures():
@@ -202,7 +200,6 @@ class TestPlaceView:
         assert response.context["latitude"] == pytest.approx(35.2226)
         assert response.context["is_temp_location"] is True
         assert len(response.context["daily_forecasts"]) == 1
-        assert Location.objects.count() == 0
 
     def test_place_page_rejects_out_of_range_coordinates(self, client):
         response = client.get("/weather/95.0,-97.0/")
@@ -212,15 +209,6 @@ class TestPlaceView:
 
     def test_non_coordinate_path_is_not_matched(self, client):
         assert client.get("/weather/abc/").status_code == 404
-
-    def test_place_page_does_not_list_stored_locations(self, client):
-        Location.objects.create(name="Someone Else", latitude=30, longitude=-97)
-
-        with patch("requests.get", side_effect=_nws_get):
-            response = client.get("/weather/35.0,-97.0/")
-
-        assert response.status_code == 200
-        assert "Someone Else" not in response.content.decode()
 
 
 @pytest.mark.django_db

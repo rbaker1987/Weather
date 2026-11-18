@@ -131,22 +131,12 @@
           <i class="fas fa-map-marker-alt text-primary"></i> {{ location.display_name }}
         </h1>
         <p class="text-muted">
-          {% if is_temp_location %}Temporary location - not saved{% else %}Weather
-          details and forecasts{% endif %}
+          Places are not saved - bookmark this page to come back to it.
         </p>
       </div>
       <div>
         <div class="row g-2 align-items-end page-actions">
-          {% include "weather/components/location_selector.html" with locations=locations current_location_id=location.id latitude=location.latitude longitude=location.longitude location_col_class='col-12 col-md-auto' map_btn_col_class='col-12 col-md-auto' %} {% if not is_temp_location %}
-          <div class="col-12 col-md-auto">
-            <button
-              class="btn btn-outline-primary"
-              onclick="updateForecast('{{ location.id }}')"
-            >
-              <i class="fas fa-sync-alt"></i> Update Data
-            </button>
-          </div>
-          {% endif %}
+          {% include "weather/components/location_selector.html" with locations=locations current_location_id=location.id latitude=location.latitude longitude=location.longitude location_col_class='col-12 col-md-auto' map_btn_col_class='col-12 col-md-auto' %}
           <div class="col-12 col-md-auto">
             <a href="{% url 'weather:home' %}" class="btn btn-secondary">
               <i class="fas fa-arrow-left"></i> Back to Home
@@ -650,22 +640,10 @@
       <div class="card-body text-center py-5">
         <i class="fas fa-cloud-meatball fa-5x text-muted mb-4"></i>
         <h3 class="text-muted">No Forecast Data Available</h3>
-        {% if is_temp_location %}
         <p class="text-muted mb-4" style="font-size: 1.15rem">
-          This is a temporary location. View the model comparison section below for
-          forecast data, or save this as a permanent location to fetch NWS forecasts.
+          NWS forecasts are not available for this place. View the model comparison
+          section below for forecast data.
         </p>
-        {% else %}
-        <p class="text-muted mb-4" style="font-size: 1.15rem">
-          Click "Update Data" to fetch the latest weather data for this location.
-        </p>
-        <button
-          class="btn btn-primary btn-lg"
-          onclick="updateForecast('{{ location.id }}')"
-        >
-          <i class="fas fa-sync-alt"></i> Update Data
-        </button>
-        {% endif %}
       </div>
     </div>
   </div>
@@ -708,15 +686,6 @@
 {% endblock %}
 {% block extra_js %}
 <script>
-  // Update forecast functionality specific to detail page
-  function updateForecast(locationId) {
-      if (!locationId || locationId === 'None' || locationId === 'null') {
-          alert('Cannot update forecast for temporary locations.');
-          return;
-      }
-      weatherApp.updateForecast(locationId);
-  }
-
   // Convert ISO timestamps to user's local time on detail page
   document.addEventListener('DOMContentLoaded', function () {
       const els = document.querySelectorAll('.js-localtime[data-dt]');
@@ -1721,18 +1690,8 @@
             if (opt.value === 'custom' && opt.dataset.lat) {
               const lat = encodeURIComponent(opt.dataset.lat);
               const lon = encodeURIComponent(opt.dataset.lon);
-              window.location.href = `/temp-location/?latitude=${lat}&longitude=${lon}`;
-              return;
+              window.location.href = `/weather/${lat},${lon}/`;
             }
-
-            const locationId = opt.value;
-            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (!uuidPattern.test(locationId)) {
-              console.warn('Invalid location id selected', locationId);
-              return;
-            }
-
-            window.location.href = `/locations/${encodeURIComponent(locationId)}/`;
           });
         }
   });

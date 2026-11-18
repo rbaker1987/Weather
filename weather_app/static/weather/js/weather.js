@@ -322,31 +322,6 @@ window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
   }
 };
 
-// Location data refresh
-async function updateForecast(locationId) {
-  try {
-    showLoading('Updating data...');
-
-    const data = await apiRequest(`/api/locations/${locationId}/update_forecast/`, {
-      method: 'POST',
-    });
-
-    hideLoading();
-    showNotification('Data update triggered successfully!', 'success');
-
-    // Refresh forecast data
-    setTimeout(() => {
-      window.location.reload();
-    }, 2000);
-
-    return data;
-  } catch (error) {
-    hideLoading();
-    showNotification('Error updating forecast: ' + error.message, 'error');
-    throw error;
-  }
-}
-
 // UI Helper functions
 function showLoading(message = 'Loading...') {
   const loadingEl = document.getElementById('loading-indicator');
@@ -448,7 +423,6 @@ function calculateApparentTemperature(tempF, humidityPct, windSpeedMph) {
 
 // Export functions for global use
 window.weatherApp = {
-  updateForecast,
   getCsrfToken,
   apiRequest,
   showNotification,

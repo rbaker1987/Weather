@@ -1,14 +1,11 @@
 """Tests for model comparison API."""
 
 from datetime import datetime, timedelta
-from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pytest
 from django.core.cache import cache
 from django.urls import reverse
-
-from weather.models import Location
 
 
 @pytest.mark.django_db
@@ -484,16 +481,6 @@ class TestModelsView:
         """Test models comparison page renders."""
         response = client.get(reverse("weather:models"))
         assert response.status_code == 200
-
-    def test_models_view_does_not_list_stored_locations(self, client):
-        """Stored Location rows are never offered in the models selector."""
-        Location.objects.create(
-            name="Test City", latitude=Decimal("32.4910"), longitude=Decimal("-95.3954")
-        )
-
-        response = client.get(reverse("weather:models"))
-        assert response.status_code == 200
-        assert "Test City" not in response.content.decode()
 
 
 @pytest.mark.django_db
