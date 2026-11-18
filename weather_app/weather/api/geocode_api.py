@@ -17,11 +17,20 @@ logger = logging.getLogger("weather")
 GEOCODER_URL = "https://geocoding-api.open-meteo.com/v1/search"
 GEOCODER_TIMEOUT = 8
 MAX_RESULTS = 5
-_COORDINATES = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$")
+MAX_QUERY_LENGTH = 200
+_NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
 
 
 class GeocodeThrottle(AnonRateThrottle):
     rate = "60/minute"
+
+
+def _parse_coordinates(query):
+    """Return the two numbers in "lat, lon" / "lat lon" text, or None."""
+    parts = [part for part in re.split(r"[,\s]+", query) if part]
+    if len(parts) == 2 and all(_NUMBER.fullmatch(part) for part in parts):
+        return parts
+    return None
 
 
 def place_url(latitude, longitude, name=None):
@@ -56,11 +65,13 @@ class GeocodeAPIView(APIView):
         query = (request.query_params.get("q") or "").strip()
         if not query:
             return Response({"error": "q parameter is required"}, status=400)
+        if len(query) > MAX_QUERY_LENGTH:
+            return Response({"error": "q parameter is too long"}, status=400)
 
-        match = _COORDINATES.match(query)
-        if match:
+        coordinates = _parse_coordinates(query)
+        if coordinates:
             try:
-                latitude, longitude = validate_coordinates(*match.groups())
+                latitude, longitude = validate_coordinates(*coordinates)
             except ValueError:
                 return Response({"error": "Coordinates out of range"}, status=400)
             label = f"{latitude:.4f}, {longitude:.4f}"

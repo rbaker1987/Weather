@@ -253,8 +253,17 @@ class TestGeocodeAPI:
         [result] = response.json()["results"]
         assert result["url"].startswith("/weather/35.2226,-97.4395/?name=")
 
+    def test_accepts_space_separated_coordinates(self, client):
+        response = self._get(client, q="  35.2   -97.4 ")
+
+        assert response.json()["results"][0]["latitude"] == 35.2
+
     def test_rejects_out_of_range_coordinates(self, client):
         assert self._get(client, q="95, 10").status_code == 400
+
+    def test_rejects_overlong_queries(self, client):
+        assert self._get(client, q="9 " + "1 " * 300).status_code == 400
+        assert self._get(client, q="a" * 201).status_code == 400
 
     def test_geocodes_place_names(self, client):
         payload = {
