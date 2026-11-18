@@ -656,11 +656,7 @@
         <div>
           <h5 class="mb-0">
             <i class="fas fa-calendar-alt text-white"></i>
-            {% if has_custom_daily %}
-              Ralph's Weather Daily
-            {% else %}
-              NWS Daily
-            {% endif %}
+            NWS Daily
           </h5>
           {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
         </div>
@@ -703,11 +699,7 @@
         <div>
           <h5 class="mb-0">
             <i class="fas fa-clock text-primary"></i>
-            {% if has_custom_hourly %}
-              Ralph's Weather Hourly for {{ location.display_name }}
-            {% else %}
-              NWS Hourly for {{ location.display_name }}
-            {% endif %}
+            NWS Hourly for {{ location.display_name }}
           </h5>
           {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
         </div>
@@ -1557,28 +1549,6 @@
           alert('Error saving location: ' + err.message);
       });
   }
-
-  // Initialize modals
-  document.addEventListener('DOMContentLoaded', function() {
-      const dailyModal = document.getElementById('editDailyForecastModal');
-      const hourlyModal = document.getElementById('editHourlyForecastModal');
-
-      if (dailyModal) {
-          dailyModal.addEventListener('shown.bs.modal', function() {
-              generateDailyForecastGrid();
-          });
-      }
-
-      if (hourlyModal) {
-          hourlyModal.addEventListener('shown.bs.modal', function() {
-              generateHourlyForecastGrid();
-          });
-      }
-  });
-
-
-
-
 
   // Get CSRF token from cookies
   function getCookie(name) {

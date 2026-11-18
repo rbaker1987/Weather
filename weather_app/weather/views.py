@@ -31,7 +31,6 @@ from rest_framework.views import APIView
 from .forms import ProfileEditForm, UniqueUsernameCreationForm
 from .models import (
     CurrentConditions,
-    CustomDailyForecast,
     DailyForecast,
     ForecastRequest,
     HourlyForecast,
@@ -1849,9 +1848,6 @@ class TempLocationView(TemplateView):
         context["page_title"] = f"Temporary Location - {lat}, {lon}"
         context["daily_forecasts"] = grouped_forecasts
         context["hourly_forecasts"] = hourly_forecasts
-        context["hourly_forecasts_json"] = "[]"
-        context["has_custom_daily"] = False
-        context["has_custom_hourly"] = False
         context["active_alerts"] = active_alerts
         context["is_temp_location"] = True
 
@@ -3487,26 +3483,11 @@ class LocationDetailView(DetailView):
             "period_start"
         )
 
-        # Prefer per-user custom forecasts when available
-        if self.request.user.is_authenticated:
-            custom_daily = CustomDailyForecast.objects.filter(
-                location=location, owner=self.request.user
-            ).order_by("period_start")
-        else:
-            custom_daily = CustomDailyForecast.objects.none()
-
-        if custom_daily.exists():
-            daily_to_show = custom_daily
-            has_custom_daily = True
-        else:
-            daily_to_show = all_daily
-            has_custom_daily = False
-
         # Group forecasts by date (day and night together)
         from itertools import groupby
 
         grouped_forecasts = []
-        for date, periods in groupby(daily_to_show, key=lambda f: f.forecast_date):
+        for date, periods in groupby(all_daily, key=lambda f: f.forecast_date):
             periods_list = list(periods)
             day_forecast = next((p for p in periods_list if p.is_daytime), None)
             night_forecast = next((p for p in periods_list if not p.is_daytime), None)
@@ -3524,107 +3505,14 @@ class LocationDetailView(DetailView):
             location=location, period_start__gte=cutoff_time
         ).order_by("period_start")
 
-        # Check if we have custom hourly forecasts
-        custom_hourly = all_hourly.filter(nws_data_url="")[
-            :48
-        ]  # Get more to ensure coverage
         nws_hourly = all_hourly.exclude(nws_data_url="")[:48]
-
-        # For detail page, prefer custom forecasts if they exist
-        if custom_hourly.exists():
-            hourly_to_show = custom_hourly
-            has_custom_hourly = True
-        else:
-            hourly_to_show = nws_hourly
-            has_custom_hourly = False
-
-        # Serialize hourly forecasts for JavaScript
-        # For editing: merge custom and NWS data - use custom where it exists, NWS for the rest
-        import json
-        from datetime import timedelta
-
-        # Build dictionaries for faster lookup and track used forecasts
-        custom_list = list(custom_hourly)
-        nws_list = list(nws_hourly)
-        used_custom_indices = set()
-        used_nws_indices = set()
-
-        # Start from current hour and go forward 24 hours
-        current_time = timezone.now().replace(minute=0, second=0, microsecond=0)
-        merged_hourly = []
-
-        for i in range(24):
-            hour_time = current_time + timedelta(hours=i)
-            forecast_to_use = None
-
-            # Try to find the closest custom forecast for this hour (within 60 min, not yet used)
-            best_custom_match = None
-            best_custom_diff = float("inf")
-            best_custom_idx = None
-
-            for idx, custom_forecast in enumerate(custom_list):
-                if idx in used_custom_indices:
-                    continue
-                time_diff = abs(
-                    (custom_forecast.period_start - hour_time).total_seconds()
-                )
-                if (
-                    time_diff < 3600 and time_diff < best_custom_diff
-                ):  # Within 60 minutes
-                    best_custom_match = custom_forecast
-                    best_custom_diff = time_diff
-                    best_custom_idx = idx
-
-            if best_custom_match:
-                forecast_to_use = best_custom_match
-                used_custom_indices.add(best_custom_idx)
-            else:
-                # Find closest NWS forecast (within 60 min, not yet used)
-                best_nws_match = None
-                best_nws_diff = float("inf")
-                best_nws_idx = None
-
-                for idx, nws_forecast in enumerate(nws_list):
-                    if idx in used_nws_indices:
-                        continue
-                    time_diff = abs(
-                        (nws_forecast.period_start - hour_time).total_seconds()
-                    )
-                    if time_diff < 3600 and time_diff < best_nws_diff:
-                        best_nws_match = nws_forecast
-                        best_nws_diff = time_diff
-                        best_nws_idx = idx
-
-                if best_nws_match:
-                    forecast_to_use = best_nws_match
-                    used_nws_indices.add(best_nws_idx)
-
-            # Add to list if we found something
-            if forecast_to_use:
-                merged_hourly.append(forecast_to_use)
-
-        hourly_json = json.dumps(
-            [
-                {
-                    "temperature": h.temperature,
-                    "short_forecast": h.short_forecast,
-                    "wind_speed": h.wind_speed,
-                    "wind_gust": h.wind_gust,
-                    "precipitation_probability": h.precipitation_probability,
-                    "period_start": h.period_start.isoformat(),
-                }
-                for h in merged_hourly
-            ]
-        )
+        hourly_to_show = nws_hourly
 
         context.update(
             {
                 "page_title": f"{location.name} - Weather Details",
                 "daily_forecasts": grouped_forecasts,
                 "hourly_forecasts": hourly_to_show,
-                "hourly_forecasts_json": hourly_json,
-                "has_custom_daily": has_custom_daily,
-                "has_custom_hourly": has_custom_hourly,
                 "active_alerts": location.alerts.filter(is_active=True),
             }
         )
@@ -3808,27 +3696,6 @@ class ForecastListView(ListView):
 
         dates_forecasts = defaultdict(dict)
 
-        # Seed with custom forecasts for this user when available
-        if self.request.user.is_authenticated:
-            custom_daily_qs = CustomDailyForecast.objects.filter(
-                owner=self.request.user,
-                location__id__in=location_ids,
-                forecast_date__gte=timezone.now().date(),
-            )
-            for custom in custom_daily_qs:
-                date = custom.forecast_date
-                location_id = custom.location.id
-                if location_id not in dates_forecasts[date]:
-                    dates_forecasts[date][location_id] = {
-                        "location": custom.location,
-                        "day": None,
-                        "night": None,
-                    }
-                if custom.is_daytime:
-                    dates_forecasts[date][location_id]["day"] = custom
-                else:
-                    dates_forecasts[date][location_id]["night"] = custom
-
         for forecast in context["forecasts"]:
             date = forecast.forecast_date
             location_id = forecast.location.id
@@ -3873,117 +3740,6 @@ class ForecastListView(ListView):
         context["grouped_by_date"] = grouped_by_date
 
         return context
-
-
-@method_decorator(login_required, name="dispatch")
-class CustomForecastView(TemplateView):
-    template_name = "weather/custom_forecast.html"
-
-    def get_context_data(self, **kwargs):
-        import requests
-
-        context = super().get_context_data(**kwargs)
-        request = self.request
-
-        latitude = request.GET.get("latitude")
-        longitude = request.GET.get("longitude")
-        location_id = request.GET.get("location_id")
-
-        location_ids = request.session.get("location_ids", [])
-        locations = Location.objects.filter(
-            is_active=True, id__in=location_ids, owner=request.user
-        ).order_by("-is_current_location", "display_order", "name")
-
-        nws_forecast_periods = []
-        climate_normals = {}
-        custom_forecasts = []
-
-        # If location_id provided, fetch reference data
-        if location_id:
-            try:
-                location = Location.objects.get(id=location_id, owner=request.user)
-            except Location.DoesNotExist:
-                location = None
-
-            if location:
-                latitude = location.latitude
-                longitude = location.longitude
-
-                # Fetch climate normals
-                if location.avg_high_temp and location.avg_low_temp:
-                    climate_normals = {
-                        "avg_high": location.avg_high_temp,
-                        "avg_low": location.avg_low_temp,
-                    }
-
-                # Fetch NWS forecast for reference
-                try:
-                    points_url = (
-                        f"https://api.weather.gov/points/{latitude},{longitude}"
-                    )
-                    points_resp = requests.get(
-                        points_url,
-                        headers={"User-Agent": "WeatherApp/1.0"},
-                        timeout=10,
-                    )
-                    if points_resp.status_code == 200:
-                        points_data = points_resp.json()
-                        forecast_url = points_data.get("properties", {}).get("forecast")
-                        if forecast_url:
-                            forecast_resp = requests.get(
-                                forecast_url,
-                                headers={"User-Agent": "WeatherApp/1.0"},
-                                timeout=10,
-                            )
-                            if forecast_resp.status_code == 200:
-                                forecast_data = forecast_resp.json()
-                                nws_forecast_periods = forecast_data.get(
-                                    "properties", {}
-                                ).get("periods", [])[:14]
-                except requests.RequestException:
-                    pass
-
-                custom_qs = CustomDailyForecast.objects.filter(
-                    owner=request.user, location=location
-                ).order_by("forecast_date", "-is_daytime")
-                custom_forecasts = _build_custom_daily_payload(custom_qs)
-
-        context.update(
-            {
-                "locations": locations,
-                "latitude": latitude,
-                "longitude": longitude,
-                "location_id": location_id,
-                "nws_forecast_periods": nws_forecast_periods,
-                "climate_normals": climate_normals,
-                "custom_forecasts": custom_forecasts,
-            }
-        )
-        return context
-
-
-def _build_custom_daily_payload(queryset):
-    days_by_date = {}
-    for forecast in queryset:
-        date_key = forecast.forecast_date.isoformat()
-        day = days_by_date.setdefault(
-            date_key,
-            {
-                "date": date_key,
-                "morning_temp": None,
-                "morning_weather": "",
-                "afternoon_temp": None,
-                "afternoon_weather": "",
-            },
-        )
-        if forecast.is_daytime:
-            day["afternoon_temp"] = forecast.temperature
-            day["afternoon_weather"] = forecast.short_forecast
-        else:
-            day["morning_temp"] = forecast.temperature
-            day["morning_weather"] = forecast.short_forecast
-
-    return [days_by_date[key] for key in sorted(days_by_date.keys())]
 
 
 # Duplicate AlertListView removed to avoid F811 redefinition; earlier definition retained.

@@ -1,14 +1,12 @@
 """Tests for remaining hourly forecast API branches."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
 from django.test import Client
-from django.utils import timezone as django_timezone
 
 from weather.api.hourly_forecast_api import _TZ_CACHE, HourlyForecastForLocationAPIView
-from weather.models import HourlyForecast, Location
 
 
 class Response:
@@ -82,51 +80,6 @@ def test_hourly_api_handles_malformed_period_without_aborting_response():
 
     assert response.status_code == 500
     assert "Invalid isoformat" in response.json()["error"]
-
-
-@pytest.mark.django_db
-def test_hourly_api_uses_closest_custom_forecast_for_rounded_hour():
-    _TZ_CACHE.clear()
-    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
-    start = django_timezone.now().replace(minute=0, second=0, microsecond=0)
-    HourlyForecast.objects.create(
-        location=location,
-        forecast_date=start.date(),
-        period_start=start + timedelta(minutes=40),
-        period_end=start + timedelta(hours=1),
-        temperature=81,
-        apparent_temperature=80,
-        short_forecast="Near",
-        wind_speed=5,
-        nws_data_url="",
-    )
-    with (
-        patch(
-            "weather.api.hourly_forecast_api.requests.get",
-            side_effect=[
-                Response({"properties": {"forecastHourly": "hourly-url"}}),
-                Response(
-                    {
-                        "properties": {
-                            "periods": [
-                                {
-                                    "startTime": start.isoformat().replace("+00:00", "Z"),
-                                    "temperature": 70,
-                                    "shortForecast": "NWS",
-                                }
-                            ]
-                        }
-                    }
-                ),
-            ],
-        ),
-        patch("weather.api.hourly_forecast_api.TimezoneFinder") as finder,
-    ):
-        finder.return_value.timezone_at.return_value = "UTC"
-        response = Client().get("/api/hourly_forecast/?lat=30&lon=-97&hours=1")
-
-    assert response.status_code == 200
-    assert response.json()["hours"][0]["temp"] == 81
 
 
 def test_hourly_api_sunrise_fallback_returns_fixed_utc_times():

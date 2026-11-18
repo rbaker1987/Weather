@@ -7,11 +7,9 @@ A Django web application for weather forecasting using the National Weather Serv
 - **Web Interface**: Dashboard with browser geolocation and location management
 - **Model Comparison**: Compare forecasts from 8 weather models (GFS, ICON, ECMWF, AIFS, GEM, HRRR, NAM, RGEM)
 - **Temporary Locations**: View full forecasts for any map coordinates without saving
-- **Custom Forecasts**: Edit daily and hourly forecasts with live preview and validation
 - **Animated Radar**: Interactive weather radar maps with play/pause controls and time scrubbing
 - **REST API**: Full CRUD operations for locations and forecasts
 - **Real-time Data**: Current conditions, hourly/daily forecasts, and weather alerts from NWS
-- **Merged Data**: Custom edits prioritized, NWS fills remaining forecast slots automatically
 - **Timezone Support**: Accurate sunrise/sunset times with automatic timezone detection
 - **Session Storage**: Locations stored per browser session (no user accounts)
 - **Component-based UI**: Reusable Django template components
@@ -126,7 +124,6 @@ mobile and desktop widths without obscuring the primary actions.
 - **Locations**: Add locations by name/zip code, view detailed forecasts
 - **Temporary Locations**: Click any map point to see full forecast data without saving
 - **Forecasts**: 7-day forecasts with hourly breakdowns
-- **Custom Forecasts**: Edit daily and hourly forecasts with live preview
 - **Animated Radar**: Interactive weather radar with animation controls (play/pause, time slider)
 - **Alerts**: Active weather alerts for your locations
 - **Timezone Support**: Accurate sunrise/sunset times with proper timezone handling
@@ -144,22 +141,11 @@ curl -X POST http://localhost:8000/api/locations/ \
 # Get forecasts
 curl http://localhost:8000/api/locations/{id}/forecasts/
 
-# Get hourly forecast with merged custom/NWS data
+# Get hourly forecast
 curl "http://localhost:8000/api/hourly_forecast/?lat=30.2672&lon=-97.7431&hours=24"
 
 # Compare weather models
 curl "http://localhost:8000/api/model-comparison/?latitude=30.2672&longitude=-97.7431&models=GFS,ICON,ECMWF&forecast_days=7"
-
-# Create custom hourly forecast
-curl -X POST http://localhost:8000/api/locations/{id}/hourly-forecasts/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "forecast_time": "2025-11-24T14:00:00Z",
-    "temperature": 75,
-    "short_forecast": "Partly Cloudy",
-    "wind_speed": 10,
-    "precipitation_probability": 20
-  }'
 ```
 
 ### Management Commands
@@ -191,7 +177,7 @@ python manage.py update_forecasts --locations uuid1 uuid2
 - `weather/views.py` - Django views and DRF API endpoints (including ModelDetailView, TempLocationView)
 - `weather/services.py` - NWS API integration
 - `weather/utils/` - Geocoding, apparent temperature, datetime utilities
-- `weather/api/hourly_forecast_api.py` - Hourly forecast API with custom/NWS merge
+- `weather/api/hourly_forecast_api.py` - Hourly forecast API (NWS)
 - `weather/api/model_comparison_api.py` - Multi-model forecast comparison via Open-Meteo
 - `weather/middleware.py` - Session location management
 
@@ -348,15 +334,6 @@ tests/                       # Unit tests
 - Base map switching: Street view or satellite imagery
 - Base reflectivity data with color-coded legend (NOAA/NWS MRMS)
 - Automatic radar initialization on dashboard and location detail pages
-
-### Custom Forecast Editing
-
-- Edit daily and hourly forecasts through modal interfaces
-- Live preview with icon and temperature-based background updates
-- Merged display: custom edits take priority, NWS fills remaining slots
-- Time-aligned matching with 60-minute tolerance window
-- Bulk save operations with validation
-- "Update Forecast" button clears custom edits and refreshes from NWS
 
 ### Timezone Support
 

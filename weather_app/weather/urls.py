@@ -6,7 +6,6 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from .api.climate_analysis_api import ClimateAnalysisAPIView
 from .api.climate_normals_api import ClimateNormalsAPIView
-from .api.custom_forecast_api import CustomForecastAPIView
 from .api.hourly_forecast_api import HourlyForecastForLocationAPIView
 from .api.model_comparison_api import ModelComparisonAPIView
 from .api.summarize_api import SummarizeForecastAPIView
@@ -58,16 +57,6 @@ urlpatterns = [
         "api/climate-analysis/",
         ClimateAnalysisAPIView.as_view(),
         name="climate-analysis",
-    ),
-    path(
-        "api/custom-forecast/",
-        CustomForecastAPIView.as_view(),
-        name="custom-forecast-api",
-    ),
-    path(
-        "forecasts/custom/",
-        views.CustomForecastView.as_view(),
-        name="custom-forecast",
     ),
     # Web interface
     path("", views.DashboardView.as_view(), name="dashboard"),
