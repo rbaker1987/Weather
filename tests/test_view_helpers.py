@@ -4,7 +4,6 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pytest
-from django.contrib.auth.models import User
 from rest_framework.test import APIRequestFactory
 
 from weather.models import Location
@@ -57,21 +56,6 @@ def test_location_viewset_filters_anonymous_locations_by_session():
 
     assert list(view.get_queryset()) == [visible]
     assert hidden not in view.get_queryset()
-
-
-@pytest.mark.django_db
-def test_location_viewset_filters_authenticated_locations_by_owner():
-    owner = User.objects.create_user(username="location-owner")
-    owned = Location.objects.create(name="Owned", owner=owner)
-    Location.objects.create(name="Other")
-    request = APIRequestFactory().get("/api/locations/")
-    request.user = owner
-    request.session = SessionDict()
-
-    view = LocationViewSet()
-    view.request = request
-
-    assert list(view.get_queryset()) == [owned]
 
 
 @pytest.mark.django_db

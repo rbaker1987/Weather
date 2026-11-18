@@ -4,42 +4,18 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
-from django.contrib.auth.models import User
 from django.test import RequestFactory
 from django.utils import timezone
 
 from weather.models import DailyForecast, Location
 from weather.views import (
     ModelsView,
-    SignUpView,
     _refresh_forecasts_for_location,
 )
 
 
 class SessionDict(dict):
     modified = False
-
-
-@pytest.mark.django_db
-def test_signup_transfers_anonymous_session_locations():
-    anonymous = Location.objects.create(name="Anonymous")
-    user = User.objects.create_user(username="new-user")
-    form = type("Form", (), {"save": lambda _self: user})()
-    request = RequestFactory().post("/signup")
-    request.session = SessionDict(location_ids=[str(anonymous.id)])
-    request.user = User()
-    view = SignUpView()
-    view.request = request
-
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setattr("weather.views.login", lambda _request, _user: None)
-        response = view.form_valid(form)
-
-    anonymous.refresh_from_db()
-    assert response.status_code == 302
-    assert anonymous.owner_id == user.id
-    assert request.session.modified is True
-    assert request.session["location_ids"] == [str(anonymous.id)]
 
 
 @pytest.mark.django_db

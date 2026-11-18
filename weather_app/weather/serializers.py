@@ -1,6 +1,5 @@
 """Django REST Framework serializers for weather data."""
 
-from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
@@ -13,15 +12,6 @@ from .models import (
     Location,
     WeatherAlert,
 )
-
-
-class UserSerializer(ModelSerializer):
-    """User serializer for API responses."""
-
-    class Meta:
-        model = User
-        fields = ["id", "username", "email", "first_name", "last_name"]
-        read_only_fields = ["id"]
 
 
 class LocationSerializer(ModelSerializer):

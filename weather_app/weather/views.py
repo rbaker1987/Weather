@@ -7,28 +7,16 @@ from datetime import datetime, time, timedelta
 from datetime import timezone as dt_timezone
 
 from django.conf import settings
-from django.contrib.auth import login
-from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db.models import Avg, Case, Count, IntegerField, Q, When
 from django.http import HttpResponse
-from django.shortcuts import redirect
-from django.urls import reverse_lazy
 from django.utils import timezone
-from django.utils.decorators import method_decorator
-from django.views.generic import (
-    CreateView,
-    DetailView,
-    ListView,
-    TemplateView,
-    UpdateView,
-)
+from django.views.generic import DetailView, ListView, TemplateView
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .forms import ProfileEditForm, UniqueUsernameCreationForm
 from .models import (
     CurrentConditions,
     DailyForecast,
@@ -83,20 +71,14 @@ class LocationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter locations by session."""
         queryset = super().get_queryset()
-
-        if self.request.user.is_authenticated:
-            queryset = queryset.filter(owner=self.request.user)
-        else:
-            # Only show locations in session for anonymous users
-            location_ids = self.request.session.get("location_ids", [])
-            queryset = queryset.filter(id__in=location_ids)
+        location_ids = self.request.session.get("location_ids", [])
+        queryset = queryset.filter(id__in=location_ids)
 
         return queryset.annotate(forecast_count=Count("forecasts"))
 
     def perform_create(self, serializer):
         """Save location and add to session."""
-        owner = self.request.user if self.request.user.is_authenticated else None
-        location = serializer.save(owner=owner)
+        location = serializer.save()
 
         # Save location ID in session (convert UUID to string)
         if "location_ids" not in self.request.session:
@@ -1347,51 +1329,6 @@ class AlertListView(ListView):
 # =============================================================================
 # Django Web Interface Views
 # =============================================================================
-
-
-class SignUpView(CreateView):
-    """Create a new user account."""
-
-    template_name = "registration/signup.html"
-    form_class = UniqueUsernameCreationForm
-    success_url = reverse_lazy("weather:dashboard")
-
-    def form_valid(self, form):
-        self.object = form.save()
-        login(self.request, self.object)
-
-        # Attach anonymous session locations to the new user.
-        session_ids = self.request.session.get("location_ids", [])
-        if session_ids:
-            Location.objects.filter(id__in=session_ids, owner__isnull=True).update(
-                owner=self.object
-            )
-            owner_ids = list(
-                Location.objects.filter(owner=self.object).values_list("id", flat=True)
-            )
-            self.request.session["location_ids"] = [
-                str(location_id) for location_id in owner_ids
-            ]
-            self.request.session.modified = True
-
-        return redirect(self.get_success_url())
-
-
-@method_decorator(login_required, name="dispatch")
-class ProfileEditView(UpdateView):
-    """Edit user profile information (name, email, password)."""
-
-    template_name = "registration/profile_edit.html"
-    form_class = ProfileEditForm
-    success_url = reverse_lazy("weather:dashboard")
-
-    def get_object(self, queryset=None):
-        return self.request.user
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["page_title"] = "Edit Profile"
-        return context
 
 
 class DashboardView(TemplateView):
@@ -3317,16 +3254,12 @@ class LocationListView(ListView):
 
     def get_queryset(self):
         """Get active locations with forecast counts, favorite first."""
-        # Filter by owner for authenticated users, otherwise use session
-        if self.request.user.is_authenticated:
-            queryset = Location.objects.filter(is_active=True, owner=self.request.user)
+        location_ids = self.request.session.get("location_ids", [])
+        if location_ids:
+            queryset = Location.objects.filter(is_active=True, id__in=location_ids)
         else:
-            location_ids = self.request.session.get("location_ids", [])
-            if location_ids:
-                queryset = Location.objects.filter(is_active=True, id__in=location_ids)
-            else:
-                # If no location_ids in session, show no locations
-                queryset = Location.objects.none()
+            # If no location_ids in session, show no locations
+            queryset = Location.objects.none()
 
         # Search functionality
         search = self.request.GET.get("search")
@@ -3416,26 +3349,18 @@ class LocationDetailView(DetailView):
     context_object_name = "location"
 
     def get_queryset(self):
-        queryset = Location.objects.filter(is_active=True)
-        if self.request.user.is_authenticated:
-            queryset = queryset.filter(owner=self.request.user)
-        else:
-            location_ids = self.request.session.get("location_ids", [])
-            queryset = queryset.filter(Q(id__in=location_ids) | Q(owner__isnull=True))
-        return queryset.prefetch_related("alerts")
+        return Location.objects.filter(is_active=True).prefetch_related("alerts")
 
     def get(self, request, *args, **kwargs):
         """Override get to trigger forecast update on page load."""
         self.object = self.get_object()
 
-        if not request.user.is_authenticated and self.object.owner_id is None:
-            location_ids = [
-                str(location_id)
-                for location_id in request.session.get("location_ids", [])
-            ]
-            if str(self.object.id) not in location_ids:
-                location_ids.append(str(self.object.id))
-                request.session["location_ids"] = location_ids
+        location_ids = [
+            str(location_id) for location_id in request.session.get("location_ids", [])
+        ]
+        if str(self.object.id) not in location_ids:
+            location_ids.append(str(self.object.id))
+            request.session["location_ids"] = location_ids
 
         # Check if forecast needs updating (older than 15 minutes or doesn't exist)
         from datetime import timedelta
