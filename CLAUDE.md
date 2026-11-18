@@ -10,7 +10,7 @@ Production is a Render **free** web service with **no permanent database** (free
 - User accounts are removed (signup/login/profile, `Location.owner`); only Django admin keeps `django.contrib.auth`. Session locations (`request.session["location_ids"]`) and the location/forecast/alert list pages are removed; the home page offers "use my location" or "enter a location", with the place carried in the URL, not the session or DB.
 - Celery/Redis are removed; data is fetched on demand and the cache is process-local memory.
 - The custom forecast builder is removed.
-- Places are carried in the URL: `/weather/<lat>,<lon>/?name=` (`PlaceView`, `place_service.py`, no DB rows); `/api/geocode/?q=` powers the search box. The `Location` table is being removed entirely (decision: no cache rows); until then `/locations/<uuid>/` and the read-only `/api/locations/<uuid>/` serve existing rows, and climate analysis takes a `location_id` without a session check.
+- Places are carried in the URL: `/weather/<lat>,<lon>/?name=` (`PlaceView`, `place_service.py`, no DB rows); `/api/geocode/?q=` powers the search box. The `Location` table is being removed entirely (decision: no cache rows); until then `/locations/<uuid>/` and the read-only `/api/locations/<uuid>/` serve existing rows, and climate analysis takes `lat`/`lon` (`/api/climate-analysis/?lat=&lon=&month=&day=`) with no DB rows.
 - Work is split into small PRs (accounts removal, place-from-URL, remove session locations and list pages, Celery/Redis removal and on-demand climate data, drop the Location table, deploy config cleanup).
 
 ## Commands
@@ -51,16 +51,16 @@ cd weather_app && python manage.py runserver 8000
 - `weather_app/weather/`: models, `views.py` (large, ~2.7k lines), `services.py`, `noaa_service.py`, `noaa_nomads.py`, `climate_analysis.py`.
 - `weather_app/weather/api/`: DRF views (climate analysis and normals, hourly forecast, model comparison, NWS client, summarize).
 - `weather_app/weather/core/`: non-Django core logic. `weather_app/config/`: settings, urls, wsgi.
-- `weather_app/weather/management/commands/`: importers (`import_climate_data` has `--indices-only`), `update_forecasts`.
+- `weather_app/weather/management/commands/`: `update_forecasts`, `populate_climate_normals`.
 - `tests/` at repo root (pytest-django, `config.settings`). Templates in `weather_app/templates/weather/`.
 - Settings fall back to SQLite when `DATABASE_URL` is unset; `DJANGO_SECRET_KEY` and allowed hosts are enforced in production.
 
 ## Climate analysis
 
-- UI: `location_detail.html`; API: `api/climate_analysis_api.py`; stats in `climate_analysis.py`; importer in `import_climate_data.py`.
+- UI: `location_detail.html`; API: `api/climate_analysis_api.py`; stats in `climate_analysis.py`; on-demand NOAA/Open-Meteo fetch and parsing in `climate_data.py` (no DB; cached in process memory); `/api/climate-indices/` gives the latest index values.
 - Weather source: Open-Meteo Archive (daily, F/mph/in, per-location timezone). Indices: NAO/AO/PNA from CPC CDAS daily files; EPO/WPO from PSL core files standardized per calendar month (1991-2020); ENSO (internal key `oni`) is monthly. Never label monthly indices as daily.
 - The user selects month/day and clicks Run (no request on page load). Completed years only; centered 7-day average; events are warm/cool/dry/wet at the top/bottom 10%.
-- Missing indices load synchronously on request. The endpoint is rate-limited per IP and rejects inactive locations.
+- Everything is fetched on request (one Open-Meteo archive call for the full history, indices in parallel) and cached in memory; a failed index is reported in `unavailable_indices` instead of failing the request. The endpoint is rate-limited per IP.
 
 ## Deploy (Render)
 

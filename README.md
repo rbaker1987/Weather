@@ -76,32 +76,23 @@ The server will start at http://127.0.0.1:8000/
 
 To stop the server, press **`Ctrl + C`** in the terminal.
 
-**Importing Historical Climate Data:**
+**Historical Climate Analysis:**
 
 The historical climate analysis compares a centered seven-day average around one
-calendar day (month/day) across every completed year. It loads missing daily weather
+calendar day (month/day) across every completed year. It fetches daily weather
 from the Open-Meteo archive and the
 NOAA teleconnection indices automatically: daily CPC values for `nao`, `ao`, `pna`,
 daily PSL values for `epo` and `wpo`, and monthly values for `oni` (ENSO), which is
 only published monthly. Analysis averages each index over the same 7-day window as the
-weather and reports Pearson r, Spearman, detrended r, r², p-value and 95% CI:
-
-```bash
-python manage.py import_climate_data \
-  --location-id <location-uuid> \
-  --start-date 2025-09-01 \
-  --end-date 2025-09-30 \
-  --teleconnection-file indices.csv
-```
-
-The optional CSV must contain `index,date,value` columns for manual imports. The
+weather and reports Pearson r, Spearman, detrended r, r², p-value and 95% CI.
+Nothing is stored: data is fetched on request and cached in memory. The
 Historical Climate Analysis panel asks for only a month and day, then reports
 annual weather samples and the strongest index relationship for each weather
 value. It also identifies warm, cool, dry, and wet weeks as the top or bottom 10%
 of the selected day's historical weekly distribution. These labels are
 season-agnostic statistical departures, not claims of a heat wave, arctic outbreak,
 drought, or flood.
-NOAA's monthly feed is expanded onto matching calendar dates for each year.
+NOAA's monthly feed is applied to every day of its month.
 
 **UI Hint Plan:**
 

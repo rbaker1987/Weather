@@ -364,19 +364,8 @@
         {% include "weather/components/section_header.html" with icon="globe-americas" title="Latest Available Climate Indicators" %}
       </div>
       <div class="card-body">
-        {% if current_index_values %}
-        <div class="climate-current-grid">
-          {% for indicator in current_index_values %}
-          <div class="climate-current-item">
-            <span class="climate-current-label">{% if indicator.index_key == "oni" %}ENSO{% else %}{{ indicator.index_key|upper }}{% endif %}</span>
-            <strong>{{ indicator.value|floatformat:3 }}</strong>
-            <small class="text-muted">{{ indicator.observation_date|date:"M j, Y" }} · {% if indicator.source_metadata.cadence == "daily" %}Daily{% elif indicator.source_metadata.cadence == "monthly" %}Monthly{% else %}Unknown cadence{% endif %}</small>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-muted mb-0">No current climate-index values are available yet.</p>
-        {% endif %}
+        <div id="climateCurrentIndices" class="climate-current-grid d-none"></div>
+        <p id="climateCurrentStatus" class="text-muted mb-0">Loading current climate-index values...</p>
       </div>
     </div>
   </div>
@@ -772,8 +761,42 @@
       loadNext24Hours();
   });
 
+  async function loadClimateIndicators() {
+      const grid = document.getElementById('climateCurrentIndices');
+      const status = document.getElementById('climateCurrentStatus');
+      if (!grid || !status) return;
+      try {
+          const response = await fetch("{% url 'weather:climate-indices' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const data = await response.json();
+          if (!response.ok || !Array.isArray(data.indices) || data.indices.length === 0) {
+              throw new Error('No values');
+          }
+          data.indices.forEach((item) => {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'climate-current-item';
+              const label = document.createElement('span');
+              label.className = 'climate-current-label';
+              label.textContent = item.index === 'oni' ? 'ENSO' : item.index.toUpperCase();
+              const value = document.createElement('strong');
+              value.textContent = Number(item.value).toFixed(3);
+              const meta = document.createElement('small');
+              meta.className = 'text-muted';
+              const when = new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              meta.textContent = `${when} · ${item.cadence === 'daily' ? 'Daily' : 'Monthly'}`;
+              wrapper.append(label, value, meta);
+              grid.appendChild(wrapper);
+          });
+          grid.classList.remove('d-none');
+          status.classList.add('d-none');
+      } catch (error) {
+          status.textContent = 'Current climate-index values are unavailable right now.';
+      }
+  }
+  document.addEventListener('DOMContentLoaded', loadClimateIndicators);
+
   async function loadClimateAnalysis() {
-      const locationId = '{{ location.id|default:"None" }}';
+      const climateLat = '{{ location.latitude|default:"" }}';
+      const climateLon = '{{ location.longitude|default:"" }}';
       const climateStatus = document.getElementById('climateAnalysisStatus');
       const climateResults = document.getElementById('climateAnalysisResults');
       const climateEmpty = document.getElementById('climateAnalysisEmpty');
@@ -786,9 +809,9 @@
       const climateDayInput = document.getElementById('climateAnalysisDay');
       const displayIndex = (index) => (index || 'N/A').toUpperCase();
 
-      if (!locationId || locationId === 'None' || !climateMonthInput || !climateDayInput) {
+      if (!climateLat || !climateLon || !climateMonthInput || !climateDayInput) {
           if (climateStatus) {
-              climateStatus.textContent = 'Historical climate analysis is only available for saved locations.';
+              climateStatus.textContent = 'Historical climate analysis needs a place with coordinates.';
           }
           if (climateResults) climateResults.classList.add('d-none');
           if (climateHighlights) climateHighlights.classList.add('d-none');
@@ -819,7 +842,7 @@
       if (climatePrompt) climatePrompt.classList.add('d-none');
 
       try {
-          const url = `{% url 'weather:climate-analysis' %}?location_id=${encodeURIComponent(locationId)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo&index=wpo`;
+          const url = `{% url 'weather:climate-analysis' %}?lat=${encodeURIComponent(climateLat)}&lon=${encodeURIComponent(climateLon)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo&index=wpo`;
             const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const responseText = await response.text();
             let data;
@@ -828,11 +851,6 @@
             } catch (parseError) {
               throw new Error(`Climate analysis request returned HTTP ${response.status}.`);
             }
-
-              if (response.status === 202 && data.status === 'loading') {
-                if (climateStatus) climateStatus.textContent = data.message;
-                return;
-              }
 
           if (!response.ok || !data || !Array.isArray(data.correlations)) {
               throw new Error(data?.error || 'Climate analysis request failed.');
@@ -846,9 +864,7 @@
               if (climateEmpty) climateEmpty.classList.remove('d-none');
               if (climateStatus) {
                 climateStatus.textContent = data.indexes_available
-                  ? (data.weather_loaded
-                    ? 'Historical weather data was loaded, but no matched climate observations were found for this week.'
-                    : 'No matched climate observations were found for this week.')
+                  ? 'No matched climate observations were found for this week.'
                   : 'No published climate-index values are available for this selected week yet.';
               }
               return;

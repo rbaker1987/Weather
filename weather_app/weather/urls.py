@@ -4,7 +4,7 @@ from django.urls import include, path, register_converter
 from rest_framework.routers import DefaultRouter
 
 from . import views
-from .api.climate_analysis_api import ClimateAnalysisAPIView
+from .api.climate_analysis_api import ClimateAnalysisAPIView, ClimateIndicesAPIView
 from .api.climate_normals_api import ClimateNormalsAPIView
 from .api.geocode_api import GeocodeAPIView
 from .api.hourly_forecast_api import HourlyForecastForLocationAPIView
@@ -57,6 +57,11 @@ urlpatterns = [
         "api/climate-normals/",
         ClimateNormalsAPIView.as_view(),
         name="climate-normals",
+    ),
+    path(
+        "api/climate-indices/",
+        ClimateIndicesAPIView.as_view(),
+        name="climate-indices",
     ),
     path(
         "api/climate-analysis/",

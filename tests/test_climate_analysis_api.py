@@ -1,4 +1,4 @@
-"""Tests for persisted historical climate analysis API responses."""
+"""Tests for the on-demand historical climate analysis API."""
 
 from datetime import date, timedelta
 from types import SimpleNamespace
@@ -11,62 +11,69 @@ from weather.api.climate_analysis_api import (
     ClimateAnalysisAPIView,
     ClimateAnalysisThrottle,
 )
-from weather.models import (
-    HistoricalWeatherObservation,
-    Location,
-    TeleconnectionObservation,
-)
+from weather.climate_data import ClimateDataError, IndexSeries, WeatherDay
+
+URL = "/api/climate-analysis/"
+PARAMS = {"lat": "30", "lon": "-97", "month": "1", "day": "1"}
 
 
-@pytest.mark.django_db
-def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypatch):
-    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
-    client = APIClient()
-    monkeypatch.setattr(
-        "weather.api.climate_analysis_api.ImportClimateDataCommand._import_weather",
-        lambda *_args, **_kwargs: 0,
-    )
-    monkeypatch.setattr(
-        "weather.api.climate_analysis_api.ImportClimateDataCommand.import_noaa_calendar_day",
-        lambda *_args, **_kwargs: 0,
-    )
-    monkeypatch.setattr(
-        "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year",
-        2019,
-    )
+class FakeDate(date):
+    @classmethod
+    def today(cls):
+        return cls(2023, 1, 2)
 
-    class FakeDate(date):
-        @classmethod
-        def today(cls):
-            return cls(2023, 1, 2)
 
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture
+def three_years(monkeypatch):
+    """Pin the analysis to 2020-2022 with temperature rising alongside NAO."""
+    monkeypatch.setattr(ClimateAnalysisAPIView, "first_year", 2019)
     monkeypatch.setattr("weather.api.climate_analysis_api.date", FakeDate)
-    for year in range(2020, 2023):
-        observation_date = date(year, 1, 1)
-        TeleconnectionObservation.objects.create(
-            index_key="nao",
-            observation_date=observation_date,
-            value=float(year - 2019),
-            source_url="https://example.com/nao",
+    weather = {
+        date(year, 1, 1) + timedelta(days=offset): WeatherDay(
+            mean_temperature=float((year - 2019) * 10 + offset)
         )
-        for offset in range(-3, 4):
-            HistoricalWeatherObservation.objects.create(
-                location=location,
-                observation_date=observation_date + timedelta(days=offset),
-                source_kind="ncei_station",
-                mean_temperature=float((year - 2019) * 10 + offset),
-            )
-
-    response = client.get(
-        "/api/climate-analysis/",
-        {"location_id": str(location.id), "month": "1", "day": "1", "index": "nao"},
+        for year in range(2020, 2023)
+        for offset in range(-3, 4)
+    }
+    nao = IndexSeries(
+        "nao",
+        "daily",
+        "https://example.com/nao",
+        {date(year, 1, 1): float(year - 2019) for year in range(2020, 2023)},
     )
+    calls = {}
+
+    def fake_weather(*args):
+        calls["weather"] = args
+        return weather
+
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.fetch_weather_window", fake_weather
+    )
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.fetch_index_series_many",
+        lambda _keys: ({"nao": nao}, {}),
+    )
+    return calls
+
+
+def test_climate_analysis_returns_calendar_day_samples_and_correlation(three_years):
+    response = APIClient().get(URL, {**PARAMS, "index": "nao"})
 
     assert response.status_code == 200
     assert len(response.data["weather"]) == 3
     assert response.data["calendar_day"] == "01-01"
     assert response.data["year_count"] == 3
-    assert response.data["sample_count"] == 3
+    assert response.data["latitude"] == 30
+    assert response.data["indexes_available"] is True
+    assert response.data["unavailable_indices"] == []
     correlation = next(
         item
         for item in response.data["correlations"]
@@ -74,109 +81,93 @@ def test_climate_analysis_returns_calendar_day_samples_and_correlation(monkeypat
     )
     assert correlation["value"] == pytest.approx(1.0)
     assert correlation["sample_count"] == 3
-    assert correlation["r_squared"] == pytest.approx(1.0)
+    assert three_years["weather"][:2] == (30.0, -97.0)
 
 
-@pytest.mark.django_db
-def test_climate_analysis_rejects_unknown_or_malformed_location_id():
-    client = APIClient()
-    params = {"month": "1", "day": "1"}
-
-    missing = client.get(
-        "/api/climate-analysis/",
-        {**params, "location_id": "00000000-0000-0000-0000-000000000000"},
-    )
-    malformed = client.get(
-        "/api/climate-analysis/", {**params, "location_id": "not-a-uuid"}
-    )
-
-    assert missing.status_code == 404
-    assert malformed.status_code == 400
-
-
-@pytest.mark.django_db
-def test_climate_analysis_rejects_inactive_location():
-    location = Location.objects.create(
-        name="Inactive", latitude=30, longitude=-97, is_active=False
-    )
-    client = APIClient()
-
-    response = client.get(
-        "/api/climate-analysis/",
-        {"location_id": str(location.id), "month": "1", "day": "1"},
-    )
-
-    assert response.status_code == 404
-
-
-@pytest.mark.django_db
-def test_climate_analysis_throttles_anonymous_backfill_requests(monkeypatch):
-    cache.clear()
-    monkeypatch.setattr(ClimateAnalysisThrottle, "rate", "1/minute")
-    monkeypatch.setattr(ClimateAnalysisAPIView, "first_year", date.today().year - 1)
-    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
-    client = APIClient()
-    params = {"location_id": str(location.id), "month": "1", "day": "1"}
-
-    assert client.get("/api/climate-analysis/", params).status_code == 200
-    assert client.get("/api/climate-analysis/", params).status_code == 429
-    cache.clear()
-
-
-@pytest.mark.django_db
-def test_climate_analysis_validates_required_parameters():
-    client = APIClient()
-    assert client.get("/api/climate-analysis/").status_code == 400
-    assert (
-        client.get(
-            "/api/climate-analysis/", {"location_id": "x", "month": "13", "day": "1"}
-        ).status_code
-        == 400
-    )
-    assert (
-        client.get(
-            "/api/climate-analysis/",
-            {"location_id": "x", "month": "1", "day": "1", "index": "bad"},
-        ).status_code
-        == 400
-    )
-
-
-@pytest.mark.django_db
-def test_climate_analysis_rejects_large_sync_weather_backfill(monkeypatch, settings):
-    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
-    client = APIClient()
-
-    def fail_if_called(*args, **kwargs):
-        raise AssertionError(
-            "synchronous weather import should not run for large backfill"
-        )
-
+def test_climate_analysis_reports_failed_indices_but_keeps_others(
+    three_years, monkeypatch
+):
     monkeypatch.setattr(
-        "weather.api.climate_analysis_api.ImportClimateDataCommand._import_weather",
-        fail_if_called,
+        "weather.api.climate_analysis_api.fetch_index_series_many",
+        lambda _keys: (
+            {
+                "nao": IndexSeries(
+                    "nao", "daily", "u", {date(2021, 1, 1): 1.0, date(2022, 1, 1): 2.0}
+                )
+            },
+            {"ao": "boom"},
+        ),
     )
+    response = APIClient().get(URL, PARAMS)
 
-    response = client.get(
-        "/api/climate-analysis/",
-        {"location_id": str(location.id), "month": "1", "day": "1", "index": "nao"},
+    assert response.status_code == 200
+    assert response.data["unavailable_indices"] == ["ao"]
+    assert {item["index"] for item in response.data["indices"]} == {"nao"}
+
+
+def test_climate_analysis_502_when_weather_unavailable(monkeypatch):
+    def fail(*_args):
+        raise ClimateDataError("down")
+
+    monkeypatch.setattr("weather.api.climate_analysis_api.fetch_weather_window", fail)
+    response = APIClient().get(URL, PARAMS)
+
+    assert response.status_code == 502
+    assert "weather" in response.data["error"]
+
+
+def test_climate_analysis_502_when_every_index_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.fetch_weather_window",
+        lambda *_args: {},
     )
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.fetch_index_series_many",
+        lambda _keys: ({}, {"nao": "down"}),
+    )
+    response = APIClient().get(URL, PARAMS)
 
-    assert response.status_code == 503
-    assert "select fewer years" in response.data["error"]
+    assert response.status_code == 502
+    assert "index" in response.data["error"]
 
 
-@pytest.mark.django_db
-def test_climate_analysis_rejects_location_without_coordinates():
-    location = Location.objects.create(name="No Coordinates")
+def test_climate_analysis_validates_parameters():
+    client = APIClient()
+    assert client.get(URL).status_code == 400
+    assert client.get(URL, {**PARAMS, "lat": "abc"}).status_code == 400
+    assert client.get(URL, {**PARAMS, "lat": "91"}).status_code == 400
+    assert client.get(URL, {**PARAMS, "month": "13"}).status_code == 400
+    assert client.get(URL, {**PARAMS, "day": "32"}).status_code == 400
+    assert client.get(URL, {**PARAMS, "index": "bad"}).status_code == 400
+
+
+def test_climate_analysis_throttles_anonymous_requests(monkeypatch, three_years):
+    monkeypatch.setattr(ClimateAnalysisThrottle, "rate", "1/minute")
     client = APIClient()
 
-    response = client.get(
-        "/api/climate-analysis/",
-        {"location_id": str(location.id), "month": "1", "day": "1"},
-    )
+    assert client.get(URL, PARAMS).status_code == 200
+    assert client.get(URL, PARAMS).status_code == 429
 
-    assert response.status_code == 400
+
+def test_leap_day_skips_non_leap_years(three_years):
+    response = APIClient().get(URL, {**PARAMS, "month": "2", "day": "29"})
+
+    assert response.status_code == 200
+    assert response.data["calendar_day"] == "02-29"
+
+
+def test_climate_indices_endpoint_returns_latest_values(monkeypatch):
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.latest_index_values",
+        lambda: ([{"index": "nao", "value": 0.5}], ["ao"]),
+    )
+    response = APIClient().get("/api/climate-indices/")
+
+    assert response.status_code == 200
+    assert response.data == {
+        "indices": [{"index": "nao", "value": 0.5}],
+        "unavailable_indices": ["ao"],
+    }
 
 
 def test_climate_analysis_helpers_average_complete_windows_and_events():
@@ -206,109 +197,42 @@ def test_climate_analysis_helpers_average_complete_windows_and_events():
     }
     averaged = view._weekly_weather(rows, range(2015, 2025), 6, 15)
     assert len(averaged) == 10
-    correlations = view._correlations(
-        [
-            {"index": "nao", "date": center.isoformat(), "value": float(index)}
-            for index, center in enumerate(weekly)
-        ],
-        weekly,
-    )
-    assert len(correlations) == 4
-    events, thresholds = view._event_correlations(
-        [
-            {"index": "nao", "date": center.isoformat(), "value": float(index)}
-            for index, center in enumerate(weekly)
-        ],
-        weekly,
-    )
+    indices = [
+        {"index": "nao", "date": center.isoformat(), "value": float(index)}
+        for index, center in enumerate(weekly)
+    ]
+    assert len(view._correlations(indices, weekly)) == 4
+    events, thresholds = view._event_correlations(indices, weekly)
     assert len(events) == 4
     assert set(thresholds) == {"warm", "cool", "dry", "wet"}
 
 
 def test_climate_analysis_serialization_helpers():
     view = ClimateAnalysisAPIView()
-    observation = SimpleNamespace(
-        observation_date=date(2025, 6, 15),
-        source_kind="reanalysis",
-        source_identifier="archive",
-        mean_temperature=80,
-        precipitation=0.1,
-        wind_speed=5,
-        snowfall=0,
-    )
-    serialized = view._serialize_weather(observation)
-    assert serialized["date"] == "2025-06-15"
     assert view._serialize_weather({"date": "x"}) == {"date": "x"}
     assert view._weather_value(None, "mean_temperature") is None
     assert view._weather_value({"mean_temperature": 80}, "mean_temperature") == 80
-    assert view._weather_value(observation, "mean_temperature") == 80
+    assert (
+        view._weather_value(WeatherDay(mean_temperature=80), "mean_temperature") == 80
+    )
     assert len(view._window_dates(date(2025, 6, 15))) == 7
 
 
-@pytest.mark.django_db
-def test_climate_analysis_serializes_index_observations():
-    observation = TeleconnectionObservation.objects.create(
-        index_key="nao",
-        observation_date=date(2025, 6, 15),
-        value=0.5,
-        source_url="https://example.com/nao",
+def test_window_mean_indices_average_daily_and_monthly_series():
+    view = ClimateAnalysisAPIView()
+    daily = IndexSeries(
+        "ao", "daily", "d", {date(2021, 6, 12 + i): float(i) for i in range(7)}
     )
-    serialized = ClimateAnalysisAPIView()._serialize_indices([observation])
-    assert serialized == [
-        {
-            "index": "nao",
-            "date": "2025-06-15",
-            "value": 0.5,
-            "source_url": "https://example.com/nao",
-        }
-    ]
+    monthly = IndexSeries("oni", "monthly", "m", {(2021, 6): 0.4})
+    empty = IndexSeries("pna", "daily", "p", {})
 
-
-@pytest.mark.django_db
-def test_climate_analysis_loads_missing_indices_synchronously(monkeypatch, settings):
-    location = Location.objects.create(name="Austin", latitude=30, longitude=-97)
-    client = APIClient()
-    monkeypatch.setattr(
-        "weather.api.climate_analysis_api.ClimateAnalysisAPIView.first_year",
-        2019,
+    results = view._window_mean_indices(
+        {"ao": daily, "oni": monthly, "pna": empty}, [2021], 6, 15
     )
 
-    class FakeDate(date):
-        @classmethod
-        def today(cls):
-            return cls(2023, 1, 2)
-
-    monkeypatch.setattr("weather.api.climate_analysis_api.date", FakeDate)
-    for year in range(2020, 2023):
-        for offset in range(-3, 4):
-            HistoricalWeatherObservation.objects.create(
-                location=location,
-                observation_date=date(year, 1, 1) + timedelta(days=offset),
-                source_kind="ncei_station",
-                mean_temperature=float(year + offset),
-            )
-    loaded = []
-
-    def fake_import(self, month, day, years, index_keys, half_window=3):
-        loaded.append(list(years))
-        for year in years:
-            TeleconnectionObservation.objects.create(
-                index_key="nao",
-                observation_date=date(year, month, day),
-                value=float(year),
-                source_url="https://example.com/nao",
-            )
-        return len(years)
-
-    monkeypatch.setattr(
-        "weather.api.climate_analysis_api.ImportClimateDataCommand.import_noaa_calendar_day",
-        fake_import,
-    )
-    response = client.get(
-        "/api/climate-analysis/",
-        {"location_id": str(location.id), "month": "1", "day": "1", "index": "nao"},
-    )
-
-    assert response.status_code == 200
-    assert loaded == [[2020, 2021, 2022]]
-    assert response.data["indexes_available"] is True
+    by_index = {item["index"]: item for item in results}
+    assert set(by_index) == {"ao", "oni"}
+    assert by_index["ao"]["value"] == pytest.approx(3.0)
+    assert by_index["ao"]["days_averaged"] == 7
+    assert by_index["oni"]["cadence"] == "monthly"
+    assert by_index["oni"]["value"] == pytest.approx(0.4)

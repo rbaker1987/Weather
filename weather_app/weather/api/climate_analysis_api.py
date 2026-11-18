@@ -1,15 +1,12 @@
-"""API endpoint for persisted historical climate analysis data."""
+"""API endpoint for historical climate analysis computed on demand."""
 
 from __future__ import annotations
 
 import calendar
 import logging
-import uuid
 from datetime import date, timedelta
 from math import ceil
 
-from django.core.management.base import CommandError
-from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
@@ -20,20 +17,31 @@ from weather.climate_analysis import (
     correlation_significance,
     detrend_by_year,
 )
-from weather.management.commands.import_climate_data import (
-    Command as ImportClimateDataCommand,
+from weather.climate_data import (
+    INDEX_KEYS,
+    ClimateDataError,
+    fetch_index_series_many,
+    fetch_weather_window,
+    latest_index_values,
 )
-from weather.models import (
-    HistoricalWeatherObservation,
-    Location,
-    TeleconnectionObservation,
-)
+from weather.place_service import validate_coordinates
 
 logger = logging.getLogger("weather")
 
 
 class ClimateAnalysisThrottle(AnonRateThrottle):
     rate = "10/hour"
+
+
+class ClimateIndicesAPIView(APIView):
+    """Return the latest published value of each teleconnection index."""
+
+    permission_classes = []
+    throttle_classes = [ClimateAnalysisThrottle]
+
+    def get(self, request, *args, **kwargs):
+        latest, unavailable = latest_index_values()
+        return Response({"indices": latest, "unavailable_indices": unavailable})
 
 
 class ClimateAnalysisAPIView(APIView):
@@ -44,13 +52,17 @@ class ClimateAnalysisAPIView(APIView):
     first_year = 1950
     window_days = 7
     weather_fields = ("mean_temperature", "precipitation", "wind_speed", "snowfall")
-    supported_index_keys = ("nao", "ao", "pna", "oni", "epo", "wpo")
-    max_sync_weather_backfill_years = 5
+    supported_index_keys = INDEX_KEYS
 
     def get(self, request, *args, **kwargs):
-        location_id = request.query_params.get("location_id")
-        if not location_id:
-            return Response({"error": "location_id parameter is required"}, status=400)
+        try:
+            latitude, longitude = validate_coordinates(
+                request.query_params.get("lat"), request.query_params.get("lon")
+            )
+        except ValueError:
+            return Response(
+                {"error": "lat and lon must be valid coordinates"}, status=400
+            )
 
         try:
             month = int(request.query_params["month"])
@@ -69,14 +81,6 @@ class ClimateAnalysisAPIView(APIView):
         if unsupported:
             return Response({"error": "unsupported climate index"}, status=400)
 
-        try:
-            location_uuid = uuid.UUID(location_id)
-        except ValueError:
-            return Response({"error": "location_id must be a valid UUID"}, status=400)
-        location = get_object_or_404(Location, id=location_uuid, is_active=True)
-        if location.latitude is None or location.longitude is None:
-            return Response({"error": "location does not have coordinates"}, status=400)
-
         # Use completed years only so every sample has a complete centered window.
         last_year = date.today().year - 1
         years = [
@@ -84,111 +88,37 @@ class ClimateAnalysisAPIView(APIView):
             for year in range(self.first_year + 1, last_year + 1)
             if not (month == 2 and day == 29 and not calendar.isleap(year))
         ]
-        calendar_dates = [date(year, month, day) for year in years]
         half_window = self.window_days // 2
 
-        required_dates = {
-            window_date
-            for calendar_date in calendar_dates
-            for window_date in self._window_dates(calendar_date)
-        }
-        weather_queryset = HistoricalWeatherObservation.objects.filter(
-            location=location, observation_date__in=required_dates
-        )
-        weather_loaded = False
-        existing_weather_dates = set(
-            weather_queryset.values_list("observation_date", flat=True)
-        )
-        missing_weather_years = []
-        for year, calendar_date in zip(years, calendar_dates, strict=True):
-            window_dates = self._window_dates(calendar_date)
-            if any(
-                window_date not in existing_weather_dates
-                for window_date in window_dates
-            ):
-                missing_weather_years.append(year)
-        if missing_weather_years:
-            if (
-                not existing_weather_dates
-                and len(missing_weather_years) > self.max_sync_weather_backfill_years
-            ):
-                return Response(
-                    {
-                        "error": (
-                            "historical weather data is missing for too many years; "
-                            "select fewer years and retry"
-                        )
-                    },
-                    status=503,
-                )
-            try:
-                importer = ImportClimateDataCommand()
-                for missing_year in missing_weather_years:
-                    center = date(missing_year, month, day)
-                    importer._import_weather(
-                        location,
-                        center - timedelta(days=half_window),
-                        center + timedelta(days=half_window),
-                    )
-            except CommandError:
-                logger.exception("Historical weather data loading failed")
-                return Response(
-                    {"error": "historical weather data could not be loaded"},
-                    status=502,
-                )
-            weather_loaded = True
-
-        supported_index_keys = set(index_keys)
-
-        def count_available_indices():
-            return (
-                TeleconnectionObservation.objects.filter(
-                    index_key__in=supported_index_keys,
-                    observation_date__month=month,
-                    observation_date__day=day,
-                    observation_date__year__in=years,
-                )
-                .values("index_key", "observation_date")
-                .distinct()
-                .count()
+        try:
+            weather_by_date = fetch_weather_window(
+                latitude,
+                longitude,
+                month,
+                day,
+                self.first_year + 1,
+                last_year,
+                half_window,
+            )
+        except ClimateDataError:
+            logger.exception("Historical weather data loading failed")
+            return Response(
+                {"error": "historical weather data could not be loaded"}, status=502
             )
 
-        available_index_count = count_available_indices()
-        if available_index_count < len(years) * len(supported_index_keys):
-            try:
-                ImportClimateDataCommand().import_noaa_calendar_day(
-                    month, day, years, index_keys, half_window
-                )
-            except CommandError:
-                logger.exception("Climate index data loading failed")
-                return Response(
-                    {"error": "climate index data could not be loaded"}, status=502
-                )
-            available_index_count = count_available_indices()
-        index_loaded = available_index_count > 0
-
-        observations = HistoricalWeatherObservation.objects.filter(
-            location=location, observation_date__in=required_dates
-        ).order_by("observation_date", "source_kind")
-        weather_by_date = {}
-        for observation in observations:
-            existing = weather_by_date.get(observation.observation_date)
-            if existing is None or (
-                observation.source_kind
-                == HistoricalWeatherObservation.SourceKind.NCEI_STATION
-            ):
-                weather_by_date[observation.observation_date] = observation
+        series, index_errors = fetch_index_series_many(index_keys)
+        if not series:
+            logger.error("Climate index data loading failed: %s", index_errors)
+            return Response(
+                {"error": "climate index data could not be loaded"}, status=502
+            )
 
         weekly_weather = self._weekly_weather(weather_by_date, years, month, day)
         daily_weather = [
             self._serialize_weather(observation)
             for observation in weekly_weather.values()
         ]
-        index_observations = TeleconnectionObservation.objects.filter(
-            index_key__in=index_keys,
-            observation_date__in=required_dates,
-        ).order_by("index_key", "observation_date")
-        indices = self._window_mean_indices(index_observations, years, month, day)
+        indices = self._window_mean_indices(series, years, month, day)
 
         correlations = self._correlations(indices, weekly_weather)
         event_correlations, event_thresholds = self._event_correlations(
@@ -196,7 +126,8 @@ class ClimateAnalysisAPIView(APIView):
         )
         return Response(
             {
-                "location_id": str(location.id),
+                "latitude": latitude,
+                "longitude": longitude,
                 "calendar_day": f"{month:02d}-{day:02d}",
                 "window_days": self.window_days,
                 "year_count": len(weekly_weather),
@@ -206,8 +137,7 @@ class ClimateAnalysisAPIView(APIView):
                 "correlations": correlations,
                 "event_correlations": event_correlations,
                 "event_thresholds": event_thresholds,
-                "weather_loaded": weather_loaded,
-                "index_loaded": index_loaded,
+                "unavailable_indices": sorted(index_errors),
                 "indexes_available": bool(indices),
             }
         )
@@ -262,39 +192,32 @@ class ClimateAnalysisAPIView(APIView):
             for offset in range(-half_window, half_window + 1)
         ]
 
-    def _serialize_indices(self, observations):
-        return [
-            {
-                "index": observation.index_key,
-                "date": observation.observation_date.isoformat(),
-                "value": observation.value,
-                "source_url": observation.source_url,
-            }
-            for observation in observations
-        ]
-
-    def _window_mean_indices(self, observations, years, month, day):
+    def _window_mean_indices(self, series_by_key, years, month, day):
         """Average each index over the same centered window used for weather."""
-        by_index = {}
-        for observation in observations:
-            by_index.setdefault(observation.index_key, {})[
-                observation.observation_date
-            ] = observation
         results = []
-        for index_key in sorted(by_index):
-            rows = by_index[index_key]
+        for index_key in sorted(series_by_key):
+            series = series_by_key[index_key]
             for year in years:
                 center = date(year, month, day)
-                window = [rows[d] for d in self._window_dates(center) if d in rows]
-                if center not in rows or not window:
+                if series.value_on(center) is None:
+                    continue
+                window = [
+                    value
+                    for value in (
+                        series.value_on(item) for item in self._window_dates(center)
+                    )
+                    if value is not None
+                ]
+                if not window:
                     continue
                 results.append(
                     {
                         "index": index_key,
                         "date": center.isoformat(),
-                        "value": sum(item.value for item in window) / len(window),
+                        "value": sum(window) / len(window),
                         "days_averaged": len(window),
-                        "source_url": rows[center].source_url,
+                        "cadence": series.cadence,
+                        "source_url": series.url,
                     }
                 )
         return results
