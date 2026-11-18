@@ -1,11 +1,9 @@
 """Tests for user-related view branches."""
 
-from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
 from django.test import RequestFactory
-from django.utils import timezone
 
 from weather.models import DailyForecast, Location
 from weather.views import (
@@ -77,26 +75,3 @@ def test_refresh_forecasts_stores_nws_periods():
     assert forecast.temperature == 78
     assert forecast.wind_speed == 15
     assert location.nws_office == "FWD"
-
-
-@pytest.mark.django_db
-def test_forecast_list_includes_current_location_outside_session(client):
-    current = Location.objects.create(
-        name="Current", is_current_location=True, is_enabled=True
-    )
-    today = timezone.now().date()
-    DailyForecast.objects.create(
-        location=current,
-        forecast_date=today,
-        period_start=timezone.now(),
-        period_end=timezone.now() + timedelta(hours=12),
-        is_daytime=True,
-        temperature=75,
-        short_forecast="Clear",
-        wind_speed=4,
-    )
-
-    response = client.get("/forecasts/")
-
-    assert response.status_code == 200
-    assert response.context["forecasts"][0].location_id == current.id

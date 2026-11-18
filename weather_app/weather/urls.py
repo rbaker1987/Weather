@@ -65,7 +65,6 @@ urlpatterns = [
     ),
     # Web interface
     path("", views.HomeView.as_view(), name="home"),
-    path("locations/", views.LocationListView.as_view(), name="location-list"),
     path(
         "locations/<uuid:pk>/",
         views.LocationDetailView.as_view(),
@@ -73,8 +72,6 @@ urlpatterns = [
     ),
     path("temp-location/", views.TempLocationView.as_view(), name="temp-location"),
     path("weather/<coords:coords>/", views.PlaceView.as_view(), name="place"),
-    path("forecasts/", views.ForecastListView.as_view(), name="forecast-list"),
-    path("alerts/", views.AlertListView.as_view(), name="alert-list"),
     path("models/", views.ModelsView.as_view(), name="models"),
     path(
         "models/<str:model_name>/", views.ModelDetailView.as_view(), name="model-detail"

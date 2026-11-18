@@ -121,14 +121,7 @@
         <li class="breadcrumb-item">
           <a href="{% url 'weather:home' %}">Home</a>
         </li>
-        {% if not is_temp_location %}
-        <li class="breadcrumb-item">
-          <a href="{% url 'weather:location-list' %}">Locations</a>
-        </li>
-        <li class="breadcrumb-item active">{{ location.name }}</li>
-        {% else %}
-        <li class="breadcrumb-item active">Temporary Location</li>
-        {% endif %}
+        <li class="breadcrumb-item active">{{ location.display_name }}</li>
       </ol>
     </nav>
 
@@ -164,12 +157,8 @@
           </div>
           {% endif %}
           <div class="col-12 col-md-auto">
-            <a
-              href="{% if is_temp_location %}{% url 'weather:home' %}{% else %}{% url 'weather:location-list' %}{% endif %}"
-              class="btn btn-secondary"
-            >
-              <i class="fas fa-arrow-left"></i> {% if is_temp_location %}Back to Home{%
-              else %}Back to Locations{% endif %}
+            <a href="{% url 'weather:home' %}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left"></i> Back to Home
             </a>
           </div>
         </div>
