@@ -6,9 +6,18 @@ from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.core.cache import cache
+from django.http import Http404, HttpResponse
+from django.shortcuts import render
+from django.views import View
 from django.views.generic import TemplateView
 
-from .place_service import fetch_place_weather, validate_coordinates
+from .place_service import (
+    PANELS,
+    build_place,
+    is_unsupported_place,
+    panel_context,
+    validate_coordinates,
+)
 from .regional_pages import ReportUnavailableError, build_report
 
 logger = logging.getLogger("weather")
@@ -72,8 +81,9 @@ class ModelsView(TemplateView):
 def _place_context(context, lat, lon, name=None):
     """Fill ``context`` for location_detail.html from coordinates in the request.
 
-    No database rows are created: the place is a stand-in object built from the
-    URL, with forecast data fetched on demand.
+    No database rows are created and no upstream call is made here: the place is a
+    stand-in object built from the URL, and each panel loads its own data afterwards
+    (see ``PlacePanelView``).
     """
     try:
         latitude, longitude = validate_coordinates(lat, lon)
@@ -82,15 +92,12 @@ def _place_context(context, lat, lon, name=None):
         context["page_title"] = "Weather"
         return context
 
-    data = fetch_place_weather(latitude, longitude, name)
-    place = data["place"]
+    place = build_place(latitude, longitude, name)
     context["location"] = place
     context["latitude"] = latitude
     context["longitude"] = longitude
+    context["panel_coords"] = f"{latitude:.6f},{longitude:.6f}"
     context["page_title"] = f"Weather - {place.display_name}"
-    context["daily_forecasts"] = data["daily_forecasts"]
-    context["hourly_forecasts"] = []
-    context["active_alerts"] = data["alerts"]
     context["is_temp_location"] = True
     return context
 
@@ -119,6 +126,41 @@ class PlaceView(TemplateView):
         context = super().get_context_data(**kwargs)
         lat, _, lon = kwargs["coords"].partition(",")
         return _place_context(context, lat, lon, self.request.GET.get("name"))
+
+
+class PlacePanelView(View):
+    """One panel of the place page (alerts, current conditions or forecast) as HTML.
+
+    The place page loads each panel separately so its first paint never waits on an
+    upstream call, and one failing upstream only affects its own panel.
+    """
+
+    def get(self, request, coords, panel):
+        if panel not in PANELS:
+            raise Http404("Unknown panel")
+        lat, _, lon = coords.partition(",")
+        try:
+            latitude, longitude = validate_coordinates(lat, lon)
+        except ValueError:
+            return HttpResponse("Invalid coordinates", status=400)
+
+        try:
+            context = panel_context(panel, latitude, longitude)
+        except Exception as exc:
+            logger.warning("Place panel %s failed: %s", panel, exc)
+            unsupported = is_unsupported_place(exc)
+            message = (
+                "The National Weather Service does not cover this location."
+                if unsupported
+                else "This section is unavailable right now."
+            )
+            return render(
+                request,
+                "weather/panels/error.html",
+                {"message": message, "retryable": not unsupported},
+                status=404 if unsupported else 502,
+            )
+        return render(request, f"weather/panels/{panel}.html", context)
 
 
 class ModelDetailView(TemplateView):

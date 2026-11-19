@@ -7,12 +7,12 @@ the place entirely in the request URL.
 
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from itertools import groupby
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+import requests
 from django.utils import timezone
 from timezonefinder import TimezoneFinder
 
@@ -226,21 +226,6 @@ def _fetch_alerts(latitude, longitude):
     return alerts
 
 
-def _safe_alerts(latitude, longitude):
-    try:
-        return _fetch_alerts(latitude, longitude)
-    except Exception as exc:
-        logger.warning("Failed to fetch alerts: %s", exc)
-        return []
-
-
-def _safe_current_conditions(place, properties):
-    try:
-        _fetch_current_conditions(place, properties)
-    except Exception as exc:
-        logger.warning("Could not fetch current conditions: %s", exc)
-
-
 def grid_properties(latitude, longitude):
     """NWS grid metadata for a point (cached; raises ``requests`` errors)."""
     return _get_json(
@@ -319,36 +304,35 @@ def fetch_alerts_panel(latitude, longitude):
     ]
 
 
-def fetch_place_weather(latitude, longitude, name=None):
-    """Fetch current conditions, daily forecast and alerts for a point.
+def is_unsupported_place(exc):
+    """True when the NWS answered 404, which means the point is outside its coverage."""
+    return (
+        isinstance(exc, requests.HTTPError)
+        and exc.response is not None
+        and exc.response.status_code == 404
+    )
 
-    Returns a dict with ``place``, ``daily_forecasts`` (grouped by day) and
-    ``alerts``. Upstream failures are logged and leave the affected parts empty
-    so the page can still render. Alerts, observations and the forecast are
-    fetched in parallel once the NWS grid point is known.
-    """
-    place = build_place(latitude, longitude, name)
-    daily = []
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        alerts_future = pool.submit(_safe_alerts, latitude, longitude)
-        try:
-            properties = grid_properties(latitude, longitude)
-            place.nws_office = properties.get("gridId", "")
-            place.grid_x = properties.get("gridX")
-            place.grid_y = properties.get("gridY")
 
-            conditions_future = pool.submit(_safe_current_conditions, place, properties)
-            forecast_url = properties.get("forecast")
-            if forecast_url:
-                daily = _daily_periods(forecast_url, _timezone_for(latitude, longitude))
-            conditions_future.result()
-            place.last_forecast_update = timezone.now()
-        except Exception as exc:
-            logger.warning("Failed to fetch forecast data: %s", exc)
-        alerts = alerts_future.result()
+PANELS = ("alerts", "current", "forecast")
 
-    return {
-        "place": place,
-        "daily_forecasts": _group_by_day(daily),
-        "alerts": alerts,
-    }
+
+def panel_context(panel, latitude, longitude):
+    """Template context for one place-page panel (raises on upstream failure)."""
+    if panel == "alerts":
+        return {"active_alerts": _fetch_alerts(latitude, longitude)}
+
+    place = build_place(latitude, longitude)
+    properties = grid_properties(latitude, longitude)
+    if panel == "current":
+        _fetch_current_conditions(place, properties)
+        place.nws_office = properties.get("gridId", "")
+        return {"location": place}
+
+    forecast_url = properties.get("forecast")
+    daily = (
+        _daily_periods(forecast_url, _timezone_for(latitude, longitude))
+        if forecast_url
+        else []
+    )
+    place.last_forecast_update = timezone.now()
+    return {"location": place, "daily_forecasts": _group_by_day(daily)}

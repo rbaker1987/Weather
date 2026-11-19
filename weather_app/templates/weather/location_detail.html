@@ -174,15 +174,12 @@
           </div>
           <div class="col-md-6">
             <h5>Weather Service Info</h5>
-            {% if location.nws_office %}
             <p class="mb-2" style="font-size: 1.1rem">
-              <strong>NWS Office:</strong> {{ location.nws_office }}
+              <strong>NWS Office:</strong> <span id="nwsOffice" class="text-muted">...</span>
             </p>
-            {% endif %} {% if location.grid_x and location.grid_y %}
             <p class="mb-2" style="font-size: 1.1rem">
-              <strong>Grid:</strong> {{ location.grid_x }}, {{ location.grid_y }}
+              <strong>Grid:</strong> <span id="nwsGrid" class="text-muted">...</span>
             </p>
-            {% endif %} {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-muted' show_label=True %}
           </div>
         </div>
       </div>
@@ -195,152 +192,35 @@
         <h6 class="mb-0"><i class="fas fa-thermometer-half"></i> Status</h6>
       </div>
       <div class="card-body text-center">
-        {% if location.last_forecast_update %}
-        <span class="badge bg-success mb-2" style="font-size: 1.1rem">
-          <i class="fas fa-check"></i> Active
+        <span id="placeStatus" class="badge bg-secondary mb-2" style="font-size: 1.1rem">
+          <i class="fas fa-spinner fa-spin"></i> Checking
         </span>
-        {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-muted' show_label=True %} {% else %}
-        <span class="badge bg-warning mb-2" style="font-size: 1.1rem">
-          <i class="fas fa-exclamation-triangle"></i> No Data
-        </span>
-        <p class="text-muted" style="font-size: 1rem">No forecast data available</p>
-        {% endif %}
+        <p id="placeStatusNote" class="text-muted mb-0" style="font-size: 1rem"></p>
       </div>
     </div>
   </div>
 </div>
-{% comment %} Active Alerts moved above Current Conditions {% endcomment %}
-<div class="row mb-4">
+{% if panel_coords %}
+<div class="row mb-4" id="alertsRow">
   <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-header bg-danger text-white">
-        <h5 class="mb-0">
-          <i class="fas fa-exclamation-triangle"></i> Active Weather Alerts
-        </h5>
-      </div>
-      <div class="card-body">
-        {% if active_alerts %} {% for alert in active_alerts %}
-        <div
-          class="alert mb-2 {% if alert.severity == 'extreme' or alert.severity == 'severe' %}alert-danger{% elif alert.severity == 'moderate' %}alert-warning{% else %}alert-info{% endif %}"
-        >
-          <div class="d-flex justify-content-between align-items-start">
-            <div class="flex-grow-1">
-              <div class="mb-2">
-                <span
-                  class="badge {% if alert.severity == 'extreme' or alert.severity == 'severe' %}bg-danger{% elif alert.severity == 'moderate' %}bg-warning text-dark{% else %}bg-info{% endif %}"
-                  style="font-size: 1rem"
-                  >{{ alert.severity|upper }}</span
-                >
-                <strong class="ms-2" style="font-size: 1.2rem"
-                  >{{ alert.event }}</strong
-                >
-              </div>
-              {% if alert.headline %}
-              <p class="mb-2" style="font-size: 1.1rem">{{ alert.headline }}</p>
-              {% endif %}
-              <div class="text-muted border-top pt-2 mt-2" style="font-size: 1rem">
-                {% if alert.onset %}<strong>Onset:</strong>
-                <span class="js-localtime" data-dt="{{ alert.onset|date:'c' }}"></span
-                >{% endif %} {% if alert.expires %}
-                <span class="ms-2"
-                  ><strong>Expires:</strong>
-                  <span
-                    class="js-localtime"
-                    data-dt="{{ alert.expires|date:'c' }}"
-                  ></span></span
-                >{% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-        {% endfor %} {% else %}
-        <div class="text-center text-muted py-4">
-          <i class="fas fa-check-circle fa-4x mb-3 text-success"></i>
-          <h4>No Active Alerts</h4>
-          <p class="mb-0" style="font-size: 1.1rem">
-            This location is clear of weather alerts
-          </p>
-        </div>
-        {% endif %}
-      </div>
+    <div id="alertsPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='alerts' %}" aria-live="polite">
+      <div class="card weather-card"><div class="card-body text-center text-muted py-4">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+        Loading weather alerts...
+      </div></div>
     </div>
   </div>
 </div>
+{% endif %}
 
-<!-- Current Conditions -->
-{% if location.current_temp %}
-<div class="row mb-4">
+{% if panel_coords %}
+<div class="row mb-4" id="currentRow">
   <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div>
-          {% include "weather/components/section_header.html" with icon="thermometer-half" title="Current Conditions" %}
-        </div>
-        <button
-          onclick="exportSectionAsImage('currentConditionsSection')"
-          class="btn btn-sm text-white"
-          title="Export as JPG"
-          style="background: transparent; border: none"
-        >
-          <i class="fas fa-download"></i>
-        </button>
-      </div>
-      <div class="card-body" id="currentConditionsSection">
-        <div class="card border-0 temp-bg-{{ location.current_temp }}">
-          <div class="card-body p-4">
-            <div class="row align-items-center">
-              <div class="col-md-6">
-                <h1 class="display-2 mb-3">{{ location.current_temp }}°F</h1>
-                {% if location.current_temp|should_show_feels_like:location.current_apparent_temp %}
-                <h5 class="mb-3" style="opacity: 0.9">
-                  <i class="fas fa-temperature-high"></i> Feels like {{ location.current_apparent_temp }}°F
-                </h5>
-                {% endif %}
-                <h3 class="mb-4">{{ location.current_conditions }}</h3>
-                <div class="d-flex flex-wrap gap-3">
-                  {% if location.current_humidity %}
-                  <div style="font-size: 1.15rem">
-                    <i class="fas fa-tint text-primary"></i>
-                    <strong>Humidity:</strong> {{ location.current_humidity }}%
-                  </div>
-                  {% endif %}
-                  {% if location.current_wind_speed %}
-                  <div style="font-size: 1.15rem">
-                    <i class="fas fa-wind text-primary"></i>
-                    <strong>Wind:</strong> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}
-                  </div>
-                  {% endif %}
-                </div>
-              </div>
-              <div class="col-md-6 text-center">
-                <!-- Placeholder icon; will be replaced after sunrise/sunset fetched -->
-                <i
-                  id="currentConditionsIcon"
-                  data-condition="{{ location.current_conditions|escapejs }}"
-                  class="fas fa-cloud-sun"
-                  style="font-size: 10rem; opacity: 0.3"
-                ></i>
-                <div class="mt-4">
-                  <span class="badge bg-dark me-2" style="font-size: 1.05rem">
-                    <i class="fas fa-sun"></i> Sunrise:
-                    <span id="sunriseDisplay">--:--</span>
-                  </span>
-                  <span class="badge bg-dark" style="font-size: 1.05rem">
-                    <i class="fas fa-moon"></i> Sunset:
-                    <span id="sunsetDisplay">--:--</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          {% if location.last_observation_time %}
-          <div class="card-footer text-muted" style="font-size: 1rem">
-            <i class="fas fa-clock"></i> Observed
-            <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
-          </div>
-          {% endif %}
-        </div>
-      </div>
+    <div id="currentPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='current' %}" aria-live="polite">
+      <div class="card weather-card"><div class="card-body text-center text-muted py-4">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+        Loading current conditions...
+      </div></div>
     </div>
   </div>
 </div>
@@ -535,163 +415,14 @@
   </div>
 </div>
 
-<!-- Daily Forecasts -->
-{% if daily_forecasts %}
-<div class="row mb-4">
+{% if panel_coords %}
+<div class="row mb-4" id="forecastRow">
   <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div>
-          <h5 class="mb-0">
-            <i class="fas fa-calendar-alt text-white"></i>
-            NWS Daily
-          </h5>
-          {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
-        </div>
-        <button
-          onclick="exportForecastAsImage()"
-          class="btn btn-sm text-white"
-          title="Export as JPG"
-          style="background: transparent; border: none"
-        >
-          <i class="fas fa-download"></i>
-        </button>
-      </div>
-      <div class="card-body" id="forecastExportSection">
-        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
-          {% for day_group in daily_forecasts %}
-          <div class="col">
-            <div class="card border-0 h-100">
-              <div class="card-header text-center py-2">
-                <strong>{{ day_group.date|date:"D, M j" }}</strong>
-              </div>
-              <div class="card-body p-0 d-flex flex-column">
-                {% if day_group.day %} {% include "weather/components/forecast_period_card.html" with period=day_group.day period_type="day" %} {% endif %} {% if day_group.night %} {% include "weather/components/forecast_period_card.html" with period=day_group.night period_type="night" %} {% endif %}
-              </div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- Hourly Forecasts -->
-{% if hourly_forecasts %}
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div>
-          <h5 class="mb-0">
-            <i class="fas fa-clock text-primary"></i>
-            NWS Hourly for {{ location.display_name }}
-          </h5>
-          {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
-        </div>
-        <button
-          onclick="exportSectionAsImage('hourlyForecastTable')"
-          class="btn btn-sm text-white"
-          title="Export as JPG"
-          style="background: transparent; border: none"
-        >
-          <i class="fas fa-download"></i>
-        </button>
-      </div>
-      <div class="card-body" id="hourlyForecastTable">
-        <div class="table-responsive">
-          <table class="table table-hover" style="font-size: 1.1rem">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Temp</th>
-                <th>Conditions</th>
-                <th>Wind</th>
-                <th>Humidity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for forecast in hourly_forecasts|slice:":12" %}
-              <tr>
-                <td>{{ forecast.forecast_time|date:"g:i A" }}</td>
-                <td>
-                  <span class="temperature-small">
-                    {{ forecast.temperature }}°{{ forecast.temperature_unit }}
-                  </span>
-                </td>
-                <td>{{ forecast.short_forecast }}</td>
-                <td>
-                  {% if forecast.wind_speed %}
-                    {{ forecast.wind_speed }} {{ forecast.wind_direction }}
-                  {% else %}
-                    -
-                  {% endif %}
-                </td>
-                <td>
-                  {% if forecast.humidity %}
-                    {{ forecast.humidity }}%
-                  {% else %}
-                    -
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- Weather Model Comparison -->
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-header">
-          {% include "weather/components/section_header.html" with icon="cloud-sun" title="Weather Model Comparison" %}
-      </div>
-      <div class="card-body">
-        <p class="text-muted mb-3">
-          <i class="fas fa-info-circle"></i> Compare predictions from multiple weather
-          models for this location.
-          <a
-            href="{% url 'weather:models' %}"
-            class="btn btn-sm btn-outline-primary float-end"
-          >
-            <i class="fas fa-expand"></i> View Full Comparison
-          </a>
-        </p>
-
-        <div id="modelComparisonContainer">
-          <div class="text-center py-4">
-            <div class="spinner-border text-primary" role="status">
-              <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="mt-2 text-muted">Loading model comparison...</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- No Data Message -->
-{% if not daily_forecasts and not hourly_forecasts %}
-<div class="row">
-  <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-body text-center py-5">
-        <i class="fas fa-cloud-meatball fa-5x text-muted mb-4"></i>
-        <h3 class="text-muted">No Forecast Data Available</h3>
-        <p class="text-muted mb-4" style="font-size: 1.15rem">
-          NWS forecasts are not available for this place. View the model comparison
-          section below for forecast data.
-        </p>
-      </div>
+    <div id="forecastPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='forecast' %}" aria-live="polite">
+      <div class="card weather-card"><div class="card-body text-center text-muted py-4">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+        Loading the forecast...
+      </div></div>
     </div>
   </div>
 </div>
@@ -1419,28 +1150,103 @@
       }
   }
 
-  // NWS forecast data from Django template
-  const nwsForecasts = [
-      {% for day_group in daily_forecasts %}
-      {
-          date: '{{ day_group.date|date:"Y-m-d" }}',
-          day: {% if day_group.day %}{
-              temperature: {{ day_group.day.temperature }},
-              short_forecast: '{{ day_group.day.short_forecast|escapejs }}',
-              wind_speed: {{ day_group.day.wind_speed|default:'null' }},
-              wind_gust: {{ day_group.day.wind_gust|default:'null' }},
-              precipitation_probability: {{ day_group.day.precipitation_probability|default:'null' }}
-          }{% else %}null{% endif %},
-          night: {% if day_group.night %}{
-              temperature: {{ day_group.night.temperature }},
-              short_forecast: '{{ day_group.night.short_forecast|escapejs }}',
-              wind_speed: {{ day_group.night.wind_speed|default:'null' }},
-              wind_gust: {{ day_group.night.wind_gust|default:'null' }},
-              precipitation_probability: {{ day_group.night.precipitation_probability|default:'null' }}
-          }{% else %}null{% endif %}
-      }{% if not forloop.last %},{% endif %}
-      {% endfor %}
-  ];
+
+  // Place page shell: each panel is a server-rendered fragment fetched on its own, so the
+  // first paint never waits on an upstream call and one failure cannot block the rest.
+  function formatLocalTimes(root) {
+      root.querySelectorAll('.js-localtime[data-dt]').forEach(function (el) {
+          const d = new Date(el.getAttribute('data-dt'));
+          if (isNaN(d.getTime())) return;
+          el.textContent = d.toLocaleString(undefined, {
+              year: 'numeric', month: 'short', day: 'numeric',
+              hour: 'numeric', minute: '2-digit'
+          });
+      });
+  }
+
+  function applySunTimes() {
+      const sunriseEl = document.getElementById('sunriseDisplay');
+      const sunsetEl = document.getElementById('sunsetDisplay');
+      if (!window.locationSunrise || !window.locationSunset) return;
+      const fmtOptions = { hour: 'numeric', minute: '2-digit' };
+      if (window.locationTimezone) fmtOptions.timeZone = window.locationTimezone;
+      if (sunriseEl) sunriseEl.textContent = window.locationSunrise.toLocaleTimeString([], fmtOptions);
+      if (sunsetEl) sunsetEl.textContent = window.locationSunset.toLocaleTimeString([], fmtOptions);
+  }
+
+  function showPanelError(mount, message) {
+      const card = document.createElement('div');
+      card.className = 'card weather-card';
+      const body = document.createElement('div');
+      body.className = 'card-body text-center text-muted py-4';
+      body.append(message + ' ');
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'btn btn-sm btn-outline-secondary';
+      retry.textContent = 'Retry';
+      retry.addEventListener('click', function () { loadPanel(mount); });
+      body.appendChild(retry);
+      card.appendChild(body);
+      mount.replaceChildren(card);
+  }
+
+  async function loadPanel(mount) {
+      mount.setAttribute('aria-busy', 'true');
+      try {
+          const response = await fetch(mount.dataset.panelUrl);
+          const html = await response.text();
+          // Same-origin HTML rendered by Django templates (autoescaped).
+          mount.innerHTML = html;
+          formatLocalTimes(mount);
+          const retry = mount.querySelector('button[data-retry]');
+          if (retry) retry.addEventListener('click', function () { loadPanel(mount); });
+          if (mount.id === 'currentPanel') {
+              updateCurrentConditionsIcon();
+              applySunTimes();
+          }
+      } catch (err) {
+          console.warn('Could not load panel:', mount.id, err);
+          showPanelError(mount, 'Could not load this section.');
+      } finally {
+          mount.removeAttribute('aria-busy');
+      }
+  }
+
+  async function loadPlaceStatus() {
+      const badge = document.getElementById('placeStatus');
+      const note = document.getElementById('placeStatusNote');
+      const office = document.getElementById('nwsOffice');
+      const grid = document.getElementById('nwsGrid');
+      const params = new URLSearchParams({ latitude: '{{ latitude|stringformat:"f" }}', longitude: '{{ longitude|stringformat:"f" }}' });
+      try {
+          const response = await fetch(`/api/place/current/?${params}`);
+          const payload = await response.json();
+          if (!response.ok || payload.status !== 'success') {
+              throw new Error(payload.error || 'unavailable');
+          }
+          const data = payload.data;
+          badge.className = 'badge bg-success mb-2';
+          badge.replaceChildren(Object.assign(document.createElement('i'), { className: 'fas fa-check' }), ' Active');
+          if (data.observed_at) {
+              note.textContent = 'Observed ' + new Date(data.observed_at).toLocaleString(undefined, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
+          }
+          if (office) office.textContent = data.office || 'n/a';
+          if (grid) grid.textContent = data.grid_x != null ? `${data.grid_x}, ${data.grid_y}` : 'n/a';
+      } catch (err) {
+          badge.className = 'badge bg-warning text-dark mb-2';
+          badge.replaceChildren(Object.assign(document.createElement('i'), { className: 'fas fa-exclamation-triangle' }), ' No Data');
+          note.textContent = 'Weather service data is unavailable for this place right now.';
+          if (office) office.textContent = 'n/a';
+          if (grid) grid.textContent = 'n/a';
+      }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+      const panels = document.querySelectorAll('[data-panel-url]');
+      if (!panels.length) return;
+      panels.forEach(loadPanel);
+      loadPlaceStatus();
+  });
 
   // getWeatherIcon function is now defined in weather.js - uses standardized logic across app
 
