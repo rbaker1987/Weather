@@ -104,7 +104,17 @@ def _place_context(context, lat, lon, name=None):
     return context
 
 
-class TempLocationView(TemplateView):
+class PlacePageMixin:
+    """Show a plain error page, not a broken forecast page, for unusable coordinates."""
+
+    def render_to_response(self, context, **response_kwargs):
+        if context.get("error"):
+            response_kwargs["status"] = 400
+            self.template_name = "weather/place_error.html"
+        return super().render_to_response(context, **response_kwargs)
+
+
+class TempLocationView(PlacePageMixin, TemplateView):
     """Forecast for map-selected coordinates (?latitude=&longitude=)."""
 
     template_name = "weather/location_detail.html"
@@ -119,7 +129,7 @@ class TempLocationView(TemplateView):
         )
 
 
-class PlaceView(TemplateView):
+class PlaceView(PlacePageMixin, TemplateView):
     """Forecast for a place carried in the URL: /weather/<lat>,<lon>/?name=."""
 
     template_name = "weather/location_detail.html"
