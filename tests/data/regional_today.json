@@ -177,12 +177,7 @@
     ],
     "headline": "Quiet today, windy Friday, then a cold front with light snow Saturday.",
     "summary": "Sunny and dry today after a very cold morning in the high valleys. West wind gusts near 35 mph Friday in the high country. A quick system Friday night into Saturday brings a dusting to a couple of inches in the northern mountains, followed by the coldest night of the season so far.",
-    "town_cols": [
-      "Today high",
-      "Tonight low",
-      "Fri high",
-      "Fri night"
-    ],
+    "town_cols": ["Today high", "Tonight low", "Fri high", "Fri night"],
     "towns": [
       {
         "name": "Red River",
@@ -380,10 +375,7 @@
       {
         "kicker": "Travel",
         "title": "Travel routes",
-        "cols": [
-          "Route",
-          "Conditions"
-        ],
+        "cols": ["Route", "Conditions"],
         "rows": [
           [
             {
@@ -428,9 +420,7 @@
             "Difficult (wet, may be slick): US-64 Taos Canyon MM 260–273 and NM-38 Questa – Red River. Others no reported issues"
           ]
         ],
-        "key_rows": [
-          5
-        ],
+        "key_rows": [5],
         "note": "No reported issues on the interstates. Watch for icy spots in shaded canyons early in the morning; check nmroads.com before leaving."
       }
     ]
