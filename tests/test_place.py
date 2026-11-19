@@ -288,9 +288,10 @@ class TestPlaceView:
     def test_place_page_rejects_out_of_range_coordinates(self, client):
         response = client.get("/weather/95.0,-97.0/")
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         assert "valid" in response.context["error"]
         assert "/panel/" not in response.content.decode()
+        assert "Back to Home" in response.content.decode()
 
     def test_non_coordinate_path_is_not_matched(self, client):
         assert client.get("/weather/abc/").status_code == 404

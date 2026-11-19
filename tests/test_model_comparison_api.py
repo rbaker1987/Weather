@@ -565,13 +565,13 @@ class TestTempLocationView:
     def test_temp_location_missing_coordinates(self, client):
         """Test temporary location view with missing coordinates."""
         response = client.get(reverse("weather:temp-location"))
-        # View renders with empty location data
-        assert response.status_code == 200
+        assert response.status_code == 400
 
     def test_temp_location_invalid_coordinates(self, client):
         """Test temporary location view with invalid coordinates."""
         response = client.get(
             reverse("weather:temp-location"), {"latitude": 999, "longitude": -95.3954}
         )
-        # View renders but shows error message
-        assert response.status_code == 200
+        assert response.status_code == 400
+        assert "valid" in response.content.decode()
+        assert "const lat = ;" not in response.content.decode()

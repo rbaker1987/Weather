@@ -1,0 +1,15 @@
+{% extends "weather/base.html" %}
+{% block title %}Weather{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="alert alert-warning" role="alert">
+      <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> We couldn't use that location</h4>
+      <p class="mb-3">{{ error }}</p>
+      <a href="{% url 'weather:home' %}" class="btn btn-primary">
+        <i class="fas fa-arrow-left"></i> Back to Home
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
