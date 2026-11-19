@@ -245,6 +245,23 @@ class TestPlaceView:
         assert 'id="modelComparisonContainer"' in html
         assert "Weather Model Comparison" in html
 
+    def test_current_conditions_and_forecast_come_before_everything_else(self, client):
+        html = client.get("/weather/35.2226,-97.4395/").content.decode()
+
+        order = [
+            html.index('id="currentRow"'),
+            html.index("NWS Hourly"),
+            html.index('id="forecastRow"'),
+            html.index("Weather Radar"),
+            html.index("Weather Model Comparison"),
+            html.index("Location Information"),
+            html.index("Current Climate Indicators"),
+            html.index("Historical Climate Analysis"),
+        ]
+        assert order == sorted(order)
+        # Alerts stay visible, but only as a thin line above current conditions.
+        assert html.index('id="alertsRow"') < order[0]
+
     def test_radar_is_shown_inside_the_covered_area(self, client):
         response = client.get("/weather/35.2226,-97.4395/")
 
@@ -371,7 +388,11 @@ class TestPlacePanelView:
         with patch("requests.get", side_effect=get):
             response = self._get(client, "alerts")
 
-        assert "No Active Alerts" in response.content.decode()
+        html = response.content.decode()
+        assert "No active weather alerts" in html
+        assert (
+            "Active Weather Alerts" not in html
+        )  # no card when there is nothing to show
 
     def test_current_panel_without_observation_shows_a_note(self, client):
         with patch(
