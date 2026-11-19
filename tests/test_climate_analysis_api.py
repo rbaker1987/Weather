@@ -236,3 +236,32 @@ def test_window_mean_indices_average_daily_and_monthly_series():
     assert by_index["ao"]["days_averaged"] == 7
     assert by_index["oni"]["cadence"] == "monthly"
     assert by_index["oni"]["value"] == pytest.approx(0.4)
+
+
+def test_climate_analysis_flags_small_samples_and_multiple_testing(three_years):
+    response = APIClient().get(URL, {**PARAMS, "index": "nao"})
+
+    assert response.status_code == 200
+    for item in response.data["correlations"]:
+        assert item["warnings"] == ["too_few_samples"]  # only 3 years
+    for item in response.data["event_correlations"]:
+        assert "too_few_samples" in item["warnings"]
+    assert response.data["multiple_testing"]["tests"] == 0  # no p-values with n=3
+    assert "Only 3 completed years" in response.data["caveats"][0]
+
+
+def test_climate_analysis_caveats_mention_monthly_indices(monkeypatch, three_years):
+    oni = IndexSeries(
+        "oni",
+        "monthly",
+        "https://example.com/oni",
+        {(year, 1): float(year - 2019) for year in range(2020, 2023)},
+    )
+    monkeypatch.setattr(
+        "weather.api.climate_analysis_api.fetch_index_series_many",
+        lambda _keys: ({"oni": oni}, {}),
+    )
+
+    response = APIClient().get(URL, {**PARAMS, "index": "oni"})
+
+    assert any("ONI is published monthly" in c for c in response.data["caveats"])

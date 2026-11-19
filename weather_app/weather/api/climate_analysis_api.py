@@ -12,10 +12,13 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from weather.climate_analysis import (
+    build_caveats,
     calculate_pearson_correlation,
     calculate_spearman_correlation,
     correlation_significance,
     detrend_by_year,
+    multiple_testing_summary,
+    reliability_warnings,
 )
 from weather.climate_data import (
     INDEX_KEYS,
@@ -124,6 +127,10 @@ class ClimateAnalysisAPIView(APIView):
         event_correlations, event_thresholds = self._event_correlations(
             indices, weekly_weather
         )
+        multiple_testing = multiple_testing_summary(correlations + event_correlations)
+        monthly_indices = {
+            item["index"] for item in indices if item["cadence"] == "monthly"
+        }
         return Response(
             {
                 "latitude": latitude,
@@ -137,6 +144,10 @@ class ClimateAnalysisAPIView(APIView):
                 "correlations": correlations,
                 "event_correlations": event_correlations,
                 "event_thresholds": event_thresholds,
+                "multiple_testing": multiple_testing,
+                "caveats": build_caveats(
+                    len(weekly_weather), multiple_testing, monthly_indices
+                ),
                 "unavailable_indices": sorted(index_errors),
                 "indexes_available": bool(indices),
             }
@@ -255,6 +266,7 @@ class ClimateAnalysisAPIView(APIView):
                         "r_squared": None if result.value is None else result.value**2,
                         "spearman": spearman.value,
                         "detrended_value": detrended.value,
+                        "warnings": reliability_warnings(result.sample_count),
                         **significance,
                     }
                 )
@@ -309,14 +321,16 @@ class ClimateAnalysisAPIView(APIView):
                     if center in index_values
                 ]
                 result = calculate_pearson_correlation(pairs)
+                event_count = sum(1 for is_event in year_events.values() if is_event)
                 results.append(
                     {
                         "index": index_key,
                         "event": event_name,
                         "value": result.value,
                         "sample_count": result.sample_count,
-                        "event_count": sum(
-                            1 for is_event in year_events.values() if is_event
+                        "event_count": event_count,
+                        "warnings": reliability_warnings(
+                            result.sample_count, event_count
                         ),
                         **correlation_significance(result.value, result.sample_count),
                     }

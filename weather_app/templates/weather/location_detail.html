@@ -404,6 +404,7 @@
           </div>
         </div>
         <div id="climateAnalysisStatus" class="mb-2 text-muted small"></div>
+        <ul id="climateAnalysisCaveats" class="mb-2 small text-muted d-none"></ul>
         <div class="climate-results-columns">
           <div id="climateAnalysisHighlights" class="row g-2 mb-3 d-none"></div>
           <div id="climateEventPanel" class="climate-event-summary d-none">
@@ -862,7 +863,7 @@
                   summary.className = 'climate-ranking-item';
                   const variable = item.weather_variable.replace(/_/g, ' ');
                   const displayVariable = variable.replace(/\b\w/g, (letter) => letter.toUpperCase());
-                  summary.textContent = `${displayVariable}: ${displayIndex(item.index)} (${Number(item.value).toFixed(3)})`;
+                  summary.textContent = `${displayVariable}: ${displayIndex(item.index)} (${Number(item.value).toFixed(3)})${item.warnings && item.warnings.length ? ' †' : ''}`;
                   col.appendChild(summary);
                   climateHighlights.appendChild(col);
                 });
@@ -890,7 +891,7 @@
                     summary.className = 'climate-event-item';
                     const label = item.event.replace(/_/g, ' ');
                     const displayLabel = label.charAt(0).toUpperCase() + label.slice(1);
-                    summary.textContent = `${displayLabel}: ${displayIndex(item.index)} (${Number(item.value).toFixed(3)})`;
+                    summary.textContent = `${displayLabel}: ${displayIndex(item.index)} (${Number(item.value).toFixed(3)})${item.warnings && item.warnings.length ? ' †' : ''}`;
                     col.appendChild(summary);
                     climateEventHighlights.appendChild(col);
                   });
@@ -922,11 +923,13 @@
                   cell.textContent = 'N/A';
                 } else {
                   const significant = item.p_value != null && item.p_value < 0.05;
-                  cell.textContent = Number(item.value).toFixed(3) + (significant ? ' *' : '');
+                  const caution = item.warnings && item.warnings.length;
+                  cell.textContent = Number(item.value).toFixed(3) + (significant ? ' *' : '') + (caution ? ' †' : '');
                   const fmt = (number) => (number == null ? 'n/a' : Number(number).toFixed(3));
                   cell.title = `n=${item.sample_count}, R\u00b2=${fmt(item.r_squared)}, Spearman=${fmt(item.spearman)}, `
                     + `detrended r=${fmt(item.detrended_value)}, p=${fmt(item.p_value)}, `
-                    + `95% CI [${fmt(item.ci_low)}, ${fmt(item.ci_high)}]`;
+                    + `95% CI [${fmt(item.ci_low)}, ${fmt(item.ci_high)}]`
+                    + (caution ? ' — † small sample: read with caution' : '');
                   if (significant) cell.classList.add('fw-bold');
                 }
                 row.appendChild(cell);
@@ -938,7 +941,17 @@
           tableBody.replaceChildren(fragment);
           if (climateResults) climateResults.classList.remove('d-none');
           if (climateStatus) {
-                climateStatus.textContent = `Showing ${data.correlations.length} correlations for the centered week around ${data.calendar_day} across ${data.year_count} completed years. * = statistically significant (p < 0.05); hover a value for Spearman, detrended r, and confidence interval.`;
+                climateStatus.textContent = `Showing ${data.correlations.length} correlations for the centered week around ${data.calendar_day} across ${data.year_count} completed years. * = statistically significant (p < 0.05); † = small sample, read with caution; hover a value for Spearman, detrended r, and confidence interval.`;
+          }
+          const caveatList = document.getElementById('climateAnalysisCaveats');
+          if (caveatList) {
+            caveatList.replaceChildren();
+            (data.caveats || []).forEach((text) => {
+              const item = document.createElement('li');
+              item.textContent = text;
+              caveatList.appendChild(item);
+            });
+            caveatList.classList.toggle('d-none', !(data.caveats || []).length);
           }
       } catch (error) {
           console.error('Climate analysis failed:', error);
