@@ -241,6 +241,84 @@ def _safe_current_conditions(place, properties):
         logger.warning("Could not fetch current conditions: %s", exc)
 
 
+def grid_properties(latitude, longitude):
+    """NWS grid metadata for a point (cached; raises ``requests`` errors)."""
+    return _get_json(
+        f"https://api.weather.gov/points/{latitude},{longitude}", TTL_GRID
+    ).get("properties", {})
+
+
+def _iso(value):
+    return value.isoformat() if value else None
+
+
+def fetch_current_panel(latitude, longitude):
+    """Current conditions plus NWS grid info for one panel, as plain data."""
+    properties = grid_properties(latitude, longitude)
+    place = build_place(latitude, longitude)
+    _fetch_current_conditions(place, properties)
+    return {
+        "office": properties.get("gridId", ""),
+        "grid_x": properties.get("gridX"),
+        "grid_y": properties.get("gridY"),
+        "temperature": place.current_temp,
+        "apparent_temperature": place.current_apparent_temp,
+        "conditions": place.current_conditions,
+        "humidity": place.current_humidity,
+        "wind_speed": place.current_wind_speed,
+        "wind_gust": place.current_wind_gust,
+        "wind_direction": place.current_wind_direction,
+        "observed_at": _iso(place.last_observation_time),
+    }
+
+
+def _period_data(period):
+    return {
+        "start": _iso(period.period_start),
+        "end": _iso(period.period_end),
+        "is_daytime": period.is_daytime,
+        "temperature": period.temperature,
+        "temperature_unit": period.temperature_unit,
+        "wind_speed": period.wind_speed,
+        "wind_direction": period.wind_direction,
+        "short_forecast": period.short_forecast,
+        "detailed_forecast": period.detailed_forecast,
+        "precipitation_probability": period.precipitation_probability,
+    }
+
+
+def fetch_forecast_panel(latitude, longitude):
+    """Daily forecast for one panel: a list of {date, day, night} dicts."""
+    forecast_url = grid_properties(latitude, longitude).get("forecast")
+    if not forecast_url:
+        return []
+    daily = _daily_periods(forecast_url, _timezone_for(latitude, longitude))
+    return [
+        {
+            "date": group["date"].isoformat(),
+            "day": _period_data(group["day"]) if group["day"] else None,
+            "night": _period_data(group["night"]) if group["night"] else None,
+        }
+        for group in _group_by_day(daily)
+    ]
+
+
+def fetch_alerts_panel(latitude, longitude):
+    """Active NWS alerts for one panel, as plain data."""
+    return [
+        {
+            "event": alert.event,
+            "headline": alert.headline,
+            "description": alert.description,
+            "severity": alert.severity,
+            "urgency": alert.urgency,
+            "onset": _iso(alert.onset),
+            "expires": _iso(alert.expires),
+        }
+        for alert in _fetch_alerts(latitude, longitude)
+    ]
+
+
 def fetch_place_weather(latitude, longitude, name=None):
     """Fetch current conditions, daily forecast and alerts for a point.
 
@@ -254,9 +332,7 @@ def fetch_place_weather(latitude, longitude, name=None):
     with ThreadPoolExecutor(max_workers=3) as pool:
         alerts_future = pool.submit(_safe_alerts, latitude, longitude)
         try:
-            properties = _get_json(
-                f"https://api.weather.gov/points/{latitude},{longitude}", TTL_GRID
-            ).get("properties", {})
+            properties = grid_properties(latitude, longitude)
             place.nws_office = properties.get("gridId", "")
             place.grid_x = properties.get("gridX")
             place.grid_y = properties.get("gridY")
