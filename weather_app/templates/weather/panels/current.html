@@ -1,0 +1,78 @@
+{% load ui_tags %}
+{% if location.current_temp %}
+<div class="card weather-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          {% include "weather/components/section_header.html" with icon="thermometer-half" title="Current Conditions" %}
+        </div>
+        <button
+          onclick="exportSectionAsImage('currentConditionsSection')"
+          class="btn btn-sm text-white"
+          title="Export as JPG"
+          style="background: transparent; border: none"
+        >
+          <i class="fas fa-download"></i>
+        </button>
+      </div>
+      <div class="card-body" id="currentConditionsSection">
+        <div class="card border-0 temp-bg-{{ location.current_temp }}">
+          <div class="card-body p-4">
+            <div class="row align-items-center">
+              <div class="col-md-6">
+                <h1 class="display-2 mb-3">{{ location.current_temp }}°F</h1>
+                {% if location.current_temp|should_show_feels_like:location.current_apparent_temp %}
+                <h5 class="mb-3" style="opacity: 0.9">
+                  <i class="fas fa-temperature-high"></i> Feels like {{ location.current_apparent_temp }}°F
+                </h5>
+                {% endif %}
+                <h3 class="mb-4">{{ location.current_conditions }}</h3>
+                <div class="d-flex flex-wrap gap-3">
+                  {% if location.current_humidity %}
+                  <div style="font-size: 1.15rem">
+                    <i class="fas fa-tint text-primary"></i>
+                    <strong>Humidity:</strong> {{ location.current_humidity }}%
+                  </div>
+                  {% endif %}
+                  {% if location.current_wind_speed %}
+                  <div style="font-size: 1.15rem">
+                    <i class="fas fa-wind text-primary"></i>
+                    <strong>Wind:</strong> {{ location.current_wind_speed }} mph {{ location.current_wind_direction }}
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-6 text-center">
+                <!-- Placeholder icon; will be replaced after sunrise/sunset fetched -->
+                <i
+                  id="currentConditionsIcon"
+                  data-condition="{{ location.current_conditions|escapejs }}"
+                  class="fas fa-cloud-sun"
+                  style="font-size: 10rem; opacity: 0.3"
+                ></i>
+                <div class="mt-4">
+                  <span class="badge bg-dark me-2" style="font-size: 1.05rem">
+                    <i class="fas fa-sun"></i> Sunrise:
+                    <span id="sunriseDisplay">--:--</span>
+                  </span>
+                  <span class="badge bg-dark" style="font-size: 1.05rem">
+                    <i class="fas fa-moon"></i> Sunset:
+                    <span id="sunsetDisplay">--:--</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% if location.last_observation_time %}
+          <div class="card-footer text-muted" style="font-size: 1rem">
+            <i class="fas fa-clock"></i> Observed
+            <span class="js-localtime" data-dt="{{ location.last_observation_time|date:'c' }}"></span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+{% else %}
+<div class="card weather-card"><div class="card-body text-center text-muted py-4">
+  No current observation is available for this place right now.
+</div></div>
+{% endif %}

@@ -65,6 +65,11 @@ urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
     path("temp-location/", views.TempLocationView.as_view(), name="temp-location"),
     path("weather/<coords:coords>/", views.PlaceView.as_view(), name="place"),
+    path(
+        "weather/<coords:coords>/panel/<str:panel>/",
+        views.PlacePanelView.as_view(),
+        name="place-fragment",
+    ),
     path("models/", views.ModelsView.as_view(), name="models"),
     path(
         "models/<str:model_name>/", views.ModelDetailView.as_view(), name="model-detail"

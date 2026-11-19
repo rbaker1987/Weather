@@ -8,7 +8,6 @@ the others.
 
 import logging
 
-import requests
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -16,6 +15,7 @@ from weather.place_service import (
     fetch_alerts_panel,
     fetch_current_panel,
     fetch_forecast_panel,
+    is_unsupported_place,
     validate_coordinates,
 )
 
@@ -54,11 +54,7 @@ class PlacePanelAPIView(APIView):
             data = fetch(lat, lon)
         except Exception as exc:
             # The NWS answers 404 for points outside its US coverage.
-            if (
-                isinstance(exc, requests.HTTPError)
-                and exc.response is not None
-                and exc.response.status_code == 404
-            ):
+            if is_unsupported_place(exc):
                 return Response(
                     {
                         "status": "error",

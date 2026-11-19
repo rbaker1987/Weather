@@ -1,6 +1,6 @@
 """Tests for major remaining view branches."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from django.core.cache import cache
@@ -59,12 +59,9 @@ class TestModelDetailBranches:
 
 
 @pytest.mark.django_db
-class TestTempLocationFailure:
-    def test_temp_location_handles_forecast_request_failure(self, client):
-        failed_response = Mock()
-        failed_response.raise_for_status.side_effect = RuntimeError("NWS unavailable")
-
-        with patch("requests.get", return_value=failed_response):
+class TestTempLocationShell:
+    def test_temp_location_renders_without_calling_upstreams(self, client):
+        with patch("requests.get", side_effect=AssertionError("no upstream")):
             response = client.get(
                 reverse("weather:temp-location"),
                 {"latitude": "30", "longitude": "-97"},
@@ -72,5 +69,4 @@ class TestTempLocationFailure:
 
         assert response.status_code == 200
         assert response.context["is_temp_location"] is True
-        assert response.context["daily_forecasts"] == []
-        assert response.context["active_alerts"] == []
+        assert "/panel/forecast/" in response.content.decode()
