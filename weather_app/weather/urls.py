@@ -10,6 +10,7 @@ from .api.geocode_api import GeocodeAPIView
 from .api.hourly_forecast_api import HourlyForecastForLocationAPIView
 from .api.model_comparison_api import ModelComparisonAPIView
 from .api.model_spread_api import ModelSpreadAPIView
+from .api.place_panels_api import PlacePanelAPIView
 from .api.summarize_api import SummarizeForecastAPIView
 from .converters import CoordinatesConverter
 
@@ -39,6 +40,7 @@ urlpatterns = [
         ForecastVerificationAPIView.as_view(),
         name="forecast-verification",
     ),
+    path("api/place/<str:panel>/", PlacePanelAPIView.as_view(), name="place-panel"),
     path(
         "api/model-spread/",
         ModelSpreadAPIView.as_view(),
