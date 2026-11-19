@@ -219,6 +219,12 @@ class TestPlaceView:
         for panel in ("alerts", "current", "forecast"):
             assert f"/weather/35.222600,-97.439500/panel/{panel}/" in html
 
+    def test_model_comparison_section_is_still_on_the_page(self, client):
+        html = client.get("/weather/35.2226,-97.4395/").content.decode()
+
+        assert 'id="modelComparisonContainer"' in html
+        assert "Weather Model Comparison" in html
+
     def test_place_page_rejects_out_of_range_coordinates(self, client):
         response = client.get("/weather/95.0,-97.0/")
 
@@ -376,3 +382,14 @@ class TestPlacePanelView:
 
     def test_out_of_range_coordinates_are_rejected(self, client):
         assert self._get(client, "alerts", coords="95.0,-97.0").status_code == 400
+
+    def test_fragments_and_their_errors_carry_the_marker_header(self, client):
+        # The failure goes first: successful upstream responses are cached.
+        with patch("requests.get", side_effect=OSError("down")):
+            failed = self._get(client, "alerts")
+        with patch("requests.get", side_effect=_nws_get):
+            ok = self._get(client, "alerts")
+
+        assert ok["X-Place-Panel"] == "1"
+        assert failed.status_code == 502
+        assert failed["X-Place-Panel"] == "1"

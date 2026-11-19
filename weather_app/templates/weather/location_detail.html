@@ -428,6 +428,38 @@
 </div>
 {% endif %}
 
+<!-- Weather Model Comparison -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-header">
+          {% include "weather/components/section_header.html" with icon="cloud-sun" title="Weather Model Comparison" %}
+      </div>
+      <div class="card-body">
+        <p class="text-muted mb-3">
+          <i class="fas fa-info-circle"></i> Compare predictions from multiple weather
+          models for this location.
+          <a
+            href="{% url 'weather:models' %}"
+            class="btn btn-sm btn-outline-primary float-end"
+          >
+            <i class="fas fa-expand"></i> View Full Comparison
+          </a>
+        </p>
+
+        <div id="modelComparisonContainer">
+          <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading model comparison...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="loading-indicator" style="display: none" class="text-center">
   <div class="spinner-border text-primary" role="status">
     <span class="visually-hidden">Loading...</span>
@@ -1194,6 +1226,12 @@
       mount.setAttribute('aria-busy', 'true');
       try {
           const response = await fetch(mount.dataset.panelUrl);
+          // Only inject fragments this app rendered (they carry a marker header). Anything else,
+          // such as a proxy error page or a bare server error, becomes a retryable message.
+          if (response.headers.get('X-Place-Panel') !== '1') {
+              showPanelError(mount, 'Could not load this section.');
+              return;
+          }
           const html = await response.text();
           // Same-origin HTML rendered by Django templates (autoescaped).
           mount.innerHTML = html;
@@ -1435,6 +1473,7 @@
       const lat = {{ location.latitude }};
       const lon = {{ location.longitude }};
       const container = document.getElementById('modelComparisonContainer');
+      if (!container) return;
 
         // Show loading state
         const loadingWrap = document.createElement('div');

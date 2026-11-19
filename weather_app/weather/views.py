@@ -154,13 +154,18 @@ class PlacePanelView(View):
                 if unsupported
                 else "This section is unavailable right now."
             )
-            return render(
+            response = render(
                 request,
                 "weather/panels/error.html",
                 {"message": message, "retryable": not unsupported},
                 status=404 if unsupported else 502,
             )
-        return render(request, f"weather/panels/{panel}.html", context)
+        else:
+            response = render(request, f"weather/panels/{panel}.html", context)
+        response["X-Place-Panel"] = (
+            "1"  # lets the page tell fragments from proxy error pages
+        )
+        return response
 
 
 class ModelDetailView(TemplateView):
