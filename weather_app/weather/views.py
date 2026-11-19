@@ -14,6 +14,7 @@ from django.views.generic import TemplateView
 from .place_service import (
     PANELS,
     build_place,
+    in_radar_coverage,
     is_unsupported_place,
     panel_context,
     validate_coordinates,
@@ -97,6 +98,7 @@ def _place_context(context, lat, lon, name=None):
     context["latitude"] = latitude
     context["longitude"] = longitude
     context["panel_coords"] = f"{latitude:.6f},{longitude:.6f}"
+    context["radar_supported"] = in_radar_coverage(latitude, longitude)
     context["page_title"] = f"Weather - {place.display_name}"
     context["is_temp_location"] = True
     return context

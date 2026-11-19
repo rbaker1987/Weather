@@ -109,6 +109,23 @@ def test_validate_coordinates():
             place_service.validate_coordinates(*bad)
 
 
+@pytest.mark.parametrize(
+    ("lat", "lon", "expected"),
+    [
+        (35.2, -97.4, True),  # Norman, OK
+        (47.6, -122.3, True),  # Seattle
+        (25.8, -80.2, True),  # Miami
+        (20.0, -60.0, True),  # the corner of the grid
+        (61.2, -149.9, False),  # Anchorage is outside the CONUS grid
+        (21.3, -157.8, False),  # Honolulu
+        (51.5, -0.1, False),  # London
+        (19.9, -97.4, False),  # just south of the grid
+    ],
+)
+def test_in_radar_coverage(lat, lon, expected):
+    assert place_service.in_radar_coverage(lat, lon) is expected
+
+
 def test_parse_wind_speed():
     assert place_service.parse_wind_speed("10 to 20 mph") == 15
     assert place_service.parse_wind_speed("5 mph") == 5
@@ -224,6 +241,22 @@ class TestPlaceView:
 
         assert 'id="modelComparisonContainer"' in html
         assert "Weather Model Comparison" in html
+
+    def test_radar_is_shown_inside_the_covered_area(self, client):
+        response = client.get("/weather/35.2226,-97.4395/")
+
+        assert response.context["radar_supported"] is True
+        html = response.content.decode()
+        assert 'id="radarMap"' in html
+        assert "contiguous United States only" not in html
+
+    def test_radar_is_replaced_by_a_note_outside_the_covered_area(self, client):
+        response = client.get("/weather/51.5,-0.1/")
+
+        assert response.context["radar_supported"] is False
+        html = response.content.decode()
+        assert 'id="radarMap"' not in html
+        assert "contiguous United States only" in html
 
     def test_place_page_rejects_out_of_range_coordinates(self, client):
         response = client.get("/weather/95.0,-97.0/")
