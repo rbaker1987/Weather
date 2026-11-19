@@ -18,21 +18,21 @@ Merged in PR #102 (stateless redesign + model comparison):
 
 ## Status (2026-11-19)
 
-Built as local branches, none pushed yet. Stacks: B1 > B2 > radar > B3; C2 > C3 > C4 > E1; C1, NOMADS removal
+Built and pushed as PRs (dependent PRs are drafts until their predecessors merge). Stacks: B1 > B2 > radar > B3; C2 > C3 > C4 > E1; C1, NOMADS removal
 and the coordinates fix each stand alone.
 
 | Item | Branch | Notes |
 |---|---|---|
-| B1 panel JSON endpoints | `feat/place-panel-endpoints` | `/api/place/<panel>/` |
-| B2 place page shell | `feat/place-shell` | server-rendered fragments per panel, own retry |
-| B3 shareable URLs | `feat/shareable-urls` | models, days, climate date in URL; last place in localStorage |
+| B1 panel JSON endpoints | #103 `feat/place-panel-endpoints` | `/api/place/<panel>/` |
+| B2 place page shell | #104 `feat/place-shell` | server-rendered fragments per panel, own retry |
+| B3 shareable URLs | #106 `feat/shareable-urls` | models, days, climate date in URL; last place in localStorage |
 | B4 NOMADS telemetry | dropped | NOMADS was already disabled; removed instead |
 | C1 real normals | `feat/real-climate-normals` | 1991-2020 from Open-Meteo Archive |
-| C2 sample-size warnings | `feat/climate-sample-warnings` | warnings, multiple-testing summary, caveats |
-| C3 analog years | `feat/climate-analog-years` | scaled-distance ranking vs latest index values |
-| C4 CSV export | `feat/climate-csv-export` | client-side |
-| D1+D2 radar | `feat/radar-regional` | radar already existed; now US-coverage gated |
-| E1+E2 seasonal outlook | `feat/seasonal-outlook` | ENSO only (PDO file stale since Aug 2025) |
+| C2 sample-size warnings | #107 `feat/climate-sample-warnings` | warnings, multiple-testing summary, caveats |
+| C3 analog years | #108 `feat/climate-analog-years` | scaled-distance ranking vs latest index values |
+| C4 CSV export | #109 `feat/climate-csv-export` | client-side |
+| D1+D2 radar | #105 `feat/radar-regional` | radar already existed; now US-coverage gated |
+| E1+E2 seasonal outlook | #110 `feat/seasonal-outlook` | ENSO only (PDO file stale since Aug 2025) |
 | NOMADS removal | `refactor/remove-nomads` | dead code, xarray and cfgrib dropped |
 | Invalid coordinates page | `fix/place-invalid-coordinates` | 400 page instead of broken JS |
 
