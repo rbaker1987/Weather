@@ -903,7 +903,7 @@ class ModelDetailView(TemplateView):
                 forecast_days = str(req_days_int)
             except ValueError:
                 forecast_days = str(config_max_days)
-        # Ensemble selection (for GFS/GEFS via NOMADS)
+        # Ensemble selection
         ensemble = request.GET.get("ens", "det").lower()
         valid_ens = {"det", "control", "mean"} | {f"p{i:02d}" for i in range(1, 31)}
         if ensemble not in valid_ens:
@@ -920,11 +920,6 @@ class ModelDetailView(TemplateView):
 
             import requests
 
-            from .noaa_nomads import fetch_gfs_nomads
-            from .noaa_service import NOAA_MODELS, fetch_noaa_forecast
-
-            # Temporary: rely solely on Open-Meteo for all models (skip NOMADS/NOAA)
-            only_open_meteo = True
             # Try cache first to avoid repeated slow fetches
             try:
                 lat_f = float(lat)
@@ -960,45 +955,7 @@ class ModelDetailView(TemplateView):
                     f"ModelDetailView cache hit for {cache_key} (source={model_source}, cycle={cycle})"
                 )
 
-            # Prefer NOMADS GRIB for GFS deterministic/ensemble to get full fields
-            # Use 45s timeout to allow fetching many forecast hours despite 404s
-            if not only_open_meteo and not data and model_name == "GFS":
-                try:
-                    nomads_start = time.time()
-                    logger.info(
-                        f"Attempting NOMADS fetch for GFS {ensemble} at {lat},{lon}"
-                    )
-                    nomads_data = fetch_gfs_nomads(
-                        float(lat), float(lon), ensemble, timeout=45
-                    )
-                    if nomads_data:
-                        data = nomads_data
-                        model_source = nomads_data.get("model_source", "NOAA-NOMADS")
-                        cycle = nomads_data.get("cycle")
-                        forecast_hours = nomads_data.get("forecast_hours")
-                        # Ensure metadata is in the data dict for caching
-                        data["model_source"] = model_source
-                        data["cycle"] = cycle
-                        nomads_elapsed = time.time() - nomads_start
-                        logger.info(
-                            f"NOMADS successful in {nomads_elapsed:.2f}s: {len(data.get('hourly', {}).get('time', []))} time points"
-                        )
-                        # NOMADS returns UTC times, so run_time is already in UTC
-                        if data.get("hourly", {}).get("time"):
-                            first_time = data["hourly"]["time"][0]
-                            run_time = datetime.fromisoformat(
-                                str(first_time).replace("Z", "+00:00")
-                            )
-                        # Cache will be set after precipitation classification
-                    else:
-                        logger.warning(f"NOMADS returned None for GFS {ensemble}")
-                except Exception as exc:  # noqa: BLE001
-                    nomads_elapsed = time.time() - nomads_start
-                    logger.warning(
-                        f"NOMADS fetch failed in {nomads_elapsed:.2f}s for {model_name} ({ensemble}), falling back: {exc}"
-                    )
-
-            # For GFS: if NOMADS failed, prefer Open-Meteo next for richer fields
+            # GFS comes from Open-Meteo, which has the richer fields
             if not data and model_name == "GFS":
                 try:
                     om_start = time.time()
@@ -1056,28 +1013,6 @@ class ModelDetailView(TemplateView):
                 except Exception as exc:  # noqa: BLE001
                     om_elapsed = time.time() - om_start
                     logger.warning(f"Open-Meteo failed in {om_elapsed:.2f}s: {exc}")
-
-            # If still no data and model in NOAA set, try gridpoint API (surface-only)
-            if not only_open_meteo and not data and model_name in NOAA_MODELS:
-                try:
-                    noaa_data = fetch_noaa_forecast(float(lat), float(lon), model_name)
-                    if noaa_data:
-                        data = noaa_data
-                        model_source = "NOAA"
-                        cycle = None  # NOAA gridpoint doesn't provide cycle info
-                        # Inject metadata into data dict for caching
-                        data["model_source"] = model_source
-                        data["cycle"] = cycle
-                        if data.get("hourly", {}).get("time"):
-                            first_time = data["hourly"]["time"][0]
-                            run_time = datetime.fromisoformat(
-                                first_time.replace("Z", "+00:00")
-                            )
-                        # Cache will be set after precipitation classification
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(
-                        f"NOAA fetch failed for {model_name} after other fallbacks: {exc}"
-                    )
 
             # Fallback for all other models (ICON, ECMWF, AIFS, GEM, etc.) - use Open-Meteo
             if not data and model_name != "GFS":

@@ -48,7 +48,7 @@ cd weather_app && python manage.py runserver 8000
 
 ## Layout
 
-- `weather_app/weather/`: `views.py` (home, models, place and model-detail pages; `ModelDetailView` is ~1.3k lines), `place_service.py`, `regional_pages.py` (East Texas / NM Mountains reports, read on demand from the ralphs-weather-pages repo's `data/today.json`), `noaa_service.py`, `noaa_nomads.py`, `climate_data.py`, `climate_analysis.py`.
+- `weather_app/weather/`: `views.py` (home, models, place and model-detail pages; `ModelDetailView` is ~1.3k lines), `place_service.py`, `regional_pages.py` (East Texas / NM Mountains reports, read on demand from the ralphs-weather-pages repo's `data/today.json`), `climate_data.py`, `climate_analysis.py`.
 - `weather_app/weather/api/`: DRF views (climate analysis/indices/normals, geocode, hourly forecast, model comparison, summarize).
 - `weather_app/weather/core/`: config only. `weather_app/config/`: settings, urls, wsgi.
 - `tests/` at repo root (pytest-django, `config.settings`). Templates in `weather_app/templates/weather/`.

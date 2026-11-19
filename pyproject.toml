@@ -27,8 +27,6 @@ dependencies = [
     "loguru>=0.7.0",
     "timezonefinder>=6.2.0",  # Derive IANA timezone from lat/lon
     "astral>=3.2",  # Accurate sunrise/sunset calculation
-    "xarray>=2023.12.0",  # GRIB decoding support
-    "cfgrib>=0.9.10.4",   # GRIB reader (requires eccodes)
     "pytz>=2024.1",  # Timezone support
 ]
 
