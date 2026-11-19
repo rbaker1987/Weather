@@ -455,6 +455,35 @@
   </div>
 </div>
 
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-seedling"></i> Seasonal analog outlook</h5>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-warning py-2 small" role="note">
+          Analog-based and low skill. This shows what followed similar El Ni&ntilde;o / La Ni&ntilde;a states in past years at this place. It is not a forecast.
+        </div>
+        <button id="loadSeasonalOutlookBtn" type="button" class="btn btn-primary btn-sm">
+          <i class="fas fa-search"></i> Show outlook
+        </button>
+        <div id="seasonalOutlookStatus" class="text-muted small mt-2"></div>
+        <div id="seasonalOutlookResults" class="d-none mt-2">
+          <p id="seasonalOutlookSummary" class="mb-2"></p>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-2">
+              <thead><tr><th>Year</th><th>ENSO (ONI)</th><th>Mean temp (&deg;F)</th><th>Precip total (in)</th></tr></thead>
+              <tbody id="seasonalOutlookBody"></tbody>
+            </table>
+          </div>
+          <ul id="seasonalOutlookCaveats" class="small text-muted mb-0"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="climateAnalysisHelpModal" tabindex="-1" aria-labelledby="climateAnalysisHelpTitle" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -1035,6 +1064,60 @@
           URL.revokeObjectURL(link.href);
       };
   }
+
+  async function loadSeasonalOutlook() {
+      const status = document.getElementById('seasonalOutlookStatus');
+      const results = document.getElementById('seasonalOutlookResults');
+      const params = new URLSearchParams({ lat: '{{ latitude|stringformat:"f" }}', lon: '{{ longitude|stringformat:"f" }}' });
+      status.textContent = 'Finding analog years...';
+      results.classList.add('d-none');
+      try {
+          const response = await fetch(`/api/seasonal-outlook/?${params}`);
+          const data = await response.json();
+          if (!response.ok || data.status !== 'success') {
+              throw new Error(response.status === 429
+                  ? 'Too many requests. Try again later.'
+                  : (data.error || 'The seasonal outlook is unavailable.'));
+          }
+          const number = (value, places) => Number(value).toFixed(places);
+          const signed = (value, places) => (value >= 0 ? '+' : '') + number(value, places);
+          const months = data.target_months.join(', ');
+          document.getElementById('seasonalOutlookSummary').textContent =
+              `ENSO is ${data.enso.phase} (ONI ${signed(data.enso.value, 2)}, ${data.enso.as_of.slice(0, 7)}). `
+              + `In the ${data.analog_years.length} closest past years, ${months} averaged `
+              + `${signed(data.anomaly.temperature, 1)}\u00b0F and ${signed(data.anomaly.precipitation, 1)} in of precipitation `
+              + `versus all ${data.pool_years} years. ${data.agreement.warmer} of ${data.agreement.count} were warmer than average `
+              + `and ${data.agreement.wetter} of ${data.agreement.count} were wetter.`;
+          const body = document.getElementById('seasonalOutlookBody');
+          body.replaceChildren();
+          data.analog_years.forEach((entry) => {
+              const row = document.createElement('tr');
+              [String(entry.year), signed(entry.oni, 2), number(entry.temperature, 1), number(entry.precipitation, 1)]
+                  .forEach((text) => {
+                      const cell = document.createElement('td');
+                      cell.textContent = text;
+                      row.appendChild(cell);
+                  });
+              body.appendChild(row);
+          });
+          const list = document.getElementById('seasonalOutlookCaveats');
+          list.replaceChildren();
+          data.caveats.forEach((text) => {
+              const item = document.createElement('li');
+              item.textContent = text;
+              list.appendChild(item);
+          });
+          status.textContent = '';
+          results.classList.remove('d-none');
+      } catch (error) {
+          status.textContent = error.message || 'The seasonal outlook is unavailable.';
+      }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+      const button = document.getElementById('loadSeasonalOutlookBtn');
+      if (button) button.addEventListener('click', loadSeasonalOutlook);
+  });
 
   function renderAnalogYears(analogs) {
       const panel = document.getElementById('climateAnalogPanel');
