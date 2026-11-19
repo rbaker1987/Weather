@@ -25,6 +25,7 @@ SOURCE = "Open-Meteo Archive (ERA5 reanalysis)"
 class ClimateNormalsThrottle(AnonRateThrottle):
     # Generous: results are cached, but a cold lookup is one large archive call and
     # the models page asks for normals each time the place changes.
+    scope = "climate_normals"  # its own bucket, separate from the analysis limit
     rate = "120/hour"
 
 

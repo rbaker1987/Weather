@@ -225,3 +225,10 @@ class TestClimateNormalsAPI:
 
         assert response.status_code == 502
         assert response.data["status"] == "error"
+
+
+def test_normals_and_analysis_throttles_do_not_share_a_bucket():
+    from weather.api.climate_analysis_api import ClimateAnalysisThrottle
+    from weather.api.climate_normals_api import ClimateNormalsThrottle
+
+    assert ClimateNormalsThrottle.scope != ClimateAnalysisThrottle.scope
