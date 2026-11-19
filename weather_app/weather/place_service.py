@@ -28,6 +28,8 @@ TTL_GRID = 24 * 60 * 60
 TTL_FORECAST = 10 * 60
 TTL_OBSERVATION = 5 * 60
 TTL_ALERTS = 2 * 60
+# The NWS MRMS radar layer covers the contiguous US: (south, north, west, east).
+RADAR_BOUNDS = (20.0, 55.0, -130.0, -60.0)
 _COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 _timezone_finder = None
 
@@ -42,6 +44,12 @@ def validate_coordinates(lat, lon):
     if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
         raise ValueError("Coordinates out of range")
     return latitude, longitude
+
+
+def in_radar_coverage(latitude, longitude):
+    """True when the NWS MRMS radar layer has data for this point."""
+    south, north, west, east = RADAR_BOUNDS
+    return south <= latitude <= north and west <= longitude <= east
 
 
 def parse_wind_speed(wind_speed_str):

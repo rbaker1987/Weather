@@ -466,8 +466,8 @@
   </div>
 </div>
 
-<!-- Weather Radar -->
-{% if location.latitude and location.longitude %}
+<!-- Weather Radar (the MRMS layer covers the contiguous US only) -->
+{% if radar_supported %}
 <div class="row mb-4">
   <div class="col-12">
     <div class="card weather-card">
@@ -488,6 +488,16 @@
       </div>
       <div class="card-body p-0">
         {% include 'weather/components/radar_map.html' with map_id='radarMap' lat=location.latitude lon=location.longitude location_name=location.display_name no_wrapper=True hide_header=True %}
+      </div>
+    </div>
+  </div>
+</div>
+{% elif panel_coords %}
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-body text-center text-muted py-4">
+        <i class="fas fa-broadcast-tower me-1"></i> Radar is available for the contiguous United States only.
       </div>
     </div>
   </div>
