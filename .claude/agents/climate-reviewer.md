@@ -8,6 +8,7 @@ tools: Read, Grep, Glob, Bash
 You review; you do not edit files. Bash is for read-only inspection (git diff, running tests, small recomputation scripts outside the repo).
 
 Verify the change against these documented rules and report violations with file:line:
+
 - Weather source: Open-Meteo Archive, daily, units F / mph / in, per-location timezone.
 - Indices: NAO/AO/PNA from CPC CDAS **daily** files; EPO/WPO from PSL core files standardized **per calendar month over 1991-2020**; ENSO (internal key `oni`) is **monthly**. Monthly indices must never be labeled or treated as daily.
 - Analysis: completed years only (no partial current year); centered 7-day average; events are warm/cool/dry/wet at the top/bottom 10%. Check off-by-one at window edges, Feb 29, year boundaries, NaN/missing handling, and percentile tie handling.

@@ -11,6 +11,7 @@ Run tests from the repo root with the repo venv:
 `PYTHONPATH=weather_app DJANGO_SETTINGS_MODULE=config.settings .venv/Scripts/python.exe -m pytest tests/<file> -q --cov=weather --cov-report=term-missing`
 
 Principles:
+
 - Find the missing lines first (term-missing, or diff-cover against `master`), then write the smallest tests that exercise real behavior, including error branches. Assert on outcomes, not just that code ran.
 - Mock external HTTP (NWS, Open-Meteo, CPC/PSL index files). Tests must never hit the network.
 - The app is moving to stateless (no accounts, no saved locations, no Celery/Redis). Do not write new tests that depend on features being removed; check `CLAUDE.md` direction first.
