@@ -539,6 +539,25 @@
             };
             climateMonthInput.addEventListener('change', updateClimateDays);
             updateClimateDays();
+            const sharedParams = new URLSearchParams(window.location.search);
+            const sharedMonth = Number(sharedParams.get('month'));
+            if (sharedMonth >= 1 && sharedMonth <= 12) {
+              climateMonthInput.value = String(sharedMonth);
+              updateClimateDays();
+              const sharedDay = Number(sharedParams.get('day'));
+              if (sharedDay >= 1) {
+                climateDayInput.value = String(Math.min(sharedDay, climateDayInput.options.length));
+              }
+            }
+            // Keep the chosen calendar day in the URL so the analysis can be shared.
+            const rememberClimateDate = () => {
+              const url = new URL(window.location.href);
+              url.searchParams.set('month', climateMonthInput.value);
+              url.searchParams.set('day', climateDayInput.value);
+              window.history.replaceState(null, '', url);
+            };
+            climateMonthInput.addEventListener('change', rememberClimateDate);
+            climateDayInput.addEventListener('change', rememberClimateDate);
       }
 
       const runClimateBtn = document.getElementById('runClimateAnalysisBtn');
@@ -1292,6 +1311,16 @@
   document.addEventListener('DOMContentLoaded', function () {
       const panels = document.querySelectorAll('[data-panel-url]');
       if (!panels.length) return;
+      // Remember the last place on this device only (nothing is stored on the server).
+      {% if panel_coords %}try {
+          const name = '{{ location.display_name|escapejs }}';
+          localStorage.setItem('weather:lastPlace', JSON.stringify({
+              name: name,
+              path: '{% url "weather:place" coords=panel_coords %}?name=' + encodeURIComponent(name),
+          }));
+      } catch (err) {
+          // Storage can be blocked (private windows); the page works without it.
+      }{% endif %}
       panels.forEach(loadPanel);
       loadPlaceStatus();
   });
