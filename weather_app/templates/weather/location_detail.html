@@ -148,6 +148,146 @@
   </div>
 </div>
 
+{% if panel_coords %}
+<div class="row mb-3" id="alertsRow">
+  <div class="col-12">
+    <div id="alertsPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='alerts' %}" aria-live="polite">
+      <p class="text-muted small mb-0">Checking for weather alerts...</p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if panel_coords %}
+<div class="row mb-4" id="currentRow">
+  <div class="col-12">
+    <div id="currentPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='current' %}" aria-live="polite">
+      <div class="card weather-card"><div class="card-body text-center text-muted py-4">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+        Loading current conditions...
+      </div></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- NWS Hourly -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          {% include "weather/components/section_header.html" with icon="clock" title="NWS Hourly" %} {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
+        </div>
+        <button
+          onclick="exportSectionAsImage('next24HoursBody')"
+          class="btn btn-sm text-white"
+          title="Export as JPG"
+          style="background: transparent; border: none"
+        >
+          <i class="fas fa-download"></i>
+        </button>
+      </div>
+      <div class="card-body" id="next24HoursBody">
+        <div class="text-center py-4">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <p class="mt-3 text-muted">Loading hourly forecast...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if panel_coords %}
+<div class="row mb-4" id="forecastRow">
+  <div class="col-12">
+    <div id="forecastPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='forecast' %}" aria-live="polite">
+      <div class="card weather-card"><div class="card-body text-center text-muted py-4">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+        Loading the forecast...
+      </div></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div id="loading-indicator" style="display: none" class="text-center">
+  <div class="spinner-border text-primary" role="status">
+    <span class="visually-hidden">Loading...</span>
+  </div>
+</div>
+
+<!-- Weather Radar (the MRMS layer covers the contiguous US only) -->
+{% if radar_supported %}
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          {% include "weather/components/section_header.html" with icon="broadcast-tower" title="Radar" icon_class="text-white" %} {% include "weather/components/radar_timestamp.html" %}
+        </div>
+        <div class="btn-group">
+          <button
+            onclick="exportSectionAsImage('radarMap')"
+            class="btn btn-sm text-white"
+            title="Export as JPG"
+            style="background: transparent; border: none"
+          >
+            <i class="fas fa-download"></i>
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        {% include 'weather/components/radar_map.html' with map_id='radarMap' lat=location.latitude lon=location.longitude location_name=location.display_name no_wrapper=True hide_header=True %}
+      </div>
+    </div>
+  </div>
+</div>
+{% elif panel_coords %}
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-body text-center text-muted py-4">
+        <i class="fas fa-broadcast-tower me-1"></i> Radar is available for the contiguous United States only.
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+<!-- Weather Model Comparison -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card weather-card">
+      <div class="card-header">
+          {% include "weather/components/section_header.html" with icon="cloud-sun" title="Weather Model Comparison" %}
+      </div>
+      <div class="card-body">
+        <p class="text-muted mb-3">
+          <i class="fas fa-info-circle"></i> Compare predictions from multiple weather
+          models for this location.
+          <a
+            href="{% url 'weather:models' %}"
+            class="btn btn-sm btn-outline-primary float-end"
+          >
+            <i class="fas fa-expand"></i> View Full Comparison
+          </a>
+        </p>
+
+        <div id="modelComparisonContainer">
+          <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading model comparison...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Location Information -->
 <div class="row mb-4">
   <div class="col-md-8">
@@ -200,32 +340,6 @@
     </div>
   </div>
 </div>
-{% if panel_coords %}
-<div class="row mb-4" id="alertsRow">
-  <div class="col-12">
-    <div id="alertsPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='alerts' %}" aria-live="polite">
-      <div class="card weather-card"><div class="card-body text-center text-muted py-4">
-        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-        Loading weather alerts...
-      </div></div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-{% if panel_coords %}
-<div class="row mb-4" id="currentRow">
-  <div class="col-12">
-    <div id="currentPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='current' %}" aria-live="polite">
-      <div class="card weather-card"><div class="card-body text-center text-muted py-4">
-        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-        Loading current conditions...
-      </div></div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
 <!-- Current Climate Indicators -->
 <div class="row mb-4">
   <div class="col-12">
@@ -386,123 +500,6 @@
   </div>
 </div>
 
-<!-- NWS Hourly -->
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div>
-          {% include "weather/components/section_header.html" with icon="clock" title="NWS Hourly" %} {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
-        </div>
-        <button
-          onclick="exportSectionAsImage('next24HoursBody')"
-          class="btn btn-sm text-white"
-          title="Export as JPG"
-          style="background: transparent; border: none"
-        >
-          <i class="fas fa-download"></i>
-        </button>
-      </div>
-      <div class="card-body" id="next24HoursBody">
-        <div class="text-center py-4">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
-          <p class="mt-3 text-muted">Loading hourly forecast...</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-{% if panel_coords %}
-<div class="row mb-4" id="forecastRow">
-  <div class="col-12">
-    <div id="forecastPanel" data-panel-url="{% url 'weather:place-fragment' coords=panel_coords panel='forecast' %}" aria-live="polite">
-      <div class="card weather-card"><div class="card-body text-center text-muted py-4">
-        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-        Loading the forecast...
-      </div></div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- Weather Model Comparison -->
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-header">
-          {% include "weather/components/section_header.html" with icon="cloud-sun" title="Weather Model Comparison" %}
-      </div>
-      <div class="card-body">
-        <p class="text-muted mb-3">
-          <i class="fas fa-info-circle"></i> Compare predictions from multiple weather
-          models for this location.
-          <a
-            href="{% url 'weather:models' %}"
-            class="btn btn-sm btn-outline-primary float-end"
-          >
-            <i class="fas fa-expand"></i> View Full Comparison
-          </a>
-        </p>
-
-        <div id="modelComparisonContainer">
-          <div class="text-center py-4">
-            <div class="spinner-border text-primary" role="status">
-              <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="mt-2 text-muted">Loading model comparison...</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="loading-indicator" style="display: none" class="text-center">
-  <div class="spinner-border text-primary" role="status">
-    <span class="visually-hidden">Loading...</span>
-  </div>
-</div>
-
-<!-- Weather Radar (the MRMS layer covers the contiguous US only) -->
-{% if radar_supported %}
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div>
-          {% include "weather/components/section_header.html" with icon="broadcast-tower" title="Radar" icon_class="text-white" %} {% include "weather/components/radar_timestamp.html" %}
-        </div>
-        <div class="btn-group">
-          <button
-            onclick="exportSectionAsImage('radarMap')"
-            class="btn btn-sm text-white"
-            title="Export as JPG"
-            style="background: transparent; border: none"
-          >
-            <i class="fas fa-download"></i>
-          </button>
-        </div>
-      </div>
-      <div class="card-body p-0">
-        {% include 'weather/components/radar_map.html' with map_id='radarMap' lat=location.latitude lon=location.longitude location_name=location.display_name no_wrapper=True hide_header=True %}
-      </div>
-    </div>
-  </div>
-</div>
-{% elif panel_coords %}
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card weather-card">
-      <div class="card-body text-center text-muted py-4">
-        <i class="fas fa-broadcast-tower me-1"></i> Radar is available for the contiguous United States only.
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
 {% endblock %}
 {% block extra_js %}
 <script>
@@ -539,6 +536,25 @@
             };
             climateMonthInput.addEventListener('change', updateClimateDays);
             updateClimateDays();
+            const sharedParams = new URLSearchParams(window.location.search);
+            const sharedMonth = Number(sharedParams.get('month'));
+            if (sharedMonth >= 1 && sharedMonth <= 12) {
+              climateMonthInput.value = String(sharedMonth);
+              updateClimateDays();
+              const sharedDay = Number(sharedParams.get('day'));
+              if (sharedDay >= 1) {
+                climateDayInput.value = String(Math.min(sharedDay, climateDayInput.options.length));
+              }
+            }
+            // Keep the chosen calendar day in the URL so the analysis can be shared.
+            const rememberClimateDate = () => {
+              const url = new URL(window.location.href);
+              url.searchParams.set('month', climateMonthInput.value);
+              url.searchParams.set('day', climateDayInput.value);
+              window.history.replaceState(null, '', url);
+            };
+            climateMonthInput.addEventListener('change', rememberClimateDate);
+            climateDayInput.addEventListener('change', rememberClimateDate);
       }
 
       const runClimateBtn = document.getElementById('runClimateAnalysisBtn');
@@ -1292,6 +1308,16 @@
   document.addEventListener('DOMContentLoaded', function () {
       const panels = document.querySelectorAll('[data-panel-url]');
       if (!panels.length) return;
+      // Remember the last place on this device only (nothing is stored on the server).
+      {% if panel_coords %}try {
+          const name = '{{ location.display_name|escapejs }}';
+          localStorage.setItem('weather:lastPlace', JSON.stringify({
+              name: name,
+              path: '{% url "weather:place" coords=panel_coords %}?name=' + encodeURIComponent(name),
+          }));
+      } catch (err) {
+          // Storage can be blocked (private windows); the page works without it.
+      }{% endif %}
       panels.forEach(loadPanel);
       loadPlaceStatus();
   });
