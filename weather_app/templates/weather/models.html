@@ -760,7 +760,8 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
                                 yMax: avgHighTemp,
                                 borderColor: '#dc3545',
                                 borderWidth: 2,
-                                borderDash: [5, 5]
+                                borderDash: [5, 5],
+                                label: { display: true, content: '1991\u20132020 avg high', position: 'start' }
                             }
                         }),
                         ...(avgLowTemp !== null && currentTempLevel === 'surface' && {
@@ -770,7 +771,8 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
                                 yMax: avgLowTemp,
                                 borderColor: '#0dcaf0',
                                 borderWidth: 2,
-                                borderDash: [5, 5]
+                                borderDash: [5, 5],
+                                label: { display: true, content: '1991\u20132020 avg low', position: 'start' }
                             }
                         })
                     }
