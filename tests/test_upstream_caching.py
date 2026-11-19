@@ -67,7 +67,7 @@ def test_open_meteo_error_payloads_are_not_cached():
     assert get.call_count == 2
 
 
-def test_place_weather_is_cached_between_requests():
+def test_place_panels_are_cached_between_requests():
     calls = []
 
     def counting_get(url, **kwargs):
@@ -75,28 +75,38 @@ def test_place_weather_is_cached_between_requests():
         return _nws_get(url, **kwargs)
 
     with patch("requests.get", side_effect=counting_get):
-        first = place_service.fetch_place_weather(35.2, -97.4, "Norman, OK")
+        first = {
+            panel: place_service.panel_context(panel, 35.2, -97.4)
+            for panel in place_service.PANELS
+        }
         made = len(calls)
-        second = place_service.fetch_place_weather(35.2, -97.4, "Norman, OK")
+        second = {
+            panel: place_service.panel_context(panel, 35.2, -97.4)
+            for panel in place_service.PANELS
+        }
 
     assert made > 0
-    assert len(calls) == made  # second request served entirely from cache
-    assert len(first["daily_forecasts"]) == len(second["daily_forecasts"]) == 1
-    assert second["place"].current_temp == first["place"].current_temp
+    assert len(calls) == made  # the second round was served entirely from cache
+    assert len(first["forecast"]["daily_forecasts"]) == 1
+    assert len(second["forecast"]["daily_forecasts"]) == 1
+    assert (
+        second["current"]["location"].current_temp
+        == first["current"]["location"].current_temp
+    )
 
 
-def test_place_alerts_failure_does_not_discard_forecast():
-    def get(url, **kwargs):
-        if "alerts" in url:
-            raise OSError("alerts down")
+def test_shared_grid_lookup_is_fetched_once_across_panels():
+    calls = []
+
+    def counting_get(url, **kwargs):
+        calls.append(url)
         return _nws_get(url, **kwargs)
 
-    with patch("requests.get", side_effect=get):
-        data = place_service.fetch_place_weather(35.2, -97.4)
+    with patch("requests.get", side_effect=counting_get):
+        for panel in place_service.PANELS:
+            place_service.panel_context(panel, 35.2, -97.4)
 
-    assert data["alerts"] == []
-    assert len(data["daily_forecasts"]) == 1
-    assert data["place"].last_forecast_update is not None
+    assert sum("/points/" in url for url in calls) == 1
 
 
 def test_geocode_results_are_cached(monkeypatch):

@@ -72,6 +72,11 @@ urlpatterns = [
     path("temp-location/", views.TempLocationView.as_view(), name="temp-location"),
     path("weather/<coords:coords>/", views.PlaceView.as_view(), name="place"),
     path(
+        "weather/<coords:coords>/panel/<str:panel>/",
+        views.PlacePanelView.as_view(),
+        name="place-fragment",
+    ),
+    path(
         "east-texas/",
         views.RegionalReportView.as_view(
             slug="east-texas", page_title="East Texas Weather"

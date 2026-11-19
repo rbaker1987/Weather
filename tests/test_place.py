@@ -3,6 +3,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 from django.urls import reverse
 
 from weather import place_service
@@ -115,13 +116,19 @@ def test_parse_wind_speed():
     assert place_service.parse_wind_speed(None) == 0
 
 
-@pytest.mark.django_db
-def test_fetch_place_weather_builds_place_without_database():
+def test_alerts_context_lists_active_alerts():
     with patch("requests.get", side_effect=_nws_get):
-        data = place_service.fetch_place_weather(35.2, -97.4, "Norman, OK")
+        context = place_service.panel_context("alerts", 35.2, -97.4)
 
-    place = data["place"]
-    assert place.display_name == "Norman, OK"
+    alerts = context["active_alerts"]
+    assert [a.event for a in alerts] == ["Wind Advisory", "Unknown"]
+    assert alerts[0].severity == "moderate"
+
+
+def test_current_context_builds_a_place_without_database():
+    with patch("requests.get", side_effect=_nws_get):
+        place = place_service.panel_context("current", 35.2, -97.4)["location"]
+
     assert place.nws_office == "OUN"
     assert place.current_temp == 68
     assert place.current_apparent_temp == 71
@@ -130,48 +137,56 @@ def test_fetch_place_weather_builds_place_without_database():
     assert place.current_wind_gust == 19
     assert place.current_wind_direction == "E"
     assert place.current_conditions == "Sunny"
-    assert place.last_forecast_update is not None
 
-    days = data["daily_forecasts"]
+
+def test_forecast_context_groups_periods_by_day():
+    with patch("requests.get", side_effect=_nws_get):
+        context = place_service.panel_context("forecast", 35.2, -97.4)
+
+    days = context["daily_forecasts"]
     assert len(days) == 1  # the 2 AM night period folds into the previous day
     assert days[0]["day"].wind_speed == 15
     assert days[0]["day"].precipitation_probability == 10
     assert days[0]["night"].short_forecast == "Clear"
-    assert [a.event for a in data["alerts"]] == ["Wind Advisory", "Unknown"]
-    assert data["alerts"][0].severity == "moderate"
+    assert context["location"].last_forecast_update is not None
 
 
-def test_fetch_place_weather_survives_upstream_failures():
-    def failing_get(url, **_kwargs):
-        if "/points/" in url:
-            return _json_response(
-                {"properties": {"forecast": "https://nws.test/forecast"}}
-            )
-        raise RuntimeError("down")
+def test_forecast_context_without_forecast_url_is_empty():
+    with patch("requests.get", return_value=_json_response({"properties": {}})):
+        context = place_service.panel_context("forecast", 30.0, -97.0)
 
-    with patch("requests.get", side_effect=failing_get):
-        data = place_service.fetch_place_weather(30.0, -97.0)
-
-    assert data["place"].display_name == "30.00, -97.00"
-    assert data["place"].current_temp is None
-    assert data["daily_forecasts"] == []
-    assert data["alerts"] == []
+    assert context["daily_forecasts"] == []
 
 
-def test_fetch_place_weather_handles_missing_station_data():
+def test_current_context_handles_missing_station_data():
     points = _json_response({"properties": {"observationStations": "https://x/s"}})
     no_stations = _json_response({"features": []})
     no_id = _json_response({"features": [{"properties": {}}]})
-    no_alerts = _json_response({"features": []})
 
     for stations in (no_stations, no_id):
-        with patch("requests.get", side_effect=[points, stations, no_alerts]):
-            data = place_service.fetch_place_weather(30.0, -97.0)
-        assert data["place"].current_temp is None
-        assert data["daily_forecasts"] == []
+        with patch("requests.get", side_effect=[points, stations]):
+            place = place_service.panel_context("current", 30.0, -97.0)["location"]
+        assert place.current_temp is None
 
-    with patch("requests.get", side_effect=RuntimeError("down")):
-        assert place_service.fetch_place_weather(30.0, -97.0)["alerts"] == []
+
+def test_panel_context_lets_upstream_failures_surface():
+    with (
+        patch("requests.get", side_effect=RuntimeError("down")),
+        pytest.raises(RuntimeError),
+    ):
+        place_service.panel_context("alerts", 30.0, -97.0)
+
+
+def test_is_unsupported_place_only_matches_nws_404():
+    def error(status):
+        response = requests.Response()
+        response.status_code = status
+        return requests.HTTPError(response=response)
+
+    assert place_service.is_unsupported_place(error(404)) is True
+    assert place_service.is_unsupported_place(error(500)) is False
+    assert place_service.is_unsupported_place(requests.HTTPError()) is False
+    assert place_service.is_unsupported_place(OSError("down")) is False
 
 
 def test_timezone_lookup_falls_back_when_unavailable():
@@ -188,24 +203,34 @@ def test_timezone_lookup_falls_back_when_unavailable():
 
 @pytest.mark.django_db
 class TestPlaceView:
-    def test_place_page_renders_from_url_without_saving(self, client):
-        with patch("requests.get", side_effect=_nws_get):
+    def test_place_page_is_a_shell_that_makes_no_upstream_calls(self, client):
+        with patch("requests.get", side_effect=AssertionError("no upstream")) as get:
             response = client.get(
                 reverse("weather:place", kwargs={"coords": "35.2226,-97.4395"}),
                 {"name": "Norman, OK"},
             )
 
         assert response.status_code == 200
+        assert get.call_count == 0
         assert response.context["location"].display_name == "Norman, OK"
         assert response.context["latitude"] == pytest.approx(35.2226)
         assert response.context["is_temp_location"] is True
-        assert len(response.context["daily_forecasts"]) == 1
+        html = response.content.decode()
+        for panel in ("alerts", "current", "forecast"):
+            assert f"/weather/35.222600,-97.439500/panel/{panel}/" in html
+
+    def test_model_comparison_section_is_still_on_the_page(self, client):
+        html = client.get("/weather/35.2226,-97.4395/").content.decode()
+
+        assert 'id="modelComparisonContainer"' in html
+        assert "Weather Model Comparison" in html
 
     def test_place_page_rejects_out_of_range_coordinates(self, client):
         response = client.get("/weather/95.0,-97.0/")
 
         assert response.status_code == 200
         assert "valid" in response.context["error"]
+        assert "/panel/" not in response.content.decode()
 
     def test_non_coordinate_path_is_not_matched(self, client):
         assert client.get("/weather/abc/").status_code == 404
@@ -270,3 +295,101 @@ class TestGeocodeAPI:
             response = self._get(client, q="Austin")
 
         assert response.status_code == 502
+
+
+class TestPlacePanelView:
+    def _get(self, client, panel, coords="35.2226,-97.4395"):
+        return client.get(
+            reverse("weather:place-fragment", kwargs={"coords": coords, "panel": panel})
+        )
+
+    @pytest.mark.parametrize(
+        ("panel", "expected"),
+        [
+            ("alerts", "Wind Advisory"),
+            ("current", "Sunny"),
+            ("forecast", "NWS Daily"),
+        ],
+    )
+    def test_each_panel_renders_its_fragment(self, client, panel, expected):
+        with patch("requests.get", side_effect=_nws_get):
+            response = self._get(client, panel)
+
+        assert response.status_code == 200
+        assert expected in response.content.decode()
+        assert "<html" not in response.content.decode()  # a fragment, not a page
+
+    def test_alerts_panel_shows_all_clear_when_there_are_none(self, client):
+        def get(url, **kwargs):
+            if "/alerts/" in url:
+                return _json_response({"features": []})
+            return _nws_get(url, **kwargs)
+
+        with patch("requests.get", side_effect=get):
+            response = self._get(client, "alerts")
+
+        assert "No Active Alerts" in response.content.decode()
+
+    def test_current_panel_without_observation_shows_a_note(self, client):
+        with patch(
+            "requests.get", return_value=_json_response({"properties": {"gridId": "X"}})
+        ):
+            response = self._get(client, "current")
+
+        assert response.status_code == 200
+        assert "No current observation" in response.content.decode()
+
+    def test_forecast_panel_without_periods_shows_a_note(self, client):
+        with patch(
+            "requests.get", return_value=_json_response({"properties": {"gridId": "X"}})
+        ):
+            response = self._get(client, "forecast")
+
+        assert "No Forecast Data Available" in response.content.decode()
+
+    def test_upstream_failure_renders_a_retryable_error(self, client):
+        with patch("requests.get", side_effect=OSError("down")):
+            response = self._get(client, "alerts")
+
+        assert response.status_code == 502
+        html = response.content.decode()
+        assert "unavailable right now" in html
+        assert "data-retry" in html
+
+    def test_place_outside_nws_coverage_is_not_retryable(self, client):
+        error = requests.Response()
+        error.status_code = 404
+        with patch("requests.get", side_effect=requests.HTTPError(response=error)):
+            response = self._get(client, "forecast")
+
+        assert response.status_code == 404
+        html = response.content.decode()
+        assert "does not cover" in html
+        assert "data-retry" not in html
+
+    def test_one_failing_panel_does_not_affect_another(self, client):
+        def get(url, **kwargs):
+            if "/alerts/" in url:
+                raise OSError("alerts down")
+            return _nws_get(url, **kwargs)
+
+        with patch("requests.get", side_effect=get):
+            assert self._get(client, "alerts").status_code == 502
+            assert self._get(client, "forecast").status_code == 200
+
+    def test_unknown_panel_is_404(self, client):
+        assert self._get(client, "radar").status_code == 404
+
+    def test_out_of_range_coordinates_are_rejected(self, client):
+        assert self._get(client, "alerts", coords="95.0,-97.0").status_code == 400
+
+    def test_fragments_and_their_errors_carry_the_marker_header(self, client):
+        # The failure goes first: successful upstream responses are cached.
+        with patch("requests.get", side_effect=OSError("down")):
+            failed = self._get(client, "alerts")
+        with patch("requests.get", side_effect=_nws_get):
+            ok = self._get(client, "alerts")
+
+        assert ok["X-Place-Panel"] == "1"
+        assert failed.status_code == 502
+        assert failed["X-Place-Panel"] == "1"

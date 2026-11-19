@@ -1,0 +1,49 @@
+{% load ui_tags %}
+{% if daily_forecasts %}
+<div class="card weather-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <h5 class="mb-0">
+            <i class="fas fa-calendar-alt text-white"></i>
+            NWS Daily
+          </h5>
+          {% include "weather/components/forecast_update_timestamp.html" with location=location extra_classes='text-white d-block mt-1' show_label=True %}
+        </div>
+        <button
+          onclick="exportForecastAsImage()"
+          class="btn btn-sm text-white"
+          title="Export as JPG"
+          style="background: transparent; border: none"
+        >
+          <i class="fas fa-download"></i>
+        </button>
+      </div>
+      <div class="card-body" id="forecastExportSection">
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
+          {% for day_group in daily_forecasts %}
+          <div class="col">
+            <div class="card border-0 h-100">
+              <div class="card-header text-center py-2">
+                <strong>{{ day_group.date|date:"D, M j" }}</strong>
+              </div>
+              <div class="card-body p-0 d-flex flex-column">
+                {% if day_group.day %} {% include "weather/components/forecast_period_card.html" with period=day_group.day period_type="day" %} {% endif %} {% if day_group.night %} {% include "weather/components/forecast_period_card.html" with period=day_group.night period_type="night" %} {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+{% else %}
+<div class="card weather-card">
+      <div class="card-body text-center py-5">
+        <i class="fas fa-cloud-meatball fa-5x text-muted mb-4"></i>
+        <h3 class="text-muted">No Forecast Data Available</h3>
+        <p class="text-muted mb-4" style="font-size: 1.15rem">
+          NWS forecasts are not available for this place. View the model comparison
+          section below for forecast data.
+        </p>
+      </div>
+    </div>
+{% endif %}
