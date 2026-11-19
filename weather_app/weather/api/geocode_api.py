@@ -4,18 +4,19 @@ import logging
 import re
 from urllib.parse import quote
 
-import requests
 from django.urls import reverse
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from weather.place_service import validate_coordinates
+from weather.upstream import get_json
 
 logger = logging.getLogger("weather")
 
 GEOCODER_URL = "https://geocoding-api.open-meteo.com/v1/search"
 GEOCODER_TIMEOUT = 8
+GEOCODER_CACHE_SECONDS = 24 * 60 * 60
 MAX_RESULTS = 5
 MAX_QUERY_LENGTH = 200
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
@@ -78,18 +79,20 @@ class GeocodeAPIView(APIView):
             return Response({"results": [_result(latitude, longitude, label)]})
 
         try:
-            response = requests.get(
-                GEOCODER_URL,
-                params={
-                    "name": query,
-                    "count": MAX_RESULTS,
-                    "language": "en",
-                    "format": "json",
-                },
-                timeout=GEOCODER_TIMEOUT,
+            items = (
+                get_json(
+                    GEOCODER_URL,
+                    params={
+                        "name": query,
+                        "count": MAX_RESULTS,
+                        "language": "en",
+                        "format": "json",
+                    },
+                    timeout=GEOCODER_TIMEOUT,
+                    ttl=GEOCODER_CACHE_SECONDS,
+                ).get("results")
+                or []
             )
-            response.raise_for_status()
-            items = response.json().get("results") or []
         except Exception as exc:
             logger.warning("Geocoding failed for %r: %s", query, exc)
             return Response({"error": "Place search is unavailable"}, status=502)

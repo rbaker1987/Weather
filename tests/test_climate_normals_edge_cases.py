@@ -1,24 +1,13 @@
 """Additional climate-normals API edge-case tests."""
 
 from unittest.mock import Mock, patch
-from uuid import uuid4
 
 import pytest
-from django.test import RequestFactory
 
 from weather.api.climate_normals_api import ClimateNormalsAPIView
 
 
-@pytest.mark.django_db
 class TestClimateNormalsEdgeCases:
-    def test_get_returns_error_for_missing_location(self):
-        request = RequestFactory().get("/climate", {"location_id": str(uuid4())})
-
-        response = ClimateNormalsAPIView.as_view()(request)
-
-        assert response.status_code == 500
-        assert response.data["status"] == "error"
-
     @pytest.mark.parametrize(
         "payload",
         [

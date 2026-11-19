@@ -192,15 +192,15 @@ function applySelectedLocation() {
                     window.location.href = `/models/?latitude=${selectedTempLat}&longitude=${selectedTempLon}&forecast_days=${forecastDays}`;
                 }, 150);
             }
-        } else if (currentPath.includes('/locations/') || currentPath.includes('/temp-location/')) {
-            // Location detail or temp location page - reload with temp coordinates
+        } else if (currentPath.includes('/weather/') || currentPath.includes('/temp-location/')) {
+            // Place page - reload with the newly picked coordinates
             setTimeout(() => {
-                window.location.href = `/temp-location/?latitude=${selectedTempLat}&longitude=${selectedTempLon}`;
+                window.location.href = `/weather/${selectedTempLat},${selectedTempLon}/`;
             }, 150);
         } else {
-            // Default - go to temp location detail view
+            // Default - go to the place page for these coordinates
             setTimeout(() => {
-                window.location.href = `/temp-location/?latitude=${selectedTempLat}&longitude=${selectedTempLon}`;
+                window.location.href = `/weather/${selectedTempLat},${selectedTempLon}/`;
             }, 150);
         }
     } else {

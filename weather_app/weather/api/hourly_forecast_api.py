@@ -13,10 +13,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from timezonefinder import TimezoneFinder
 
+from ..upstream import get_json
 from ..utils.apparent_temperature import calculate_apparent_temperature
 
 # Simple in-memory cache for timezone lookups keyed by rounded lat/lon
 _TZ_CACHE = {}
+
+GRID_CACHE_SECONDS = 24 * 60 * 60
+HOURLY_CACHE_SECONDS = 10 * 60
 
 logger = logging.getLogger("weather")
 
@@ -62,9 +66,9 @@ class HourlyForecastForLocationAPIView(APIView):
 
             # Get grid point
             grid_url = f"https://api.weather.gov/points/{lat_f:.4f},{lon_f:.4f}"
-            grid_response = requests.get(grid_url, headers=headers, timeout=10)
-            grid_response.raise_for_status()
-            grid_data = grid_response.json()
+            grid_data = get_json(
+                grid_url, headers=headers, timeout=10, ttl=GRID_CACHE_SECONDS
+            )
 
             # Get hourly forecast URL
             hourly_forecast_url = grid_data.get("properties", {}).get("forecastHourly")
@@ -75,11 +79,12 @@ class HourlyForecastForLocationAPIView(APIView):
                 )
 
             # Fetch hourly forecast
-            hourly_response = requests.get(
-                hourly_forecast_url, headers=headers, timeout=10
+            hourly_data = get_json(
+                hourly_forecast_url,
+                headers=headers,
+                timeout=10,
+                ttl=HOURLY_CACHE_SECONDS,
             )
-            hourly_response.raise_for_status()
-            hourly_data = hourly_response.json()
 
             periods = hourly_data.get("properties", {}).get("periods", [])
 

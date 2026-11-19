@@ -14,14 +14,6 @@ document.addEventListener('DOMContentLoaded', function () {
     new bootstrap.Modal(modal);
   });
 
-  // Auto-refresh dashboard data
-  if (document.querySelector('.dashboard-content')) {
-    setInterval(refreshDashboardStats, 300000); // 5 minutes
-  }
-
-  // Initialize search functionality
-  initializeSearch();
-
   // Initialize weather cards
   initializeWeatherCards();
 });
@@ -164,63 +156,6 @@ async function apiRequest(url, options = {}) {
   return response.json();
 }
 
-// Dashboard functionality
-function refreshDashboardStats() {
-  fetch('/api/stats/')
-    .then((response) => response.json())
-    .then((data) => {
-      updateDashboardStats(data);
-    })
-    .catch((error) => {
-      console.error('Error refreshing dashboard stats:', error);
-    });
-}
-
-function updateDashboardStats(stats) {
-  // Update stat cards if they exist
-  const locationCount = document.getElementById('location-count');
-  const forecastCount = document.getElementById('forecast-count');
-  const alertCount = document.getElementById('alert-count');
-
-  if (locationCount && stats.total_locations !== undefined) {
-    locationCount.textContent = stats.total_locations;
-  }
-  if (forecastCount && stats.total_forecasts !== undefined) {
-    forecastCount.textContent = stats.total_forecasts;
-  }
-  if (alertCount && stats.active_alerts !== undefined) {
-    alertCount.textContent = stats.active_alerts;
-  }
-}
-
-// Search functionality
-function initializeSearch() {
-  const searchInput = document.getElementById('search-locations');
-  if (searchInput) {
-    let searchTimeout;
-
-    searchInput.addEventListener('input', function (e) {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        const searchTerm = e.target.value;
-        if (searchTerm.length > 2 || searchTerm.length === 0) {
-          performSearch(searchTerm);
-        }
-      }, 300);
-    });
-  }
-}
-
-function performSearch(searchTerm) {
-  const url = new URL(window.location);
-  if (searchTerm) {
-    url.searchParams.set('search', searchTerm);
-  } else {
-    url.searchParams.delete('search');
-  }
-  window.location = url;
-}
-
 // Weather card functionality
 function initializeWeatherCards() {
   // Add click handlers for forecast cards (show hourly modal)
@@ -232,17 +167,6 @@ function initializeWeatherCards() {
       }
       const forecastDate = this.dataset.forecastDate;
       showHourlyForecastModal(forecastDate);
-    });
-  });
-  // Existing location card click (unchanged)
-  document.querySelectorAll('.weather-card[data-location-id]').forEach((card) => {
-    card.style.cursor = 'pointer';
-    card.addEventListener('click', function (e) {
-      if (e.target.closest('.dropdown') || e.target.closest('button')) {
-        return;
-      }
-      const locationId = this.dataset.locationId;
-      window.location.href = `/weather/locations/${locationId}/`;
     });
   });
 }
@@ -398,115 +322,6 @@ window.loadNext6Hours = async function loadNext6Hours(lat, lon) {
   }
 };
 
-// Location management functions
-async function addLocation(formData) {
-  try {
-    showLoading('Adding location...');
-
-    const data = await apiRequest('/api/locations/', {
-      method: 'POST',
-      body: JSON.stringify(formData),
-    });
-
-    hideLoading();
-    showNotification('Location added successfully!', 'success');
-
-    // Reload page after a short delay
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
-
-    return data;
-  } catch (error) {
-    hideLoading();
-    showNotification('Error adding location: ' + error.message, 'error');
-    throw error;
-  }
-}
-
-async function updateForecast(locationId) {
-  try {
-    showLoading('Updating data...');
-
-    const data = await apiRequest(`/api/locations/${locationId}/update_forecast/`, {
-      method: 'POST',
-    });
-
-    hideLoading();
-    showNotification('Data update triggered successfully!', 'success');
-
-    // Refresh forecast data
-    setTimeout(() => {
-      window.location.reload();
-    }, 2000);
-
-    return data;
-  } catch (error) {
-    hideLoading();
-    showNotification('Error updating forecast: ' + error.message, 'error');
-    throw error;
-  }
-}
-
-async function deleteLocation(locationId) {
-  if (!confirm('Are you sure you want to remove this location?')) {
-    return;
-  }
-
-  try {
-    showLoading('Removing location...');
-
-    await fetch(`/api/locations/${locationId}/`, {
-      method: 'DELETE',
-      headers: {
-        'X-CSRFToken': getCsrfToken(),
-      },
-    });
-
-    hideLoading();
-    showNotification('Location removed successfully!', 'success');
-
-    // Remove the card from DOM or reload page
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
-  } catch (error) {
-    hideLoading();
-    showNotification('Error removing location: ' + error.message, 'error');
-  }
-}
-
-async function toggleLocationEnabled(locationId, currentState) {
-  try {
-    showLoading(currentState ? 'Disabling location...' : 'Enabling location...');
-
-    const response = await fetch(`/api/locations/${locationId}/toggle_enabled/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCsrfToken(),
-      },
-    });
-
-    const data = await response.json();
-
-    if (data.status === 'success') {
-      hideLoading();
-      showNotification(data.message, 'success');
-
-      // Reload the page to reflect the updated state
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } else {
-      throw new Error(data.message || 'Failed to toggle location');
-    }
-  } catch (error) {
-    hideLoading();
-    showNotification('Error toggling location: ' + error.message, 'error');
-  }
-}
-
 // UI Helper functions
 function showLoading(message = 'Loading...') {
   const loadingEl = document.getElementById('loading-indicator');
@@ -608,10 +423,6 @@ function calculateApparentTemperature(tempF, humidityPct, windSpeedMph) {
 
 // Export functions for global use
 window.weatherApp = {
-  addLocation,
-  updateForecast,
-  deleteLocation,
-  toggleLocationEnabled,
   getCsrfToken,
   apiRequest,
   showNotification,

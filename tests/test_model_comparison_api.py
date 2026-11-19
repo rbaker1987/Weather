@@ -1,14 +1,11 @@
 """Tests for model comparison API."""
 
 from datetime import datetime, timedelta
-from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pytest
 from django.core.cache import cache
 from django.urls import reverse
-
-from weather.models import Location
 
 
 @pytest.mark.django_db
@@ -263,13 +260,7 @@ class TestModelDetailView:
         assert hourly["precip_type"] == ["snow", "rain"]
         assert hourly["snow_liquid_ratio"] == [12.0, 1.0]
 
-    def test_model_detail_uses_session_location_and_normalizes_parameters(self, client):
-        location = Location.objects.create(
-            name="Fallback", latitude=30, longitude=-97, is_active=True
-        )
-        session = client.session
-        session["location_ids"] = [str(location.id)]
-        session.save()
+    def test_model_detail_normalizes_parameters(self, client):
         cache.set(
             "model_detail:v4:ICON:det:30.0:-97.0:days:7",
             {
@@ -281,12 +272,17 @@ class TestModelDetailView:
 
         response = client.get(
             reverse("weather:model-detail", kwargs={"model_name": "ICON"}),
-            {"forecast_days": "bad", "ens": "unsupported"},
+            {
+                "latitude": "30.0",
+                "longitude": "-97.0",
+                "forecast_days": "bad",
+                "ens": "unsupported",
+            },
         )
 
         assert response.status_code == 200
-        assert response.context["latitude"] == location.latitude
-        assert response.context["longitude"] == location.longitude
+        assert response.context["latitude"] == "30.0"
+        assert response.context["longitude"] == "-97.0"
         assert response.context["forecast_days"] == "7"
         assert response.context["ensemble"] == "det"
         assert response.context["run_time"].tzinfo is not None
@@ -485,19 +481,6 @@ class TestModelsView:
         """Test models comparison page renders."""
         response = client.get(reverse("weather:models"))
         assert response.status_code == 200
-
-    def test_models_view_with_location(self, client):
-        """Test models view with location selection."""
-        location = Location.objects.create(
-            name="Test City", latitude=Decimal("32.4910"), longitude=Decimal("-95.3954")
-        )
-        session = client.session
-        session["location_ids"] = [str(location.id)]
-        session.save()
-
-        response = client.get(reverse("weather:models"))
-        assert response.status_code == 200
-        assert "locations" in response.context
 
 
 @pytest.mark.django_db

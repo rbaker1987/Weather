@@ -1,6 +1,6 @@
 ---
 name: climate-reviewer
-description: Read-only reviewer for changes to the historical climate and teleconnection analysis (climate_analysis.py, climate_analysis_api.py, import_climate_data.py, location_detail.html). Checks statistical and data-labeling correctness against the documented rules. Use after any change in those areas.
+description: Read-only reviewer for changes to the historical climate and teleconnection analysis (climate_analysis.py, climate_analysis_api.py, climate_data.py, location_detail.html). Checks statistical and data-labeling correctness against the documented rules. Use after any change in those areas.
 model: opus
 tools: Read, Grep, Glob, Bash
 ---
@@ -13,6 +13,6 @@ Verify the change against these documented rules and report violations with file
 - Analysis: completed years only (no partial current year); centered 7-day average; events are warm/cool/dry/wet at the top/bottom 10%. Check off-by-one at window edges, Feb 29, year boundaries, NaN/missing handling, and percentile tie handling.
 - UX/API: the user selects month/day and clicks Run; no request on page load. The endpoint is rate-limited per IP and rejects inactive locations (the Location model is being removed under the stateless redesign; confirm the check has a sensible equivalent).
 - Correlation stats: sample sizes reported, no strong claims from tiny n, no mixing of lagged and unlagged series.
-- Missing indices load synchronously when Celery is off; no assumption of a persistent DB.
+- Data is fetched on request from NOAA/Open-Meteo and cached in memory; no assumption of a persistent DB.
 
 Be skeptical of plausible-looking numbers: where possible, recompute a small case by hand or with a quick script and compare. Report only real issues, ordered by severity, each with a concrete failure scenario. If nothing is wrong, say so.

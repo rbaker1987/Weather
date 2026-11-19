@@ -1,12 +1,17 @@
 """API endpoint for fetching weather model comparison data."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from weather.upstream import get_json
+
 logger = logging.getLogger("weather")
+
+MODEL_CACHE_SECONDS = 10 * 60
 
 
 class ModelComparisonAPIView(APIView):
@@ -106,11 +111,14 @@ class ModelComparisonAPIView(APIView):
         }
 
         try:
-            response = requests.get(
-                config["url"], params=params, headers=headers, timeout=10.0
+            data = get_json(
+                config["url"],
+                params=params,
+                headers=headers,
+                timeout=10.0,
+                ttl=MODEL_CACHE_SECONDS,
+                cacheable=lambda payload: "error" not in payload,
             )
-            response.raise_for_status()
-            data = response.json()
 
             # Check for API errors
             if "error" in data:
@@ -145,11 +153,16 @@ class ModelComparisonAPIView(APIView):
         self, models: list[str], lat: float, lon: float, forecast_days: int
     ) -> list[dict]:
         """Fetch data for specified models."""
-        results = []
-        for model_name in models:
-            result = self.fetch_model_data(model_name, lat, lon, forecast_days)
-            results.append(result)
-        return results
+        if not models:
+            return []
+        # Each model is an independent upstream call; run them concurrently.
+        with ThreadPoolExecutor(max_workers=len(models)) as pool:
+            return list(
+                pool.map(
+                    lambda name: self.fetch_model_data(name, lat, lon, forecast_days),
+                    models,
+                )
+            )
 
     def get(self, request):
         """Handle GET request for model comparison data."""

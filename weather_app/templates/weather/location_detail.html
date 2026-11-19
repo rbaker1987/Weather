@@ -119,16 +119,9 @@
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb">
         <li class="breadcrumb-item">
-          <a href="{% url 'weather:dashboard' %}">Home</a>
+          <a href="{% url 'weather:home' %}">Home</a>
         </li>
-        {% if not is_temp_location %}
-        <li class="breadcrumb-item">
-          <a href="{% url 'weather:location-list' %}">Locations</a>
-        </li>
-        <li class="breadcrumb-item active">{{ location.name }}</li>
-        {% else %}
-        <li class="breadcrumb-item active">Temporary Location</li>
-        {% endif %}
+        <li class="breadcrumb-item active">{{ location.display_name }}</li>
       </ol>
     </nav>
 
@@ -136,40 +129,17 @@
       <div>
         <h1 class="display-5 mb-0">
           <i class="fas fa-map-marker-alt text-primary"></i> {{ location.display_name }}
-          {% if not is_temp_location %}
-          <button
-            class="btn btn-sm btn-outline-secondary"
-            onclick="openEditLocationModal()"
-            title="Edit Location"
-          >
-            <i class="fas fa-edit"></i>
-          </button>
-          {% endif %}
         </h1>
         <p class="text-muted">
-          {% if is_temp_location %}Temporary location - not saved{% else %}Weather
-          details and forecasts{% endif %}
+          Places are not saved - bookmark this page to come back to it.
         </p>
       </div>
       <div>
         <div class="row g-2 align-items-end page-actions">
-          {% include "weather/components/location_selector.html" with locations=locations current_location_id=location.id latitude=location.latitude longitude=location.longitude location_col_class='col-12 col-md-auto' map_btn_col_class='col-12 col-md-auto' %} {% if not is_temp_location %}
+          {% include "weather/components/location_selector.html" with locations=locations current_location_id=location.id latitude=location.latitude longitude=location.longitude location_col_class='col-12 col-md-auto' map_btn_col_class='col-12 col-md-auto' %}
           <div class="col-12 col-md-auto">
-            <button
-              class="btn btn-outline-primary"
-              onclick="updateForecast('{{ location.id }}')"
-            >
-              <i class="fas fa-sync-alt"></i> Update Data
-            </button>
-          </div>
-          {% endif %}
-          <div class="col-12 col-md-auto">
-            <a
-              href="{% if is_temp_location %}{% url 'weather:dashboard' %}{% else %}{% url 'weather:location-list' %}{% endif %}"
-              class="btn btn-secondary"
-            >
-              <i class="fas fa-arrow-left"></i> {% if is_temp_location %}Back to Home{%
-              else %}Back to Locations{% endif %}
+            <a href="{% url 'weather:home' %}" class="btn btn-secondary">
+              <i class="fas fa-arrow-left"></i> Back to Home
             </a>
           </div>
         </div>
@@ -239,125 +209,7 @@
     </div>
   </div>
 </div>
-{% if not is_temp_location %}
-<!-- Unified Add/Edit Location Modal (reused from location_list) -->
-<div class="modal fade" id="addLocationModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="addLocationModalTitle">
-          <i class="fas fa-plus text-primary" id="addLocationIcon"></i>
-          <span id="addLocationTitleText">Add New Location</span>
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        {% csrf_token %}
-        <form id="addLocationForm">
-          <div class="mb-3">
-            <label for="locationInput" class="form-label">Location</label>
-            <div class="input-group">
-              <input
-                type="text"
-                class="form-control"
-                id="locationInput"
-                placeholder="Enter city, state, or ZIP code"
-                required
-              />
-              <button
-                class="btn btn-outline-secondary"
-                type="button"
-                id="useMyLocationBtn"
-                onclick="useMyLocation()"
-              >
-                <i class="fas fa-location-arrow"></i> Use My Location
-              </button>
-            </div>
-            <div class="form-text">Examples: "Austin, TX", "78701", "New York, NY"</div>
-            <div id="geolocationStatus" class="mt-2"></div>
-          </div>
-          <div class="mb-3">
-            <label for="displayNameInput" class="form-label"
-              >Display Name (optional)</label
-            >
-            <input
-              type="text"
-              class="form-control"
-              id="displayNameInput"
-              placeholder="e.g., Home, Work, School"
-            />
-          </div>
-          <div class="mb-3">
-            <label for="locationTypeSelect" class="form-label">Location Type</label>
-            <select class="form-select" id="locationTypeSelect">
-              <option value="">General</option>
-              <option value="home">Home</option>
-              <option value="work">Work</option>
-              <option value="school">School</option>
-            </select>
-            <div class="form-text">Used for ordering and labeling.</div>
-          </div>
-          <div class="row mb-3">
-            <div class="col-md-6">
-              <label for="addLatitude" class="form-label">Latitude</label>
-              <input
-                type="number"
-                step="0.000001"
-                class="form-control"
-                id="addLatitude"
-                placeholder="Click map or use My Location"
-                readonly
-              />
-            </div>
-            <div class="col-md-6">
-              <label for="addLongitude" class="form-label">Longitude</label>
-              <input
-                type="number"
-                step="0.000001"
-                class="form-control"
-                id="addLongitude"
-                placeholder="Click map or use My Location"
-                readonly
-              />
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Click on map to set location</label>
-            <div
-              id="addLocationMap"
-              style="
-                height: 300px;
-                border-radius: 8px;
-                border: 1px solid #dee2e6;
-                background-color: #f8f9fa;
-              "
-            ></div>
-            <small class="text-muted"
-              >Tip: Use the map to fine-tune the point, or click "Use My
-              Location".</small
-            >
-          </div>
-          <!-- Removed status toggles to match original Add Location component -->
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-          Cancel
-        </button>
-        <button
-          type="button"
-          id="addLocationBtn"
-          class="btn btn-primary"
-          onclick="submitLocationForm()"
-          disabled
-        >
-          <i class="fas fa-save"></i> <span id="addLocationBtnText">Add Location</span>
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %} {% comment %} Active Alerts moved above Current Conditions {% endcomment %}
+{% comment %} Active Alerts moved above Current Conditions {% endcomment %}
 <div class="row mb-4">
   <div class="col-12">
     <div class="card weather-card">
@@ -502,19 +354,8 @@
         {% include "weather/components/section_header.html" with icon="globe-americas" title="Latest Available Climate Indicators" %}
       </div>
       <div class="card-body">
-        {% if current_index_values %}
-        <div class="climate-current-grid">
-          {% for indicator in current_index_values %}
-          <div class="climate-current-item">
-            <span class="climate-current-label">{% if indicator.index_key == "oni" %}ENSO{% else %}{{ indicator.index_key|upper }}{% endif %}</span>
-            <strong>{{ indicator.value|floatformat:3 }}</strong>
-            <small class="text-muted">{{ indicator.observation_date|date:"M j, Y" }} · {% if indicator.source_metadata.cadence == "daily" %}Daily{% elif indicator.source_metadata.cadence == "monthly" %}Monthly{% else %}Unknown cadence{% endif %}</small>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-muted mb-0">No current climate-index values are available yet.</p>
-        {% endif %}
+        <div id="climateCurrentIndices" class="climate-current-grid d-none"></div>
+        <p id="climateCurrentStatus" class="text-muted mb-0">Loading current climate-index values...</p>
       </div>
     </div>
   </div>
@@ -799,22 +640,10 @@
       <div class="card-body text-center py-5">
         <i class="fas fa-cloud-meatball fa-5x text-muted mb-4"></i>
         <h3 class="text-muted">No Forecast Data Available</h3>
-        {% if is_temp_location %}
         <p class="text-muted mb-4" style="font-size: 1.15rem">
-          This is a temporary location. View the model comparison section below for
-          forecast data, or save this as a permanent location to fetch NWS forecasts.
+          NWS forecasts are not available for this place. View the model comparison
+          section below for forecast data.
         </p>
-        {% else %}
-        <p class="text-muted mb-4" style="font-size: 1.15rem">
-          Click "Update Data" to fetch the latest weather data for this location.
-        </p>
-        <button
-          class="btn btn-primary btn-lg"
-          onclick="updateForecast('{{ location.id }}')"
-        >
-          <i class="fas fa-sync-alt"></i> Update Data
-        </button>
-        {% endif %}
       </div>
     </div>
   </div>
@@ -857,15 +686,6 @@
 {% endblock %}
 {% block extra_js %}
 <script>
-  // Update forecast functionality specific to detail page
-  function updateForecast(locationId) {
-      if (!locationId || locationId === 'None' || locationId === 'null') {
-          alert('Cannot update forecast for temporary locations.');
-          return;
-      }
-      weatherApp.updateForecast(locationId);
-  }
-
   // Convert ISO timestamps to user's local time on detail page
   document.addEventListener('DOMContentLoaded', function () {
       const els = document.querySelectorAll('.js-localtime[data-dt]');
@@ -910,8 +730,42 @@
       loadNext24Hours();
   });
 
+  async function loadClimateIndicators() {
+      const grid = document.getElementById('climateCurrentIndices');
+      const status = document.getElementById('climateCurrentStatus');
+      if (!grid || !status) return;
+      try {
+          const response = await fetch("{% url 'weather:climate-indices' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const data = await response.json();
+          if (!response.ok || !Array.isArray(data.indices) || data.indices.length === 0) {
+              throw new Error('No values');
+          }
+          data.indices.forEach((item) => {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'climate-current-item';
+              const label = document.createElement('span');
+              label.className = 'climate-current-label';
+              label.textContent = item.index === 'oni' ? 'ENSO' : item.index.toUpperCase();
+              const value = document.createElement('strong');
+              value.textContent = Number(item.value).toFixed(3);
+              const meta = document.createElement('small');
+              meta.className = 'text-muted';
+              const when = new Date(item.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              meta.textContent = `${when} · ${item.cadence === 'daily' ? 'Daily' : 'Monthly'}`;
+              wrapper.append(label, value, meta);
+              grid.appendChild(wrapper);
+          });
+          grid.classList.remove('d-none');
+          status.classList.add('d-none');
+      } catch (error) {
+          status.textContent = 'Current climate-index values are unavailable right now.';
+      }
+  }
+  document.addEventListener('DOMContentLoaded', loadClimateIndicators);
+
   async function loadClimateAnalysis() {
-      const locationId = '{{ location.id|default:"None" }}';
+      const climateLat = '{{ location.latitude|default:"" }}';
+      const climateLon = '{{ location.longitude|default:"" }}';
       const climateStatus = document.getElementById('climateAnalysisStatus');
       const climateResults = document.getElementById('climateAnalysisResults');
       const climateEmpty = document.getElementById('climateAnalysisEmpty');
@@ -924,9 +778,9 @@
       const climateDayInput = document.getElementById('climateAnalysisDay');
       const displayIndex = (index) => (index || 'N/A').toUpperCase();
 
-      if (!locationId || locationId === 'None' || !climateMonthInput || !climateDayInput) {
+      if (!climateLat || !climateLon || !climateMonthInput || !climateDayInput) {
           if (climateStatus) {
-              climateStatus.textContent = 'Historical climate analysis is only available for saved locations.';
+              climateStatus.textContent = 'Historical climate analysis needs a place with coordinates.';
           }
           if (climateResults) climateResults.classList.add('d-none');
           if (climateHighlights) climateHighlights.classList.add('d-none');
@@ -957,7 +811,7 @@
       if (climatePrompt) climatePrompt.classList.add('d-none');
 
       try {
-          const url = `{% url 'weather:climate-analysis' %}?location_id=${encodeURIComponent(locationId)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo&index=wpo`;
+          const url = `{% url 'weather:climate-analysis' %}?lat=${encodeURIComponent(climateLat)}&lon=${encodeURIComponent(climateLon)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&index=nao&index=ao&index=pna&index=oni&index=epo&index=wpo`;
             const response = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const responseText = await response.text();
             let data;
@@ -966,11 +820,6 @@
             } catch (parseError) {
               throw new Error(`Climate analysis request returned HTTP ${response.status}.`);
             }
-
-              if (response.status === 202 && data.status === 'loading') {
-                if (climateStatus) climateStatus.textContent = data.message;
-                return;
-              }
 
           if (!response.ok || !data || !Array.isArray(data.correlations)) {
               throw new Error(data?.error || 'Climate analysis request failed.');
@@ -984,9 +833,7 @@
               if (climateEmpty) climateEmpty.classList.remove('d-none');
               if (climateStatus) {
                 climateStatus.textContent = data.indexes_available
-                  ? (data.weather_loaded
-                    ? 'Historical weather data was loaded, but no matched climate observations were found for this week.'
-                    : 'No matched climate observations were found for this week.')
+                  ? 'No matched climate observations were found for this week.'
                   : 'No published climate-index values are available for this selected week yet.';
               }
               return;
@@ -1442,130 +1289,6 @@
   function getCsrfToken() {
       return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
   }
-
-  // Open unified edit modal populated with current location data
-  function openEditLocationModal() {
-      {% if is_temp_location %}
-      alert('Temporary locations cannot be edited. Please save as a permanent location first.');
-      return;
-      {% endif %}
-      const modalEl = document.getElementById('addLocationModal');
-      if (!modalEl) return;
-      // Switch titles/icons
-      document.getElementById('addLocationTitleText').textContent = 'Edit Location';
-      const icon = document.getElementById('addLocationIcon');
-      if (icon) { icon.className = 'fas fa-edit text-warning'; }
-      document.getElementById('addLocationBtnText').textContent = 'Save Changes';
-
-      // Enable button immediately (we already have data)
-      const addBtn = document.getElementById('addLocationBtn');
-      if (addBtn) addBtn.disabled = false;
-
-      // Populate fields
-      const locNameInput = document.getElementById('locationInput');
-      if (locNameInput) {
-          locNameInput.value = '{{ location.name|escapejs }}';
-          // store existing coordinates as dataset (used by submit logic)
-          {% if location.latitude and location.longitude %}
-          locNameInput.dataset.latitude = '{{ location.latitude }}';
-          locNameInput.dataset.longitude = '{{ location.longitude }}';
-          {% endif %}
-      }
-      const displayNameInput = document.getElementById('displayNameInput');
-      if (displayNameInput) displayNameInput.value = '{{ location.custom_name|escapejs }}';
-      const typeSelect = document.getElementById('locationTypeSelect');
-      if (typeSelect) typeSelect.value = '{{ location.location_type }}';
-      const latEl = document.getElementById('addLatitude');
-      const lonEl = document.getElementById('addLongitude');
-      {% if location.latitude and location.longitude %}
-      if (latEl) latEl.value = '{{ location.latitude }}';
-      if (lonEl) lonEl.value = '{{ location.longitude }}';
-      {% endif %}
-      // Status switches removed; existing flags remain unchanged on save if not sent.
-
-      // Show modal
-      const bsModal = new bootstrap.Modal(modalEl);
-      bsModal.show();
-  }
-
-  // Submit add/edit form (POST for new, PATCH for existing)
-  function submitLocationForm() {
-      {% if is_temp_location %}
-      alert('Cannot save temporary location from this view.');
-      return;
-      {% endif %}
-      const locNameInput = document.getElementById('locationInput');
-      const displayNameInput = document.getElementById('displayNameInput');
-      const typeSelect = document.getElementById('locationTypeSelect');
-      const latEl = document.getElementById('addLatitude');
-      const lonEl = document.getElementById('addLongitude');
-
-      if (!locNameInput.value.trim()) {
-          alert('Location name is required');
-          return;
-      }
-
-      const data = {
-          name: locNameInput.value.trim(),
-          ...(displayNameInput.value.trim() ? { custom_name: displayNameInput.value.trim() } : {}),
-          ...(typeSelect.value ? { location_type: typeSelect.value } : {})
-          // Status flags intentionally omitted to preserve existing values
-      };
-
-      // Include coordinates if present (either from dataset or inputs)
-      const latVal = latEl && latEl.value ? latEl.value : (locNameInput.dataset.latitude || null);
-      const lonVal = lonEl && lonEl.value ? lonEl.value : (locNameInput.dataset.longitude || null);
-      if (latVal && lonVal) {
-          data.latitude = Number(parseFloat(latVal).toFixed(6));
-          data.longitude = Number(parseFloat(lonVal).toFixed(6));
-      }
-
-      // Determine if editing existing (always editing on detail page)
-      const method = 'PATCH';
-      const url = '/api/locations/{{ location.id }}/';
-
-      fetch(url, {
-          method: method,
-          headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': getCsrfToken()
-          },
-          body: JSON.stringify(data)
-      })
-      .then(r => {
-          if (!r.ok) {
-              return r.json().then(err => { throw new Error(JSON.stringify(err)); });
-          }
-          return r.json();
-      })
-      .then(resp => {
-          // Close modal and reload to reflect changes
-          const modal = bootstrap.Modal.getInstance(document.getElementById('addLocationModal'));
-          if (modal) modal.hide();
-          window.location.reload();
-      })
-      .catch(err => {
-          console.error('Failed to save location:', err);
-          alert('Error saving location: ' + err.message);
-      });
-  }
-
-  // Get CSRF token from cookies
-  function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== '') {
-          const cookies = document.cookie.split(';');
-          for (let i = 0; i < cookies.length; i++) {
-              const cookie = cookies[i].trim();
-              if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                  break;
-              }
-          }
-
-      }
-      return cookieValue;
-  }
 </script>
 
 <!-- HTML2Canvas for image export -->
@@ -1967,18 +1690,8 @@
             if (opt.value === 'custom' && opt.dataset.lat) {
               const lat = encodeURIComponent(opt.dataset.lat);
               const lon = encodeURIComponent(opt.dataset.lon);
-              window.location.href = `/temp-location/?latitude=${lat}&longitude=${lon}`;
-              return;
+              window.location.href = `/weather/${lat},${lon}/`;
             }
-
-            const locationId = opt.value;
-            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (!uuidPattern.test(locationId)) {
-              console.warn('Invalid location id selected', locationId);
-              return;
-            }
-
-            window.location.href = `/locations/${encodeURIComponent(locationId)}/`;
           });
         }
   });

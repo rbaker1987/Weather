@@ -379,31 +379,16 @@ Weather{% endblock %} {% block extra_css %}
     }
     function createTempChartWithNormals() {
       if(currentLat && currentLon) {
-        const urlParams = new URLSearchParams(window.location.search);
-        let locationIdToFetch = urlParams.get('location_id');
-        if(!locationIdToFetch || locationIdToFetch === 'custom') {
-          const locationSelect = document.getElementById('detailLocationSelect');
-          if(locationSelect && locationSelect.options && locationSelect.options.length > 0) {
-            const selected = locationSelect.options[locationSelect.selectedIndex];
-            if(selected && selected.value && selected.value !== '' && selected.value !== 'custom') {
-              locationIdToFetch = selected.value;
+        fetch(`/api/climate-normals/?lat=${encodeURIComponent(currentLat)}&lon=${encodeURIComponent(currentLon)}`)
+          .then(r => r.json())
+          .then(resp => {
+            if((resp.status === 'success' || resp.status === 'cached') && resp.avg_high_temp !== null && resp.avg_low_temp !== null) {
+              createTempChart(resp.avg_high_temp, resp.avg_low_temp);
+            } else {
+              createTempChart(null, null);
             }
-          }
-        }
-        if(locationIdToFetch && locationIdToFetch !== 'custom') {
-          fetch(`/api/climate-normals/?location_id=${locationIdToFetch}`)
-            .then(r => r.json())
-            .then(resp => {
-              if((resp.status === 'success' || resp.status === 'cached') && resp.avg_high_temp !== null && resp.avg_low_temp !== null) {
-                createTempChart(resp.avg_high_temp, resp.avg_low_temp);
-              } else {
-                createTempChart(null, null);
-              }
-            })
-            .catch(() => createTempChart(null, null));
-        } else {
-          createTempChart(null, null);
-        }
+          })
+          .catch(() => createTempChart(null, null));
       } else {
         createTempChart(null, null);
       }
@@ -807,17 +792,12 @@ Weather{% endblock %} {% block extra_css %}
       if(!opt || !opt.dataset.lat) return;
       const lat = opt.dataset.lat;
       const lon = opt.dataset.lon;
-      const locationId = opt.value; // Get the location ID from the option
       const selectedModel = modelSel ? modelSel.value : '{{ model_name }}';
       console.log('reloadDetail: lat=', lat, 'lon=', lon, 'model=', selectedModel);
       rebuildDayOptions(selectedModel);
       const days = ensureDaysWithinModel(selectedModel);
       const base = `/models/${selectedModel}/`;
-      // Include location_id in the URL if it's a saved location (not 'custom')
-      let url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
-      if(locationId && locationId !== 'custom') {
-        url += `&location_id=${locationId}`;
-      }
+      const url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
       console.log('Navigating to:', url);
       window.location.href = url;
     }
@@ -832,19 +812,16 @@ Weather{% endblock %} {% block extra_css %}
       // Prefer the currently selected location in the dropdown (avoids stale URL coords)
       let lat = null;
       let lon = null;
-      let locationId = null;
       if(locSel && locSel.options && locSel.selectedIndex >= 0){
         const opt = locSel.options[locSel.selectedIndex];
         lat = opt?.dataset?.lat || null;
         lon = opt?.dataset?.lon || null;
-        locationId = opt?.value || null;
       }
       // Fallback to URL params if no dropdown coordinates
       if(!lat || !lon){
         const urlParams = new URLSearchParams(window.location.search);
         lat = urlParams.get('latitude');
         lon = urlParams.get('longitude');
-        locationId = urlParams.get('location_id');
       }
 
       if(lat && lon) {
@@ -852,10 +829,7 @@ Weather{% endblock %} {% block extra_css %}
         rebuildDayOptions(selectedModel);
         const days = forceExpand ? expandDaysToModelMax(selectedModel) : ensureDaysWithinModel(selectedModel);
         const base = `/models/${selectedModel}/`;
-        let url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
-        if(locationId && locationId !== 'custom') {
-          url += `&location_id=${locationId}`;
-        }
+        const url = `${base}?latitude=${lat}&longitude=${lon}&forecast_days=${days}`;
         console.log('Navigating to:', url);
         window.location.href = url;
       } else {

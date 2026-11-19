@@ -4,14 +4,14 @@ A Django web application for weather forecasting using the National Weather Serv
 
 ## Features
 
-- **Web Interface**: Dashboard with browser geolocation and location management
+- **Web Interface**: Home page with "use my location" or place search; the place is carried in the URL (`/weather/<lat>,<lon>/`)
 - **Model Comparison**: Compare forecasts from 8 weather models (GFS, ICON, ECMWF, AIFS, GEM, HRRR, NAM, RGEM)
 - **Temporary Locations**: View full forecasts for any map coordinates without saving
 - **Animated Radar**: Interactive weather radar maps with play/pause controls and time scrubbing
-- **REST API**: Full CRUD operations for locations and forecasts
+- **REST API**: Geocoding, hourly forecasts, model comparison, and climate analysis endpoints
 - **Real-time Data**: Current conditions, hourly/daily forecasts, and weather alerts from NWS
 - **Timezone Support**: Accurate sunrise/sunset times with automatic timezone detection
-- **Session Storage**: Locations stored per browser session (no user accounts)
+- **Stateless**: No user accounts and no saved locations; nothing is stored per visitor
 - **Component-based UI**: Reusable Django template components
 - **Responsive Design**: Bootstrap 5 with temperature-based color coding
 
@@ -29,7 +29,7 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-Visit <http://localhost:8000> to access the dashboard.
+Visit <http://localhost:8000> and use your location or search for a place.
 
 ## Development
 
@@ -76,32 +76,23 @@ The server will start at http://127.0.0.1:8000/
 
 To stop the server, press **`Ctrl + C`** in the terminal.
 
-**Importing Historical Climate Data:**
+**Historical Climate Analysis:**
 
 The historical climate analysis compares a centered seven-day average around one
-calendar day (month/day) across every completed year. It loads missing daily weather
+calendar day (month/day) across every completed year. It fetches daily weather
 from the Open-Meteo archive and the
 NOAA teleconnection indices automatically: daily CPC values for `nao`, `ao`, `pna`,
 daily PSL values for `epo` and `wpo`, and monthly values for `oni` (ENSO), which is
 only published monthly. Analysis averages each index over the same 7-day window as the
-weather and reports Pearson r, Spearman, detrended r, r², p-value and 95% CI:
-
-```bash
-python manage.py import_climate_data \
-  --location-id <location-uuid> \
-  --start-date 2025-09-01 \
-  --end-date 2025-09-30 \
-  --teleconnection-file indices.csv
-```
-
-The optional CSV must contain `index,date,value` columns for manual imports. The
+weather and reports Pearson r, Spearman, detrended r, r², p-value and 95% CI.
+Nothing is stored: data is fetched on request and cached in memory. The
 Historical Climate Analysis panel asks for only a month and day, then reports
 annual weather samples and the strongest index relationship for each weather
 value. It also identifies warm, cool, dry, and wet weeks as the top or bottom 10%
 of the selected day's historical weekly distribution. These labels are
 season-agnostic statistical departures, not claims of a heat wave, arctic outbreak,
 drought, or flood.
-NOAA's monthly feed is expanded onto matching calendar dates for each year.
+NOAA's monthly feed is applied to every day of its month.
 
 **UI Hint Plan:**
 
@@ -121,25 +112,20 @@ mobile and desktop widths without obscuring the primary actions.
   - **Regional Models**: HRRR (2-day), NAM (3-day), RGEM (2-day)
   - Interactive temperature and precipitation charts
   - Model-specific forecast day limits
-- **Locations**: Add locations by name/zip code, view detailed forecasts
+- **Places**: Search by city, ZIP code, or coordinates, or use your browser location
 - **Temporary Locations**: Click any map point to see full forecast data without saving
 - **Forecasts**: 7-day forecasts with hourly breakdowns
 - **Animated Radar**: Interactive weather radar with animation controls (play/pause, time slider)
-- **Alerts**: Active weather alerts for your locations
+- **Alerts**: Active NWS weather alerts for the chosen place
 - **Timezone Support**: Accurate sunrise/sunset times with proper timezone handling
 
-**Note:** Locations are session-only and clear when browser closes.
+**Note:** Places are carried in the URL; nothing is saved in the session or database.
 
 ### REST API Examples
 
 ```bash
-# Create location
-curl -X POST http://localhost:8000/api/locations/ \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Austin, TX"}'
-
-# Get forecasts
-curl http://localhost:8000/api/locations/{id}/forecasts/
+# Search for a place
+curl "http://localhost:8000/api/geocode/?q=Austin,%20TX"
 
 # Get hourly forecast
 curl "http://localhost:8000/api/hourly_forecast/?lat=30.2672&lon=-97.7431&hours=24"
@@ -162,12 +148,11 @@ python manage.py update_forecasts --locations uuid1 uuid2
 
 ### Data Flow
 
-1. User adds location (geolocation or manual entry)
-2. Coordinates geocoded via Nominatim API (if needed)
-3. Location ID stored in session
-4. NWS API provides forecasts/alerts
-5. Apparent temperature calculated (heat index/wind chill)
-6. Data cached in SQLite, refreshed automatically
+1. User shares their browser location or searches for a place (`/api/geocode/`)
+2. The browser navigates to `/weather/<lat>,<lon>/?name=`
+3. NWS API provides forecasts/alerts on demand
+4. Apparent temperature calculated (heat index/wind chill)
+5. Responses cached briefly; the SQLite database is a disposable cache
 
 ### Key Components
 
@@ -179,7 +164,6 @@ python manage.py update_forecasts --locations uuid1 uuid2
 - `weather/utils/` - Geocoding, apparent temperature, datetime utilities
 - `weather/api/hourly_forecast_api.py` - Hourly forecast API (NWS)
 - `weather/api/model_comparison_api.py` - Multi-model forecast comparison via Open-Meteo
-- `weather/middleware.py` - Session location management
 
 **Frontend:**
 
@@ -193,34 +177,11 @@ python manage.py update_forecasts --locations uuid1 uuid2
 - `temp_bg_class` - Returns temperature-based background class
 - `should_show_feels_like` - Shows feels-like when ≥3°F difference
 
-### Session Storage
-
-- All location IDs stored in `request.session['location_ids']`
-- No authentication system
-- Locations cleared on session expiry/browser close
-- Views automatically filter by session IDs
-
 ### Database
 
 - **Development**: SQLite (`db.sqlite3`, excluded from git)
 - **Production**: PostgreSQL/MySQL recommended
-- **Persistence**: Forecast cache only; locations are session-based
-
-## Optional: Background Tasks
-
-Enable automatic forecast updates with Celery:
-
-```bash
-# Install and start Redis
-redis-server
-
-# Start Celery worker (terminal 1)
-cd weather_app
-celery -A config worker --loglevel=info
-
-# Start Celery beat scheduler (terminal 2)
-celery -A config beat --loglevel=info
-```
+- **Persistence**: Disposable cache only; places are carried in the URL
 
 ## Configuration
 
@@ -230,7 +191,6 @@ Environment variables (optional):
 DJANGO_SECRET_KEY=your-secret-key
 DJANGO_DEBUG=False
 DATABASE_URL=postgresql://user:pass@localhost/weather
-REDIS_URL=redis://localhost:6379/0
 ```
 
 ## Render Deployment

@@ -12,11 +12,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 import sys
-from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
-from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -88,7 +86,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "weather.middleware.SessionLocationMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -224,65 +221,13 @@ MODEL_DETAIL_CACHE_SECONDS = int(
     os.getenv("MODEL_DETAIL_CACHE_SECONDS", str(CACHE_TIMEOUT))
 )
 
-# Caching configuration: prefer Redis via REDIS_URL, fallback to local memory
-REDIS_URL = os.getenv("REDIS_URL")
-CELERY_ENABLED = bool(os.getenv("CELERY_BROKER_URL") or REDIS_URL)
-if REDIS_URL:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": REDIS_URL,
-            "OPTIONS": {
-                "db": int(os.getenv("REDIS_DB", "0")),
-            },
-            "TIMEOUT": CACHE_TIMEOUT,
-        }
+# Caching: process-local memory only (no Redis; the host is stateless and free)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "weather-local-cache",
+        "TIMEOUT": CACHE_TIMEOUT,
     }
-else:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "weather-local-cache",
-            "TIMEOUT": CACHE_TIMEOUT,
-        }
-    }
-
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL") or REDIS_URL
-if not CELERY_BROKER_URL:
-    CELERY_BROKER_URL = "redis://localhost:6379/0"
-
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND") or REDIS_URL
-if not CELERY_RESULT_BACKEND:
-    CELERY_RESULT_BACKEND = "cache+memory://"
-    CELERY_TASK_IGNORE_RESULT = True
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-
-# Celery Beat periodic task schedule
-CELERY_BEAT_SCHEDULE = {
-    "update-current-conditions-every-15-min": {
-        "task": "weather.tasks.update_all_current_conditions",
-        "schedule": timedelta(minutes=15),
-        "options": {"queue": "default", "priority": 8},
-    },
-    "update-forecasts-every-15-min": {
-        "task": "weather.tasks.update_all_forecasts",
-        "schedule": timedelta(minutes=15),
-        "options": {"queue": "default", "priority": 7},
-    },
-    "update-alerts-every-15-min": {
-        "task": "weather.tasks.update_all_alerts",
-        "schedule": timedelta(minutes=15),
-        "options": {"queue": "default", "priority": 7},
-    },
-    "cleanup-cached-weather-data-daily": {
-        "task": "weather.tasks.cleanup_cached_weather_data",
-        "schedule": crontab(hour=2, minute=0),  # 2 AM daily
-        "options": {"queue": "default", "priority": 5},
-    },
 }
 
 # Logging configuration

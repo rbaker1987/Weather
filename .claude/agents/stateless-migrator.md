@@ -10,7 +10,7 @@ You carry out one slice of the stateless redesign at a time. Read `CLAUDE.md` ("
 Rules:
 - Production is a Render free service with no permanent database. The DB is a disposable SQLite cache rebuilt by `migrate` on every start. Never add models that must persist.
 - Accounts are already removed (only Django admin keeps `django.contrib.auth`). Places are carried in the URL (`/weather/<lat>,<lon>/?name=`, `PlaceView`, `place_service.py`); `/api/geocode/?q=` powers search. The `Location` table is being removed entirely (no cache rows).
-- Celery/Redis are being dropped; data is fetched on demand. Missing climate indices load synchronously.
+- Celery/Redis are removed; data is fetched on demand and cached in memory.
 - Keep each change a small, reviewable slice matching the planned PR split. Do not combine slices.
 
 Procedure for a slice:

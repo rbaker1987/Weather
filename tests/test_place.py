@@ -6,7 +6,6 @@ import pytest
 from django.urls import reverse
 
 from weather import place_service
-from weather.models import Location
 
 POINTS = {
     "properties": {
@@ -140,7 +139,6 @@ def test_fetch_place_weather_builds_place_without_database():
     assert days[0]["night"].short_forecast == "Clear"
     assert [a.event for a in data["alerts"]] == ["Wind Advisory", "Unknown"]
     assert data["alerts"][0].severity == "moderate"
-    assert Location.objects.count() == 0
 
 
 def test_fetch_place_weather_survives_upstream_failures():
@@ -202,18 +200,6 @@ class TestPlaceView:
         assert response.context["latitude"] == pytest.approx(35.2226)
         assert response.context["is_temp_location"] is True
         assert len(response.context["daily_forecasts"]) == 1
-        assert Location.objects.count() == 0
-
-    def test_place_page_lists_session_locations_for_selector(self, client):
-        saved = Location.objects.create(name="Saved", is_active=True)
-        session = client.session
-        session["location_ids"] = [str(saved.id)]
-        session.save()
-
-        with patch("requests.get", side_effect=_nws_get):
-            response = client.get("/weather/35.0,-97.0/")
-
-        assert list(response.context["locations"]) == [saved]
 
     def test_place_page_rejects_out_of_range_coordinates(self, client):
         response = client.get("/weather/95.0,-97.0/")
@@ -223,18 +209,6 @@ class TestPlaceView:
 
     def test_non_coordinate_path_is_not_matched(self, client):
         assert client.get("/weather/abc/").status_code == 404
-
-    def test_selector_failure_falls_back_to_empty_list(self, client):
-        with (
-            patch("requests.get", side_effect=_nws_get),
-            patch(
-                "weather.views.Location.objects.filter", side_effect=RuntimeError("db")
-            ),
-        ):
-            response = client.get("/weather/35.0,-97.0/")
-
-        assert response.status_code == 200
-        assert list(response.context["locations"]) == []
 
 
 @pytest.mark.django_db

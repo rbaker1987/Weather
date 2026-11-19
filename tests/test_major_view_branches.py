@@ -41,8 +41,10 @@ class TestModelDetailBranches:
         )
 
         assert response.status_code == 200
-        assert "no fallback location" in response.context["error"]
+        assert "Choose a place on the map" in response.context["error"]
         assert response.context["data"] is None
+        assert response.context["locations"] == []
+        assert response.context["locations_json"] == "[]"
 
     def test_model_detail_handles_open_meteo_failure(self, client):
         with patch("requests.get", side_effect=RuntimeError("service down")):
