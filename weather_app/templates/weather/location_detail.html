@@ -433,6 +433,18 @@
             <tbody id="climateAnalysisTableBody"></tbody>
           </table>
         </div>
+        <div id="climateAnalogPanel" class="mt-3 d-none">
+          <h6 class="climate-subsection-title">Closest analog years</h6>
+          <p id="climateAnalogSummary" class="text-muted small mb-2"></p>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr><th>Year</th><th>Match</th><th>Index values</th><th>Mean temp (&deg;F)</th><th>Precip (in/day)</th></tr>
+              </thead>
+              <tbody id="climateAnalogBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -943,6 +955,7 @@
           if (climateStatus) {
                 climateStatus.textContent = `Showing ${data.correlations.length} correlations for the centered week around ${data.calendar_day} across ${data.year_count} completed years. * = statistically significant (p < 0.05); † = small sample, read with caution; hover a value for Spearman, detrended r, and confidence interval.`;
           }
+          renderAnalogYears(data.analogs);
           const caveatList = document.getElementById('climateAnalysisCaveats');
           if (caveatList) {
             caveatList.replaceChildren();
@@ -960,6 +973,44 @@
           }
           if (climateEmpty) climateEmpty.classList.remove('d-none');
       }
+  }
+
+  function renderAnalogYears(analogs) {
+      const panel = document.getElementById('climateAnalogPanel');
+      const body = document.getElementById('climateAnalogBody');
+      const summary = document.getElementById('climateAnalogSummary');
+      if (!panel || !body || !summary) return;
+      body.replaceChildren();
+      if (!analogs || !analogs.years || !analogs.years.length) {
+          panel.classList.add('d-none');
+          return;
+      }
+      const number = (value, places) => (value == null ? 'n/a' : Number(value).toFixed(places));
+      const names = analogs.indices_used.map((key) => key.toUpperCase()).join(', ');
+      const now = analogs.indices_used
+          .map((key) => `${key.toUpperCase()} ${number(analogs.current[key], 2)}`)
+          .join(', ');
+      summary.textContent = `Matched on ${names} (latest values: ${now}) against ${analogs.year_count} past years. `
+          + `The ${analogs.years.length} closest years averaged ${number(analogs.analog_mean.mean_temperature, 1)}\u00b0F `
+          + `and ${number(analogs.analog_mean.precipitation, 2)} in/day, versus ${number(analogs.all_years_mean.mean_temperature, 1)}\u00b0F `
+          + `and ${number(analogs.all_years_mean.precipitation, 2)} in/day across all years. Lower match scores are closer.`;
+      analogs.years.forEach((entry) => {
+          const row = document.createElement('tr');
+          const cells = [
+              String(entry.year),
+              number(entry.distance, 2),
+              analogs.indices_used.map((key) => `${key.toUpperCase()} ${number(entry.indices[key], 2)}`).join(', '),
+              number(entry.mean_temperature, 1),
+              number(entry.precipitation, 2),
+          ];
+          cells.forEach((text) => {
+              const cell = document.createElement('td');
+              cell.textContent = text;
+              row.appendChild(cell);
+          });
+          body.appendChild(row);
+      });
+      panel.classList.remove('d-none');
   }
 
   // Load next 24 hours forecast for location
