@@ -10,6 +10,7 @@ from .api.geocode_api import GeocodeAPIView
 from .api.hourly_forecast_api import HourlyForecastForLocationAPIView
 from .api.model_comparison_api import ModelComparisonAPIView
 from .api.model_spread_api import ModelSpreadAPIView
+from .api.seasonal_outlook_api import SeasonalOutlookAPIView
 from .api.summarize_api import SummarizeForecastAPIView
 from .converters import CoordinatesConverter
 
@@ -53,6 +54,11 @@ urlpatterns = [
         "api/climate-indices/",
         ClimateIndicesAPIView.as_view(),
         name="climate-indices",
+    ),
+    path(
+        "api/seasonal-outlook/",
+        SeasonalOutlookAPIView.as_view(),
+        name="seasonal-outlook",
     ),
     path(
         "api/climate-analysis/",
