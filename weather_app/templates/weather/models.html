@@ -261,6 +261,7 @@ function getModelDomRefs(modelName) {
 }
 
 async function loadModelData() {
+    syncSelectionToUrl();
     const locationSelect = document.getElementById('locationSelect');
     if (!locationSelect) {
         console.warn('loadModelData: locationSelect not found');
@@ -793,7 +794,34 @@ function refreshChartWithClimateNormals(modelData, avgHighTemp, avgLowTemp) {
         }
     });
 }
+// Keep the selected models and forecast days in the URL so a view can be bookmarked or shared.
+function syncSelectionToUrl() {
+    const url = new URL(window.location.href);
+    const days = document.getElementById('forecastDays');
+    url.searchParams.set('models', [...getSelectedModels()].join(','));
+    if (days && days.value) url.searchParams.set('forecast_days', days.value);
+    window.history.replaceState(null, '', url);
+}
+
+function restoreSelectionFromUrl(params) {
+    const requested = (params.get('models') || '')
+        .split(',')
+        .map((name) => name.trim().toUpperCase())
+        .filter(Boolean);
+    const boxes = [...document.querySelectorAll('.model-select-checkbox')];
+    const known = new Set(boxes.map((box) => box.dataset.model));
+    if (requested.some((name) => known.has(name))) {
+        boxes.forEach((box) => { box.checked = requested.includes(box.dataset.model); });
+    }
+    const days = document.getElementById('forecastDays');
+    const wanted = params.get('forecast_days');
+    if (days && wanted && [...days.options].some((option) => option.value === wanted)) {
+        days.value = wanted;
+    }
+}
+
 function onModelSelectionChange() {
+    syncSelectionToUrl();
     if (currentModelData) displayModelComparison(currentModelData);
 }
 
@@ -848,6 +876,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const urlParams = new URLSearchParams(window.location.search);
+    restoreSelectionFromUrl(urlParams);
     const customLat = urlParams.get('latitude');
     const customLon = urlParams.get('longitude');
     const locationIdFromUrl = urlParams.get('location_id');

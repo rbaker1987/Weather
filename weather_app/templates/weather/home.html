@@ -13,6 +13,11 @@
 
     {% include "weather/components/place_search.html" %}
 
+    <div id="lastPlace" class="alert alert-light border d-none">
+      <i class="fas fa-history text-primary"></i>
+      Last place on this device: <a id="lastPlaceLink" href="#"></a>
+    </div>
+
     <div class="row g-3">
       <div class="col-md-6">
         <div class="card weather-card h-100">
@@ -39,4 +44,21 @@
     </div>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+  // The last place is remembered in this browser only; nothing is stored on the server.
+  document.addEventListener('DOMContentLoaded', function () {
+      try {
+          const saved = JSON.parse(localStorage.getItem('weather:lastPlace') || 'null');
+          if (!saved || typeof saved.path !== 'string' || !saved.path.startsWith('/weather/')) return;
+          const link = document.getElementById('lastPlaceLink');
+          link.href = saved.path;
+          link.textContent = saved.name || 'Open';
+          document.getElementById('lastPlace').classList.remove('d-none');
+      } catch (err) {
+          // Storage unavailable or malformed: just skip the shortcut.
+      }
+  });
+</script>
 {% endblock %}
