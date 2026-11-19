@@ -120,6 +120,9 @@ def test_validate_coordinates():
         (21.3, -157.8, False),  # Honolulu
         (51.5, -0.1, False),  # London
         (19.9, -97.4, False),  # just south of the grid
+        (55.1, -97.4, False),  # just north
+        (35.0, -130.1, False),  # just west
+        (35.0, -59.9, False),  # just east
     ],
 )
 def test_in_radar_coverage(lat, lon, expected):
@@ -255,6 +258,13 @@ class TestPlaceView:
 
         assert response.context["radar_supported"] is False
         html = response.content.decode()
+        assert 'id="radarMap"' not in html
+        assert "contiguous United States only" in html
+
+    def test_radar_note_is_shown_for_a_place_on_the_equator(self, client):
+        # Latitude 0.0 is falsy in a template, which once hid both the card and the note.
+        html = client.get("/weather/0,-78.5/").content.decode()
+
         assert 'id="radarMap"' not in html
         assert "contiguous United States only" in html
 
