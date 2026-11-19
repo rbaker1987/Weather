@@ -322,7 +322,8 @@ class TestForecastVerificationAPI:
             response = APIClient().get(self.URL, {"latitude": "35", "longitude": "-97"})
 
         assert response.status_code == 502
-        assert "stations" in response.data["error"]
+        assert "unavailable" in response.data["error"]
+        assert "stations" not in response.data["error"]
 
     @pytest.mark.parametrize(
         "params",

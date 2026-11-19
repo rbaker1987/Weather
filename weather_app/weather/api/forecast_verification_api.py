@@ -31,6 +31,13 @@ class ForecastVerificationAPIView(APIView):
         models = [m.strip().upper() for m in requested.split(",") if m.strip()]
         try:
             result = verify_models(lat, lon, models or None)
-        except VerificationError as exc:
-            return Response({"status": "error", "error": str(exc)}, status=502)
+        except VerificationError:
+            logger.warning("Forecast verification failed", exc_info=True)
+            return Response(
+                {
+                    "status": "error",
+                    "error": "Forecast verification is unavailable for this place right now",
+                },
+                status=502,
+            )
         return Response({"status": "success", **result})
