@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from math import atanh, erf, sqrt, tanh
+from statistics import fmean, pstdev
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
@@ -17,6 +18,9 @@ MIN_RELIABLE_SAMPLES = 30
 # An "unusual week" relationship rests on only the event years, so it needs a floor.
 MIN_RELIABLE_EVENTS = 5
 SIGNIFICANCE_LEVEL = 0.05
+# Analog ranking needs enough years for the "typical spread" of each index to mean anything.
+MIN_ANALOG_YEARS = 10
+DEFAULT_ANALOG_COUNT = 10
 
 
 class CorrelationResult(NamedTuple):
@@ -211,3 +215,56 @@ def build_caveats(
             "in the week."
         )
     return caveats
+
+
+def rank_analog_years(
+    window_means: Iterable[dict],
+    current: dict[str, float],
+    top: int = DEFAULT_ANALOG_COUNT,
+) -> dict | None:
+    """Rank past years by how closely their index state matches ``current``.
+
+    ``window_means`` is the per-year, per-index centered-window mean already computed for
+    the analysis ({"index", "date", "value"}); ``current`` maps index key to its latest
+    published value. Each index is scaled by its own year-to-year spread so no index
+    dominates, and a year's distance is the root-mean-square scaled difference over the
+    indices used. Only years with every used index are ranked. Returns None when there
+    are too few comparable years.
+    """
+    by_index: dict[str, dict[int, float]] = {}
+    for item in window_means:
+        if item["index"] not in current:
+            continue
+        year = int(str(item["date"])[:4])
+        by_index.setdefault(item["index"], {})[year] = item["value"]
+
+    spread = {
+        key: pstdev(values.values())
+        for key, values in by_index.items()
+        if len(values) >= MIN_ANALOG_YEARS
+    }
+    used = sorted(key for key, value in spread.items() if value > 0)
+    if not used:
+        return None
+    years = sorted(set.intersection(*(set(by_index[key]) for key in used)))
+    if len(years) < MIN_ANALOG_YEARS:
+        return None
+
+    ranked = []
+    for year in years:
+        squared = [
+            ((by_index[key][year] - current[key]) / spread[key]) ** 2 for key in used
+        ]
+        ranked.append(
+            {
+                "year": year,
+                "distance": sqrt(fmean(squared)),
+                "indices": {key: by_index[key][year] for key in used},
+            }
+        )
+    ranked.sort(key=lambda item: item["distance"])
+    return {
+        "indices_used": used,
+        "year_count": len(years),
+        "years": ranked[:top],
+    }

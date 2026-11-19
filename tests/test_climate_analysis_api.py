@@ -265,3 +265,93 @@ def test_climate_analysis_caveats_mention_monthly_indices(monkeypatch, three_yea
     response = APIClient().get(URL, {**PARAMS, "index": "oni"})
 
     assert any("ONI is published monthly" in c for c in response.data["caveats"])
+
+
+@pytest.fixture
+def long_history(monkeypatch):
+    """Thirteen completed years (2010-2022) whose NAO equals the year minus 2010."""
+
+    def build(month, day):
+        monkeypatch.setattr(ClimateAnalysisAPIView, "first_year", 2009)
+        monkeypatch.setattr("weather.api.climate_analysis_api.date", FakeDate)
+        weather = {
+            date(year, month, day) + timedelta(days=offset): WeatherDay(
+                mean_temperature=float(year - 2000), precipitation=0.1
+            )
+            for year in range(2010, 2023)
+            for offset in range(-3, 4)
+        }
+        nao = IndexSeries(
+            "nao",
+            "daily",
+            "https://example.com/nao",
+            {date(year, month, day): float(year - 2010) for year in range(2010, 2023)}
+            | {date(2022, 12, 31): 12.0},
+        )
+        monkeypatch.setattr(
+            "weather.api.climate_analysis_api.fetch_weather_window",
+            lambda *_args: weather,
+        )
+        monkeypatch.setattr(
+            "weather.api.climate_analysis_api.fetch_index_series_many",
+            lambda _keys: ({"nao": nao}, {}),
+        )
+
+    return build
+
+
+def test_climate_analysis_ranks_analog_years_against_the_latest_index(long_history):
+    long_history(1, 1)
+
+    response = APIClient().get(URL, {**PARAMS, "index": "nao"})
+
+    analogs = response.data["analogs"]
+    assert analogs["indices_used"] == ["nao"]
+    assert analogs["current"] == {"nao": 12.0}
+    assert analogs["as_of"] == {"nao": "2022-12-31"}
+    assert len(analogs["years"]) == 10
+    assert analogs["years"][0]["year"] == 2022
+    assert analogs["years"][0]["distance"] == pytest.approx(0.0)
+    assert analogs["years"][0]["mean_temperature"] == 22.0
+    assert analogs["analog_mean"]["mean_temperature"] == pytest.approx(17.5)
+    assert analogs["all_years_mean"]["mean_temperature"] == pytest.approx(16.0)
+    assert any("not a forecast" in c for c in response.data["caveats"])
+    assert not any("six weeks" in c for c in response.data["caveats"])
+
+
+def test_analog_years_warn_when_the_day_is_far_from_today(long_history):
+    long_history(7, 1)
+
+    response = APIClient().get(URL, {**PARAMS, "month": "7", "index": "nao"})
+
+    assert any("six weeks" in c for c in response.data["caveats"])
+
+
+def test_analog_years_are_omitted_without_enough_history(three_years):
+    response = APIClient().get(URL, {**PARAMS, "index": "nao"})
+
+    assert response.data["analogs"] is None
+
+
+def test_analog_years_handle_feb_29_when_this_year_has_no_leap_day(monkeypatch):
+    monkeypatch.setattr("weather.api.climate_analysis_api.date", FakeDate)
+    leap_years = list(range(1952, 2021, 4))
+    indices = [
+        {"index": "nao", "date": f"{year}-02-29", "value": float(n)}
+        for n, year in enumerate(leap_years)
+    ]
+    nao = IndexSeries(
+        "nao",
+        "daily",
+        "https://example.com/nao",
+        {date(2022, 12, 31): 5.0},
+    )
+    weekly = {
+        date(year, 2, 29): {"mean_temperature": 1.0, "precipitation": 0.1}
+        for year in leap_years
+    }
+
+    result = ClimateAnalysisAPIView()._analogs({"nao": nao}, indices, weekly, 2, 29)
+
+    assert result["year_count"] == len(leap_years)
+    assert not any("six weeks" in c for c in result["caveats"])

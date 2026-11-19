@@ -18,6 +18,7 @@ from weather.climate_analysis import (
     correlation_significance,
     detrend_by_year,
     multiple_testing_summary,
+    rank_analog_years,
     reliability_warnings,
 )
 from weather.climate_data import (
@@ -128,6 +129,7 @@ class ClimateAnalysisAPIView(APIView):
             indices, weekly_weather
         )
         multiple_testing = multiple_testing_summary(correlations + event_correlations)
+        analogs = self._analogs(series, indices, weekly_weather, month, day)
         monthly_indices = {
             item["index"] for item in indices if item["cadence"] == "monthly"
         }
@@ -145,13 +147,74 @@ class ClimateAnalysisAPIView(APIView):
                 "event_correlations": event_correlations,
                 "event_thresholds": event_thresholds,
                 "multiple_testing": multiple_testing,
+                "analogs": analogs,
                 "caveats": build_caveats(
                     len(weekly_weather), multiple_testing, monthly_indices
-                ),
+                )
+                + (analogs["caveats"] if analogs else []),
                 "unavailable_indices": sorted(index_errors),
                 "indexes_available": bool(indices),
             }
         )
+
+    def _analogs(self, series, indices, weekly_weather, month, day):
+        """Years whose index state best matches the latest published values."""
+        today = date.today()
+        current = {}
+        as_of = {}
+        for key, item in series.items():
+            found = item.latest(today)
+            if found is not None:
+                as_of[key] = found[0].isoformat()
+                current[key] = found[1]
+        ranking = rank_analog_years(indices, current)
+        if ranking is None:
+            return None
+
+        by_year = {center.year: item for center, item in weekly_weather.items()}
+
+        def outcome(field, years):
+            values = [
+                by_year[year][field]
+                for year in years
+                if year in by_year and by_year[year].get(field) is not None
+            ]
+            return sum(values) / len(values) if values else None
+
+        for entry in ranking["years"]:
+            entry["mean_temperature"] = outcome("mean_temperature", [entry["year"]])
+            entry["precipitation"] = outcome("precipitation", [entry["year"]])
+        picked = [entry["year"] for entry in ranking["years"]]
+        everyone = list(by_year)
+        caveats = [
+            "Analog years compare the latest published index values with this calendar "
+            "day in past years. A handful of matching years is a rough guide, not a forecast."
+        ]
+        try:
+            gap = abs((date(today.year, month, day) - today).days)
+        except ValueError:  # Feb 29 in a non-leap year
+            gap = 0
+        if min(gap, 365 - gap) > 45:
+            caveats.append(
+                "The selected day is more than six weeks from today, so the latest index "
+                "values may say little about it."
+            )
+        return {
+            "indices_used": ranking["indices_used"],
+            "year_count": ranking["year_count"],
+            "current": {key: current[key] for key in ranking["indices_used"]},
+            "as_of": {key: as_of[key] for key in ranking["indices_used"]},
+            "years": ranking["years"],
+            "analog_mean": {
+                "mean_temperature": outcome("mean_temperature", picked),
+                "precipitation": outcome("precipitation", picked),
+            },
+            "all_years_mean": {
+                "mean_temperature": outcome("mean_temperature", everyone),
+                "precipitation": outcome("precipitation", everyone),
+            },
+            "caveats": caveats,
+        }
 
     def _serialize_weather(self, observation):
         if isinstance(observation, dict):
