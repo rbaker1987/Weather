@@ -417,6 +417,11 @@
           No historical climate correlations are available for the selected week.
         </div>
         <div id="climateAnalysisPrompt" class="text-muted small">Choose a month and day, then click Run analysis to load the historical weather and climate-index data.</div>
+        <div class="mb-2">
+          <button id="downloadClimateCsvBtn" type="button" class="btn btn-sm btn-outline-secondary d-none">
+            <i class="fas fa-file-csv"></i> Download CSV
+          </button>
+        </div>
         <div id="climateAnalysisResults" class="table-responsive d-none">
           <table class="table table-sm align-middle mb-0">
             <thead>
@@ -956,6 +961,7 @@
                 climateStatus.textContent = `Showing ${data.correlations.length} correlations for the centered week around ${data.calendar_day} across ${data.year_count} completed years. * = statistically significant (p < 0.05); † = small sample, read with caution; hover a value for Spearman, detrended r, and confidence interval.`;
           }
           renderAnalogYears(data.analogs);
+          enableClimateCsv(data);
           const caveatList = document.getElementById('climateAnalysisCaveats');
           if (caveatList) {
             caveatList.replaceChildren();
@@ -973,6 +979,61 @@
           }
           if (climateEmpty) climateEmpty.classList.remove('d-none');
       }
+  }
+
+  // CSV of the loaded analysis: one row per year with the weekly weather averages and
+  // each index's window mean. Built in the browser from the response already on the page.
+  function csvCell(value) {
+      if (value == null) return '';
+      const text = String(value);
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  function climateAnalysisToCsv(data) {
+      const indexKeys = [...new Set((data.indices || []).map((item) => item.index))].sort();
+      const byDate = new Map();
+      (data.indices || []).forEach((item) => {
+          if (!byDate.has(item.date)) byDate.set(item.date, {});
+          byDate.get(item.date)[item.index] = item.value;
+      });
+      const cadence = new Map((data.indices || []).map((item) => [item.index, item.cadence]));
+      const lines = [
+          `# Historical climate analysis, centered ${data.window_days}-day averages around ${data.calendar_day} (completed years only)`,
+          `# Place: ${data.latitude}, ${data.longitude}`,
+          '# Units: mean_temperature_F, precipitation_in_per_day, wind_speed_mph, snowfall_in_per_day',
+          '# Weather: Open-Meteo Archive. Indices: NOAA CPC/PSL',
+      ];
+      indexKeys.forEach((key) => {
+          const note = cadence.get(key) === 'monthly'
+              ? 'published monthly; the same value is used for every day in the window'
+              : 'daily, averaged over the same window';
+          lines.push(`# ${key}: ${note}`);
+      });
+      lines.push(['date', 'mean_temperature_F', 'precipitation_in_per_day', 'wind_speed_mph', 'snowfall_in_per_day', ...indexKeys].join(','));
+      (data.weather || []).forEach((row) => {
+          const values = byDate.get(row.date) || {};
+          lines.push([
+              row.date, row.mean_temperature, row.precipitation, row.wind_speed, row.snowfall,
+              ...indexKeys.map((key) => values[key]),
+          ].map(csvCell).join(','));
+      });
+      return lines.join('\n') + '\n';
+  }
+
+  function enableClimateCsv(data) {
+      const button = document.getElementById('downloadClimateCsvBtn');
+      if (!button) return;
+      button.classList.remove('d-none');
+      button.onclick = function () {
+          const blob = new Blob([climateAnalysisToCsv(data)], { type: 'text/csv;charset=utf-8' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `climate-analysis-${data.calendar_day}.csv`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(link.href);
+      };
   }
 
   function renderAnalogYears(analogs) {
