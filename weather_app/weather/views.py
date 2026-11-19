@@ -9,6 +9,7 @@ from django.core.cache import cache
 from django.views.generic import TemplateView
 
 from .place_service import fetch_place_weather, validate_coordinates
+from .regional_pages import ReportUnavailableError, build_report
 
 logger = logging.getLogger("weather")
 
@@ -27,6 +28,34 @@ class HomeView(TemplateView):
         context = super().get_context_data(**kwargs)
         context["page_title"] = "Weather"
         return context
+
+
+class RegionalReportView(TemplateView):
+    """A regional report (East Texas, NM Mountains) written elsewhere each morning.
+
+    The text is read on demand from the ralphs-weather-pages data file (see
+    ``regional_pages``); if it cannot be loaded the page says so with a 503.
+    """
+
+    template_name = "weather/regional/report.html"
+    slug = ""
+    page_title = ""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            context["report"] = build_report(self.slug)
+        except ReportUnavailableError as exc:
+            logger.warning("Regional report %s unavailable: %s", self.slug, exc)
+            context["report"] = None
+        context["page_title"] = self.page_title
+        context["theme"] = "et" if self.slug == "east-texas" else "nm"
+        return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if context["report"] is None:
+            response_kwargs["status"] = 503
+        return super().render_to_response(context, **response_kwargs)
 
 
 class ModelsView(TemplateView):

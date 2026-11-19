@@ -1,0 +1,15 @@
+{# A report table. Expects: table = {columns: [{label, cls}], rows: [{key, cells: [...]}]} #}
+<div class="tbl">
+  <table>
+    <thead><tr>{% for col in table.columns %}<th{% if col.cls %} class="{{ col.cls }}"{% endif %}>{{ col.label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in table.rows %}<tr{% if row.key %} class="key"{% endif %}>
+        {% for cell in row.cells %}{% if cell.kind == "name" %}<td>{{ cell.text }}{% if cell.sub %}<span class="el">{{ cell.sub }}</span>{% endif %}</td>
+        {% elif cell.kind == "hl" %}<td class="num{% if cell.cls %} {{ cell.cls }}{% endif %}"><span class="{{ cell.tone }}">{{ cell.text }}</span></td>
+        {% elif cell.kind == "meter" %}<td class="num"><span class="meter"><i style="width:{{ cell.pop }}%"></i></span>{{ cell.text }}</td>
+        {% elif cell.kind == "text" %}<td>{{ cell.text }}</td>
+        {% else %}<td class="num{% if cell.cls %} {{ cell.cls }}{% endif %}">{{ cell.text }}</td>{% endif %}{% endfor %}
+      </tr>{% endfor %}
+    </tbody>
+  </table>
+</div>

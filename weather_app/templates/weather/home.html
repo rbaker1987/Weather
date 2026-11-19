@@ -13,6 +13,29 @@
 
     {% include "weather/components/place_search.html" %}
 
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <a href="{% url 'weather:regional-east-texas' %}" class="text-decoration-none">
+          <div class="card weather-card h-100">
+            <div class="card-body">
+              <h5 class="card-title"><i class="fas fa-cloud-sun text-primary"></i> East Texas Weather</h5>
+              <p class="card-text text-muted mb-0">Today's forecast, the week ahead and the outlook for the Tyler and Smith County area.</p>
+            </div>
+          </div>
+        </a>
+      </div>
+      <div class="col-md-6">
+        <a href="{% url 'weather:regional-nm' %}" class="text-decoration-none">
+          <div class="card weather-card h-100">
+            <div class="card-body">
+              <h5 class="card-title"><i class="fas fa-mountain text-primary"></i> Northern Mountains Report</h5>
+              <p class="card-text text-muted mb-0">Town forecasts, snowpack, ski openings and road conditions for the northern New Mexico mountains.</p>
+            </div>
+          </div>
+        </a>
+      </div>
+    </div>
+
     <div class="row g-3">
       <div class="col-md-6">
         <div class="card weather-card h-100">

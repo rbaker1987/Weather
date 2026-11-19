@@ -63,6 +63,20 @@ urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
     path("temp-location/", views.TempLocationView.as_view(), name="temp-location"),
     path("weather/<coords:coords>/", views.PlaceView.as_view(), name="place"),
+    path(
+        "east-texas/",
+        views.RegionalReportView.as_view(
+            slug="east-texas", page_title="East Texas Weather"
+        ),
+        name="regional-east-texas",
+    ),
+    path(
+        "nm-mountains/",
+        views.RegionalReportView.as_view(
+            slug="nm-mountains", page_title="Northern Mountains Report"
+        ),
+        name="regional-nm",
+    ),
     path("models/", views.ModelsView.as_view(), name="models"),
     path(
         "models/<str:model_name>/", views.ModelDetailView.as_view(), name="model-detail"

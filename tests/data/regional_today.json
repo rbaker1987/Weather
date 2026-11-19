@@ -1,0 +1,438 @@
+{
+  "east_texas": {
+    "date_label": "Thursday, Nov 19, 2026",
+    "issued": "7:00 AM CST",
+    "chips": [
+      {
+        "text": "No warnings",
+        "kind": ""
+      },
+      {
+        "text": "Patchy fog early",
+        "kind": "watch"
+      },
+      {
+        "text": "Front Sun, cooler next week",
+        "kind": "cold"
+      }
+    ],
+    "hi": 73,
+    "lo": 50,
+    "headline": "Patchy fog early, then mild and mostly sunny.",
+    "summary": "Patchy fog in low spots until about 9 AM, then a mostly sunny, mild afternoon in the low 70s. Warm and dry weather holds through Saturday. A cold front Sunday brings little rain and cooler air for Thanksgiving week.",
+    "rain_note": "Rain chance 0% today and tonight",
+    "hourly": [
+      {
+        "time": "8 AM",
+        "icon": "fog",
+        "temp": 50,
+        "sky": "Patchy fog",
+        "wind": "E 5 mph"
+      },
+      {
+        "time": "Noon",
+        "icon": "pcloud",
+        "temp": 70,
+        "sky": "Partly sunny",
+        "wind": "E 5 mph"
+      },
+      {
+        "time": "3 PM",
+        "icon": "sun",
+        "temp": 73,
+        "sky": "Mostly sunny",
+        "wind": "E 5 mph"
+      },
+      {
+        "time": "6 PM",
+        "icon": "pcloud",
+        "temp": 65,
+        "sky": "Partly cloudy",
+        "wind": "Calm"
+      },
+      {
+        "time": "9 PM",
+        "icon": "cloud",
+        "temp": 57,
+        "sky": "Mostly cloudy",
+        "wind": "Calm"
+      },
+      {
+        "time": "6 AM Fri",
+        "icon": "moon",
+        "temp": 52,
+        "sky": "Clear",
+        "wind": "E 5 mph"
+      }
+    ],
+    "days": [
+      {
+        "day": "Fri",
+        "icon": "sun",
+        "hi": 74,
+        "lo": 55,
+        "text": "Sunny and mild. Patchy fog possible early."
+      },
+      {
+        "day": "Sat",
+        "icon": "pcloud",
+        "hi": 74,
+        "lo": 57,
+        "text": "Partly sunny. A slight chance of showers Saturday night."
+      },
+      {
+        "day": "Sun",
+        "icon": "pcloud",
+        "hi": 68,
+        "lo": 47,
+        "flag": true,
+        "text": "Cold front. Most areas get less than a tenth of an inch, some none."
+      },
+      {
+        "day": "Mon",
+        "icon": "sun",
+        "hi": 64,
+        "lo": 43,
+        "text": "Sunny and cooler."
+      },
+      {
+        "day": "Tue–Wed",
+        "icon": "sun",
+        "temp_text": "50s",
+        "temp_kind": "h",
+        "flag": true,
+        "text": "Near to a bit below normal. Lows in the upper 30s to low 40s."
+      }
+    ],
+    "facts": [
+      {
+        "k": "Severe storms",
+        "v": "None",
+        "p": "No severe weather expected"
+      },
+      {
+        "k": "Power",
+        "v": "Normal",
+        "p": "About 40 customers out in Smith County"
+      },
+      {
+        "k": "School closings",
+        "v": "None",
+        "p": "Nothing listed"
+      },
+      {
+        "k": "Freeze",
+        "v": "Not expected",
+        "p": "Lows stay above freezing through Wed"
+      }
+    ],
+    "panels": [
+      {
+        "kicker": "Thanksgiving week",
+        "title": "Cooler, but not Arctic",
+        "paras": [
+          "After Sunday's front, NWS Shreveport expects temperatures near late-November normals, perhaps slightly below by Tuesday. The Climate Prediction Center leans below normal for the Southern Plains Nov 24 – Dec 2.",
+          "Rain looks limited through the holiday. Better rain chances may come just after Thanksgiving, but details are uncertain. Some single model runs show a big storm that weekend; most guidance does not support that yet."
+        ]
+      },
+      {
+        "kicker": "This winter",
+        "title": "A strong El Niño is in charge",
+        "paras": [
+          "El Niño is now strong and still strengthening, near +2.5°C in the key Pacific region. That usually means an active southern storm track, with more rain and more cool, cloudy days in East Texas.",
+          "It does not bring Arctic air on its own. Ice or snow still needs cold air from Canada, and Canada is running warm right now."
+        ]
+      }
+    ],
+    "sources": "NWS Shreveport forecast and discussion, NWS Fort Worth, NOAA Climate Prediction Center, KLTV closings, PowerOutage.us."
+  },
+  "nm": {
+    "date_label": "Thursday, Nov 19, 2026",
+    "issued": "6:00 AM MST",
+    "chips": [
+      {
+        "text": "Windy Friday",
+        "kind": "watch"
+      },
+      {
+        "text": "Light snow Fri night–Sat",
+        "kind": "watch"
+      },
+      {
+        "text": "Coldest night of the season Sat",
+        "kind": "cold"
+      }
+    ],
+    "hero": [
+      {
+        "style": "big-cold",
+        "value": "12°",
+        "label": "Angel Fire low|this morning"
+      },
+      {
+        "style": "side",
+        "value": "Nov 20",
+        "label": "Sipapu|opening day"
+      }
+    ],
+    "headline": "Quiet today, windy Friday, then a cold front with light snow Saturday.",
+    "summary": "Sunny and dry today after a very cold morning in the high valleys. West wind gusts near 35 mph Friday in the high country. A quick system Friday night into Saturday brings a dusting to a couple of inches in the northern mountains, followed by the coldest night of the season so far.",
+    "town_cols": [
+      "Today high",
+      "Tonight low",
+      "Fri high",
+      "Fri night"
+    ],
+    "towns": [
+      {
+        "name": "Red River",
+        "elev": "8,650 ft",
+        "d1_hi": 48,
+        "n1_lo": 28,
+        "pop": 0,
+        "d2_hi": 48,
+        "n2_lo": 20
+      },
+      {
+        "name": "Angel Fire",
+        "elev": "8,400 ft",
+        "d1_hi": 47,
+        "n1_lo": 30,
+        "pop": 0,
+        "d2_hi": 48,
+        "n2_lo": 19,
+        "key": true
+      },
+      {
+        "name": "Questa",
+        "elev": "7,500 ft",
+        "d1_hi": 50,
+        "n1_lo": 33,
+        "pop": 0,
+        "d2_hi": 48,
+        "n2_lo": 27
+      },
+      {
+        "name": "Chama",
+        "elev": "7,900 ft",
+        "d1_hi": 48,
+        "n1_lo": 31,
+        "pop": 10,
+        "d2_hi": 43,
+        "n2_lo": 25
+      },
+      {
+        "name": "Taos",
+        "elev": "6,970 ft",
+        "d1_hi": 54,
+        "n1_lo": 30,
+        "pop": 0,
+        "d2_hi": 54,
+        "n2_lo": 26
+      },
+      {
+        "name": "Mora",
+        "elev": "7,200 ft",
+        "d1_hi": 57,
+        "n1_lo": 32,
+        "pop": 0,
+        "d2_hi": 55,
+        "n2_lo": 28
+      },
+      {
+        "name": "Pecos",
+        "elev": "6,900 ft",
+        "d1_hi": 56,
+        "n1_lo": 33,
+        "pop": 0,
+        "d2_hi": 55,
+        "n2_lo": 30
+      },
+      {
+        "name": "Los Alamos",
+        "elev": "7,300 ft",
+        "d1_hi": 53,
+        "n1_lo": 38,
+        "pop": 0,
+        "d2_hi": 54,
+        "n2_lo": 32
+      }
+    ],
+    "days": [
+      {
+        "day": "Fri",
+        "icon": "wind",
+        "temp_text": "Gusts 35",
+        "text": "Sunny and windy. West wind 15–20 mph in the high country."
+      },
+      {
+        "day": "Fri night–Sat",
+        "icon": "snow",
+        "temp_text": "Dusting–2 in",
+        "flag": true,
+        "text": "Scattered snow showers in the northern mountains. Snow levels drop sharply behind the front."
+      },
+      {
+        "day": "Sat night",
+        "icon": "moon",
+        "temp_text": "Teens",
+        "temp_kind": "l",
+        "flag": true,
+        "text": "Coldest night of the season so far. Colder in sheltered valleys."
+      },
+      {
+        "day": "Sun–Mon",
+        "icon": "sun",
+        "temp_text": "Near normal",
+        "text": "Milder, closer to seasonal averages."
+      },
+      {
+        "day": "Tue",
+        "icon": "snow",
+        "temp_text": "Watching",
+        "text": "Another quick system with low mountain snow chances."
+      }
+    ],
+    "snowpack": [
+      {
+        "station": "Taos Powderhorn",
+        "elev": "11,020 ft",
+        "depth": "15 in",
+        "swe": "3.4 in"
+      },
+      {
+        "station": "Gallegos Peak",
+        "elev": "9,460 ft",
+        "depth": "5 in",
+        "swe": "1.4 in"
+      },
+      {
+        "station": "Palo",
+        "elev": "9,330 ft",
+        "depth": "3 in",
+        "swe": "0.6 in"
+      },
+      {
+        "station": "Tolby",
+        "elev": "10,210 ft",
+        "depth": "1 in",
+        "swe": "0.6 in"
+      }
+    ],
+    "snow_note": "Tuesday night's snow added a little at the higher stations. Lower and sunny slopes are mostly bare.",
+    "ski_title": "Opening days",
+    "ski_col": "Opens",
+    "ski": [
+      {
+        "name": "Sipapu",
+        "status": "Fri, Nov 20",
+        "key": true
+      },
+      {
+        "name": "Red River",
+        "status": "~Nov 25"
+      },
+      {
+        "name": "Taos Ski Valley",
+        "status": "~Nov 26"
+      },
+      {
+        "name": "Ski Santa Fe",
+        "status": "~Nov 26"
+      },
+      {
+        "name": "Pajarito",
+        "status": "~Dec 4"
+      },
+      {
+        "name": "Angel Fire",
+        "status": "~Dec 11"
+      }
+    ],
+    "ski_note": "Sipapu reports 6 in. of snow in the past week and a 5 in. base, which includes man-made snow. Dates with ~ are projected and may change.",
+    "panels": [
+      {
+        "kicker": "Cold front",
+        "title": "Coldest night of the season Saturday",
+        "paras": [
+          "NWS Albuquerque says Saturday's front may be the strongest of the season so far for temperature change, dropping temps 10 to 20 degrees. Expect teens and 20s across the northern mountains Saturday night, with colder readings in high valleys like the Moreno Valley. Angel Fire already reached about 12° this morning. Protect outdoor pipes and pets."
+        ]
+      },
+      {
+        "kicker": "Roads & fire",
+        "title": "Wet spots on two mountain routes",
+        "paras": [
+          "NMRoads lists US-64 through Taos Canyon and NM-38 between Questa and Red River as difficult, with wet roads that may be slick. No closures on NM-518, NM-434, NM-75 or the interstates as of this morning.",
+          "No critical fire weather is expected."
+        ]
+      },
+      {
+        "kicker": "This winter",
+        "title": "Strong El Niño favors a snowier season",
+        "paras": [
+          "El Niño is strong and still strengthening. It usually sends more storms across the southern Rockies, which improves the odds for snowfall in the northern New Mexico mountains. It doesn't guarantee a big season, but the odds lean our way."
+        ]
+      }
+    ],
+    "sources": "NWS Albuquerque forecast and discussion, NRCS SNOTEL, NMRoads, Sipapu snow report, OnTheSnow projected openings, NOAA Climate Prediction Center.",
+    "town_title": "Mountain towns",
+    "tables": [
+      {
+        "kicker": "Travel",
+        "title": "Travel routes",
+        "cols": [
+          "Route",
+          "Conditions"
+        ],
+        "rows": [
+          [
+            {
+              "name": "I-25 north",
+              "sub": "Raton Pass – Las Vegas"
+            },
+            "No reported issues"
+          ],
+          [
+            {
+              "name": "I-25 central",
+              "sub": "Las Vegas – Santa Fe – Albuquerque"
+            },
+            "No reported issues"
+          ],
+          [
+            {
+              "name": "I-25 south",
+              "sub": "Albuquerque – Las Cruces"
+            },
+            "No reported issues"
+          ],
+          [
+            {
+              "name": "I-40 east",
+              "sub": "Texas line – Clines Corners – Albuquerque"
+            },
+            "No reported issues. Dense fog advisories farther east and south this morning"
+          ],
+          [
+            {
+              "name": "I-40 west",
+              "sub": "Albuquerque – Gallup – Arizona line"
+            },
+            "No reported issues"
+          ],
+          [
+            {
+              "name": "Mountain highways",
+              "sub": "NM-518, US-64, NM-434, NM-38, NM-75, NM-150, NM-68"
+            },
+            "Difficult (wet, may be slick): US-64 Taos Canyon MM 260–273 and NM-38 Questa – Red River. Others no reported issues"
+          ]
+        ],
+        "key_rows": [
+          5
+        ],
+        "note": "No reported issues on the interstates. Watch for icy spots in shaded canyons early in the morning; check nmroads.com before leaving."
+      }
+    ]
+  }
+}

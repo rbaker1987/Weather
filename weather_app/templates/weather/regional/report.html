@@ -1,0 +1,110 @@
+{% extends "weather/base.html" %}
+{% load static %}
+{% block title %}{{ report.page_title|default:page_title }} - Ralph's Weather{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'weather/css/regional.css' %}" />
+{% endblock %}
+{% block content %}
+{% include "weather/regional/_icons.html" %}
+<div class="regional page {{ report.theme|default:theme }}">
+  <div class="wrap">
+  {% if not report %}
+    <header class="mast">
+      <div class="mast-top"><div><h1>{{ page_title }}</h1></div></div>
+    </header>
+    <section class="panel" role="status">
+      <span class="k">Unavailable</span>
+      <h3>This report is not available right now</h3>
+      <p>The latest forecast text could not be loaded. Please try again in a few minutes, or use the
+         <a href="{% url 'weather:home' %}">full forecast tool</a> for any place.</p>
+    </section>
+  {% else %}
+    <header class="mast">
+      <div class="mast-top">
+        <div>
+          <div class="brand">{{ report.brand }}</div>
+          <h1>{{ report.page_title }}</h1>
+        </div>
+        <div class="area">{{ report.area }}</div>
+      </div>
+      <div class="when"><b>Forecast for {{ report.date_label }}</b><span>Issued {{ report.issued }} · Updated each morning</span></div>
+    </header>
+
+    {% if report.age_days is not None and report.age_days > 1 %}
+    <div class="status" role="status">
+      <span class="chip watch"><i></i>This report is {{ report.age_days }} days old and may be out of date</span>
+    </div>
+    {% endif %}
+
+    <div class="status">
+      {% for chip in report.chips %}<span class="chip {{ chip.kind }}"><i></i>{{ chip.text }}</span>
+      {% endfor %}
+    </div>
+
+    <section class="hero" aria-label="Today at a glance">
+      <div class="reading">
+        {% for reading in report.readings %}<div><span class="{{ reading.style }}">{{ reading.value }}</span><small>{% for line in reading.label %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</small></div>
+        {% endfor %}
+      </div>
+      <div>
+        <h2>{{ report.headline }}</h2>
+        <p>{{ report.summary }}</p>
+      </div>
+    </section>
+
+    {% if report.slots %}
+    <section aria-label="Today hour by hour">
+      <div class="sec-h"><h3>{{ report.hourly_title }}</h3><span>{{ report.rain_note }}</span></div>
+      <div class="strip">
+        {% for slot in report.slots %}<div class="slot {{ slot.band }}"><span class="t">{{ slot.time }}</span><svg aria-hidden="true"><use href="#{{ slot.icon }}"/></svg><span class="deg">{{ slot.temp }}°</span><span class="d">{{ slot.sky }}</span><span class="w">{{ slot.wind }}</span></div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if report.town_table %}
+    <section aria-label="Town forecasts">
+      <div class="sec-h"><h3>{{ report.town_title }}</h3><span>{{ report.town_source }}</span></div>
+      {% include "weather/regional/_table.html" with table=report.town_table %}
+    </section>
+    {% endif %}
+
+    <section aria-label="Week ahead">
+      <div class="sec-h"><h3>The week ahead</h3><span>{{ report.week_note }}</span></div>
+      <div class="days">
+        {% for day in report.days %}<div class="day{% if day.flag %} flag{% endif %}"><b>{{ day.day }}</b><svg aria-hidden="true"><use href="#{{ day.icon }}"/></svg><span class="hl">{% if day.temps.mode == "hilo" %}{% if day.temps.hi is not None %}<span class="h">{{ day.temps.hi }}°</span>{% endif %}{% if day.temps.hi is not None and day.temps.lo is not None %} / {% endif %}{% if day.temps.lo is not None %}<span class="l">{{ day.temps.lo }}°</span>{% endif %}{% elif day.temps.kind %}<span class="{{ day.temps.kind }}">{{ day.temps.text }}</span>{% else %}{{ day.temps.text }}{% endif %}</span><p>{{ day.text }}</p></div>
+        {% endfor %}
+      </div>
+    </section>
+
+    {% if report.facts %}
+    <div class="facts">
+      {% for fact in report.facts %}<div class="fact"><div class="k">{{ fact.k }}</div><div class="v">{{ fact.v }}</div><p>{{ fact.p }}</p></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% for row in report.panel_rows %}
+    {% if row|length > 1 %}<div class="grid2">{% endif %}
+      {% for panel in row %}<section class="panel">
+        <span class="k">{{ panel.kicker }}</span>
+        <h3>{{ panel.title }}</h3>
+        {% if panel.table %}{% include "weather/regional/_table.html" with table=panel.table %}{% endif %}
+        {% for para in panel.paras %}<p>{{ para }}</p>{% endfor %}
+      </section>
+      {% endfor %}
+    {% if row|length > 1 %}</div>{% endif %}
+    {% endfor %}
+
+    <footer class="foot">
+      <div class="links">
+        {% for link in report.links %}<a href="{{ link.url }}" rel="noopener">{{ link.text }}</a>
+        {% endfor %}
+        <a href="{% url 'weather:home' %}">Full forecast tool</a>
+      </div>
+      <p>Sources: {{ report.sources }}</p>
+    </footer>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}
