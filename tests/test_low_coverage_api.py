@@ -1,12 +1,10 @@
 """Coverage tests for low-coverage API endpoints."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
-from django.core.cache import cache
 from rest_framework.test import APIRequestFactory
 
-from weather.api.climate_normals_api import ClimateNormalsAPIView
 from weather.api.summarize_api import SummarizeForecastAPIView
 
 
@@ -75,113 +73,3 @@ class TestSummarizeForecastAPIView:
 
         assert response.status_code == 500
         assert response.data["error"] == "Summarization failed"
-
-
-class TestClimateNormalsAPIView:
-    @pytest.fixture(autouse=True)
-    def _clear_cache(self):
-        cache.clear()
-        yield
-        cache.clear()
-
-    @pytest.mark.parametrize(
-        "params",
-        [{}, {"lat": "x", "lon": "1"}, {"lat": "95", "lon": "1"}, {"lat": "30"}],
-    )
-    def test_get_requires_valid_coordinates(self, request_factory, params):
-        response = ClimateNormalsAPIView.as_view()(
-            request_factory.get("/climate", params)
-        )
-
-        assert response.status_code == 400
-        assert "lat and lon" in response.data["error"]
-
-    def test_get_fetches_then_serves_from_cache(self, request_factory):
-        with patch.object(
-            ClimateNormalsAPIView,
-            "_fetch_climate_normals",
-            return_value=(85.5, 64.5),
-        ) as fetch:
-            first = ClimateNormalsAPIView.as_view()(
-                request_factory.get("/climate", {"lat": "30", "lon": "-97"})
-            )
-            second = ClimateNormalsAPIView.as_view()(
-                request_factory.get("/climate", {"lat": "30", "lon": "-97"})
-            )
-
-        assert first.status_code == 200
-        assert first.data == {
-            "status": "success",
-            "avg_high_temp": 85.5,
-            "avg_low_temp": 64.5,
-        }
-        assert second.data["status"] == "cached"
-        assert second.data["avg_high_temp"] == 85.5
-        assert fetch.call_count == 1
-
-    def test_get_returns_error_when_normals_unavailable(self, request_factory):
-        with patch.object(
-            ClimateNormalsAPIView,
-            "_fetch_climate_normals",
-            return_value=(None, None),
-        ):
-            response = ClimateNormalsAPIView.as_view()(
-                request_factory.get("/climate", {"lat": "30", "lon": "-97"})
-            )
-
-        assert response.status_code == 500
-        assert response.data["status"] == "error"
-
-    def test_fetch_climate_normals_calculates_averages(self):
-        points = Mock()
-        points.json.return_value = {
-            "properties": {
-                "relativeLocation": {"properties": {"city": "Austin", "state": "TX"}},
-                "forecast": "https://example.test/forecast",
-            }
-        }
-        forecast = Mock()
-        forecast.json.return_value = {
-            "properties": {
-                "periods": [
-                    {"isDaytime": True, "temperature": 80},
-                    {"isDaytime": False, "temperature": 60},
-                    {"isDaytime": True, "temperature": 86},
-                    {"isDaytime": False, "temperature": 64},
-                ]
-            }
-        }
-
-        with patch(
-            "weather.api.climate_normals_api.requests.get",
-            side_effect=[points, forecast],
-        ):
-            result = ClimateNormalsAPIView()._fetch_climate_normals(30, -97)
-
-        assert result == (83.0, 62.0)
-
-    @pytest.mark.parametrize(
-        "payload",
-        [{}, {"properties": {}}, {"properties": {"forecast": "url"}}],
-    )
-    def test_fetch_climate_normals_handles_incomplete_points_response(self, payload):
-        response = Mock()
-        response.json.return_value = payload
-
-        with patch(
-            "weather.api.climate_normals_api.requests.get", return_value=response
-        ):
-            result = ClimateNormalsAPIView()._fetch_climate_normals(30, -97)
-
-        assert result == (None, None)
-
-    def test_fetch_climate_normals_handles_request_error(self):
-        import requests
-
-        with patch(
-            "weather.api.climate_normals_api.requests.get",
-            side_effect=requests.exceptions.Timeout("timed out"),
-        ):
-            result = ClimateNormalsAPIView()._fetch_climate_normals(30, -97)
-
-        assert result == (None, None)

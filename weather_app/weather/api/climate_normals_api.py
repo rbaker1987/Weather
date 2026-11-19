@@ -1,26 +1,45 @@
-"""API endpoint for the average high/low of the NWS forecast at a place."""
+"""API endpoint for 1991-2020 climate normals at a place."""
 
 import logging
+from datetime import date
 
-import requests
-from django.core.cache import cache
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
+from weather.climate_normals import (
+    PERIOD,
+    ClimateNormalsError,
+    fetch_daily_normals,
+    normals_for_dates,
+)
 from weather.place_service import validate_coordinates
 
 logger = logging.getLogger("weather")
 
-NORMALS_CACHE_SECONDS = 6 * 60 * 60
+DEFAULT_DAYS = 7
+MAX_DAYS = 16
+SOURCE = "Open-Meteo Archive (ERA5 reanalysis)"
+
+
+class ClimateNormalsThrottle(AnonRateThrottle):
+    # Generous: results are cached, but a cold lookup is one large archive call and
+    # the models page asks for normals each time the place changes.
+    scope = "climate_normals"  # its own bucket, separate from the analysis limit
+    rate = "120/hour"
 
 
 class ClimateNormalsAPIView(APIView):
-    """API view returning average high/low temperatures for coordinates."""
+    """GET /api/climate-normals/?lat=&lon=&days=7
+
+    Returns the 1991-2020 average high and low at the place for the next ``days``
+    days, as ``avg_high_temp`` / ``avg_low_temp`` plus the daily values.
+    """
 
     permission_classes = []  # Public endpoint
+    throttle_classes = [ClimateNormalsThrottle]
 
     def get(self, request, *args, **kwargs):
-        """Fetch average high/low for ``?lat=&lon=`` from NWS, cached in memory."""
         try:
             latitude, longitude = validate_coordinates(
                 request.query_params.get("lat"), request.query_params.get("lon")
@@ -29,98 +48,34 @@ class ClimateNormalsAPIView(APIView):
             return Response(
                 {"error": "lat and lon must be valid coordinates"}, status=400
             )
-
-        cache_key = f"climate-normals:{latitude:.2f}:{longitude:.2f}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return Response({"status": "cached", **cached})
-
-        avg_high, avg_low = self._fetch_climate_normals(latitude, longitude)
-        if avg_high is None or avg_low is None:
-            return Response(
-                {
-                    "status": "error",
-                    "error": "Could not fetch climate data from NWS",
-                },
-                status=500,
-            )
-        values = {"avg_high_temp": avg_high, "avg_low_temp": avg_low}
-        cache.set(cache_key, values, NORMALS_CACHE_SECONDS)
-        return Response({"status": "success", **values})
-
-    def _fetch_climate_normals(self, latitude, longitude):
-        """
-        Fetch climate normals from NWS/NOAA API by finding the nearest location.
-        Returns (avg_high_temp, avg_low_temp) or (None, None) if failed.
-        """
         try:
-            # First, get the gridpoint from NWS API to find the nearest location
-            points_url = f"https://api.weather.gov/points/{latitude},{longitude}"
-            points_response = requests.get(points_url, timeout=10)
-            points_response.raise_for_status()
-            points_data = points_response.json()
+            days = int(request.query_params.get("days", DEFAULT_DAYS))
+        except ValueError:
+            days = 0
+        if not 1 <= days <= MAX_DAYS:
+            return Response(
+                {"error": f"days must be between 1 and {MAX_DAYS}"}, status=400
+            )
 
-            if "properties" not in points_data:
-                return None, None
+        try:
+            normals = fetch_daily_normals(latitude, longitude)
+        except ClimateNormalsError as exc:
+            logger.warning("Climate normals unavailable: %s", exc)
+            return Response(
+                {"status": "error", "error": "Climate normals are unavailable"},
+                status=502,
+            )
 
-            properties = points_data["properties"]
-
-            # Get the relative location info which gives us the nearest city
-            relative_location = properties.get("relativeLocation", {})
-            if not relative_location or not relative_location.get("properties"):
-                return None, None
-
-            rel_props = relative_location["properties"]
-            city = rel_props.get("city")
-            state = rel_props.get("state")
-
-            if not city or not state:
-                return None, None
-
-            logger.info(f"Found nearest location: {city}, {state}")
-
-            # Get the forecast grid point
-            forecast_url = properties.get("forecast")
-            if not forecast_url:
-                return None, None
-
-            # Fetch the forecast data for this location
-            forecast_response = requests.get(forecast_url, timeout=10)
-            forecast_response.raise_for_status()
-            forecast_data = forecast_response.json()
-
-            if "properties" not in forecast_data:
-                return None, None
-
-            forecast_props = forecast_data["properties"]
-            periods = forecast_props.get("periods", [])
-
-            if not periods:
-                return None, None
-
-            # Calculate averages from forecast data (daytime highs and nighttime lows)
-            highs = []
-            lows = []
-
-            for period in periods:
-                if period.get("isDaytime"):
-                    temp = period.get("temperature")
-                    if temp is not None:
-                        highs.append(temp)
-                else:
-                    temp = period.get("temperature")
-                    if temp is not None:
-                        lows.append(temp)
-
-            if highs and lows:
-                avg_high = sum(highs) / len(highs)
-                avg_low = sum(lows) / len(lows)
-                logger.info(
-                    f"Climate normals for {city}, {state}: High={avg_high}°F, Low={avg_low}°F"
-                )
-                return round(avg_high, 1), round(avg_low, 1)
-
-            return None, None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"NWS API error: {str(e)}")
-            return None, None
+        daily = normals_for_dates(normals, date.today(), days)
+        highs = [d["high"] for d in daily if d["high"] is not None]
+        lows = [d["low"] for d in daily if d["low"] is not None]
+        return Response(
+            {
+                "status": "success",
+                "period": PERIOD,
+                "source": SOURCE,
+                "avg_high_temp": round(sum(highs) / len(highs), 1) if highs else None,
+                "avg_low_temp": round(sum(lows) / len(lows), 1) if lows else None,
+                "daily": daily,
+            }
+        )
