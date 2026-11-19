@@ -10,6 +10,13 @@ if TYPE_CHECKING:
 
 
 MINIMUM_CORRELATION_SAMPLES = 3
+# Below this many samples a confidence interval is not reported at all.
+MINIMUM_INTERVAL_SAMPLES = 4
+# Fewer completed years than this makes any single relationship exploratory.
+MIN_RELIABLE_SAMPLES = 30
+# An "unusual week" relationship rests on only the event years, so it needs a floor.
+MIN_RELIABLE_EVENTS = 5
+SIGNIFICANCE_LEVEL = 0.05
 
 
 class CorrelationResult(NamedTuple):
@@ -142,3 +149,65 @@ def correlation_significance(
         "ci_low": tanh(z_score - 1.959964 * standard_error),
         "ci_high": tanh(z_score + 1.959964 * standard_error),
     }
+
+
+def reliability_warnings(
+    sample_count: int, event_count: int | None = None
+) -> list[str]:
+    """Codes describing why a correlation should be read with caution.
+
+    ``too_few_samples``: no confidence interval can be computed.
+    ``few_samples``: fewer than ``MIN_RELIABLE_SAMPLES`` samples.
+    ``few_events``: an event relationship built on fewer than ``MIN_RELIABLE_EVENTS``
+    event years.
+    """
+    warnings = []
+    if sample_count < MINIMUM_INTERVAL_SAMPLES:
+        warnings.append("too_few_samples")
+    elif sample_count < MIN_RELIABLE_SAMPLES:
+        warnings.append("few_samples")
+    if event_count is not None and event_count < MIN_RELIABLE_EVENTS:
+        warnings.append("few_events")
+    return warnings
+
+
+def multiple_testing_summary(results: Iterable[dict]) -> dict[str, float | int]:
+    """How many tests ran, how many look significant, and how many chance predicts.
+
+    Running many correlations guarantees some pass p < 0.05 by luck, so the page
+    shows the expected number of false positives next to the observed count.
+    """
+    p_values = [r["p_value"] for r in results if r.get("p_value") is not None]
+    return {
+        "tests": len(p_values),
+        "significant": sum(1 for p in p_values if p < SIGNIFICANCE_LEVEL),
+        "expected_by_chance": round(len(p_values) * SIGNIFICANCE_LEVEL, 1),
+    }
+
+
+def build_caveats(
+    year_count: int,
+    summary: dict[str, float | int],
+    monthly_indices: Iterable[str] = (),
+) -> list[str]:
+    """Plain-language caveats to show alongside the results."""
+    caveats = []
+    if year_count < MIN_RELIABLE_SAMPLES:
+        caveats.append(
+            f"Only {year_count} completed years are available for this date, "
+            "so these relationships are exploratory."
+        )
+    if summary["tests"]:
+        caveats.append(
+            f"{summary['significant']} of {summary['tests']} relationships look "
+            f"significant (p < {SIGNIFICANCE_LEVEL}); about "
+            f"{summary['expected_by_chance']:g} would be expected by chance alone."
+        )
+    monthly = sorted(monthly_indices)
+    if monthly:
+        names = ", ".join(key.upper() for key in monthly)
+        caveats.append(
+            f"{names} is published monthly, so one value is used for every day "
+            "in the week."
+        )
+    return caveats
