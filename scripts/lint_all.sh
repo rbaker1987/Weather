@@ -110,7 +110,7 @@ check_commit_messages() {
     fi
     local lines=()
     while IFS= read -r line; do
-      lines+=("$line")
+      lines+=("${line%$''}") # tolerate CRLF inside a message (commitlint does)
     done < <(git -C "$ROOT" log -1 --format=%B "$sha")
     if [ ${#lines[@]} -gt 1 ] && [ -n "${lines[1]}" ]; then
       echo "$sha: the line after the subject must be blank (body-leading-blank)"
