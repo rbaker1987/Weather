@@ -48,6 +48,8 @@ def check_file(index_eol: str, path: str) -> list[str]:
     text = data.decode("utf-8", errors="replace")
     if not text.endswith("\n"):
         problems.append(f"{path}: missing final newline")
+    elif text.endswith("\n\n"):
+        problems.append(f"{path}: extra blank lines at the end of the file")
     for number, line in enumerate(text.splitlines(), start=1):
         if line != line.rstrip(" \t"):
             problems.append(f"{path}:{number}: trailing whitespace")

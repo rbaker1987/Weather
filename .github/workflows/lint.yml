@@ -32,13 +32,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev,django] pre-commit
 
-      # Auto-fixing hooks exit 1 the first time they change a file, so run twice and only fail if
-      # the second run still fails. If detect-secrets keeps modifying .secrets.baseline, the diff in
-      # the log shows the new line numbers to commit.
+      # Run exactly once. Auto-fixing hooks (prettier, end-of-file-fixer, detect-secrets, ...) exit 1
+      # when they change a file, and that failure is the point: the diff in the log is the fix to
+      # commit. Re-running would let the second pass succeed on the already-fixed workspace and hide
+      # the failure (this is how formatting problems and baseline drift used to reach master).
       - name: Run pre-commit on all files
-        run: |
-          pre-commit run --all-files --show-diff-on-failure || \
-            pre-commit run --all-files --show-diff-on-failure
+        run: pre-commit run --all-files --show-diff-on-failure
 
   lint-python:
     name: Lint Python
