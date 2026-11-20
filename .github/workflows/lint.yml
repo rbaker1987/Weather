@@ -1,5 +1,9 @@
 name: Lint
 
+# The same whole-repo checks run on pushes to master and on every pull request. They used to run
+# only on changed files for PRs, which let failures reach master and silently block Render's
+# auto-deploy (it waits for all checks on master to pass).
+
 on:
   push:
     branches: [ master, main ]
@@ -28,20 +32,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev,django] pre-commit
 
-      - name: Run pre-commit
+      # Auto-fixing hooks exit 1 the first time they change a file, so run twice and only fail if
+      # the second run still fails. If detect-secrets keeps modifying .secrets.baseline, the diff in
+      # the log shows the new line numbers to commit.
+      - name: Run pre-commit on all files
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin "${{ github.base_ref }}" --depth=1
-            changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -v '^\.secrets\.baseline$' || true)
-            if [ -n "$changed_files" ]; then
-              pre-commit run --files $changed_files --show-diff-on-failure || \
-                pre-commit run --files $changed_files --show-diff-on-failure
-            else
-              echo "No changed files; skipping pre-commit."
-            fi
-          else
+          pre-commit run --all-files --show-diff-on-failure || \
             pre-commit run --all-files --show-diff-on-failure
-          fi
 
   lint-python:
     name: Lint Python
@@ -59,52 +56,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install ruff mypy django-stubs
 
-      - name: Determine changed Python files (PR)
-        id: changed_py
-        if: github.event_name == 'pull_request'
-        run: |
-          git fetch origin ${{ github.base_ref }} --depth=1
-          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '**/*.py' | tr '\n' ' ')
-          echo "files=$CHANGED" >> $GITHUB_OUTPUT
-
-      - name: Type check with mypy (push)
-        if: github.event_name != 'pull_request'
+      - name: Type check with mypy
         run: mypy weather_app/weather --ignore-missing-imports --no-error-summary 2>&1 | head -50 || true
 
-      - name: Type check with mypy (PR changed files)
-        if: github.event_name == 'pull_request'
-        run: |
-          if [ -n "${{ steps.changed_py.outputs.files }}" ]; then
-            mypy ${{ steps.changed_py.outputs.files }} --ignore-missing-imports --no-error-summary 2>&1 | head -50 || true
-          else
-            echo "No Python changes; skipping mypy check."
-          fi
-
-      - name: Lint with Ruff (push)
-        if: github.event_name != 'pull_request'
+      - name: Lint with Ruff
         run: ruff check .
 
-      - name: Lint with Ruff (PR changed files)
-        if: github.event_name == 'pull_request'
-        run: |
-          if [ -n "${{ steps.changed_py.outputs.files }}" ]; then
-            ruff check ${{ steps.changed_py.outputs.files }}
-          else
-            echo "No Python changes; skipping ruff check."
-          fi
-
-      - name: Check formatting with Ruff (push)
-        if: github.event_name != 'pull_request'
+      - name: Check formatting with Ruff
         run: ruff format --check .
-
-      - name: Check formatting with Ruff (PR changed files)
-        if: github.event_name == 'pull_request'
-        run: |
-          if [ -n "${{ steps.changed_py.outputs.files }}" ]; then
-            ruff format --check ${{ steps.changed_py.outputs.files }}
-          else
-            echo "No Python changes; skipping ruff format check."
-          fi
 
   lint-javascript:
     name: Lint JavaScript
@@ -120,36 +79,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Determine changed JS files (PR)
-        id: changed_js
-        if: github.event_name == 'pull_request'
-        run: |
-          git fetch origin ${{ github.base_ref }} --depth=1
-          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- 'weather_app/static/weather/js/*.js' | tr '\n' ' ')
-          echo "files=$CHANGED" >> $GITHUB_OUTPUT
-
-      - name: Lint with ESLint (push)
-        if: github.event_name != 'pull_request'
+      - name: Lint with ESLint
         run: npm run lint:js
 
-      - name: Lint with ESLint (PR changed files)
-        if: github.event_name == 'pull_request'
-        run: |
-          if [ -n "${{ steps.changed_js.outputs.files }}" ]; then
-            npx eslint ${{ steps.changed_js.outputs.files }}
-          else
-            echo "No JS changes; skipping ESLint."
-          fi
-
-      - name: Check formatting with Prettier (push)
-        if: github.event_name != 'pull_request'
+      - name: Check formatting with Prettier
         run: npm run format:check
-
-      - name: Check formatting with Prettier (PR changed files)
-        if: github.event_name == 'pull_request'
-        run: |
-          if [ -n "${{ steps.changed_js.outputs.files }}" ]; then
-            npx prettier --check ${{ steps.changed_js.outputs.files }}
-          else
-            echo "No JS changes; skipping Prettier check."
-          fi

@@ -25,6 +25,8 @@ PYTHONPATH=weather_app DJANGO_SETTINGS_MODULE=config.settings .venv/Scripts/pyth
 # Lint / format
 .venv/Scripts/ruff.exe check .        # also run `ruff format .` (repo-wide clean; CI checks it)
 npm run lint:js                       # JS in weather_app/static/weather/js
+# Full pre-PR check (commit first): whole-repo ruff/eslint/prettier, file hygiene, commit messages, tests + 90% coverage
+bash scripts/lint_all.sh
 # Django checks CI runs
 cd weather_app && python manage.py check --deploy && python manage.py makemigrations --check --dry-run
 # Dev server (VS Code task "Django Runserver"), port 8000
@@ -36,7 +38,7 @@ cd weather_app && python manage.py runserver 8000
 ## CI gates (all must be green before merge)
 
 - Overall coverage **>= 90%** (`--cov=weather --cov-fail-under=90`) and **>= 80% diff coverage** (`diff-cover`).
-- Ruff, pre-commit (run on the base..HEAD diff for PRs; auto-fixing hooks can exit 1 on the first run, rerun once), CodeQL, PR description check.
+- Lint (ruff, ESLint, Prettier) and pre-commit run on the **whole repo** for every PR and every push to master (auto-fixing hooks can exit 1 on the first run, rerun once), plus CodeQL and the PR description check. Run `bash scripts/lint_all.sh` before opening a PR; it covers everything except detect-secrets and django-upgrade, which only CI runs (they hang on the maintainer's Windows machine). If detect-secrets fails, commit the `.secrets.baseline` diff shown in the CI log.
 - **commitlint**: Conventional Commits, body lines <= 200 chars, applied to every commit in the PR.
 
 ## Git workflow
