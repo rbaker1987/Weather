@@ -1,9 +1,10 @@
 """File hygiene checks that mirror the pre-commit-hooks used in CI.
 
-Checks every tracked text file for: a final newline, no trailing whitespace, no CRLF or mixed
-line endings stored in git, and valid JSON/TOML/YAML syntax. These are the checks that failed
-on master before (a missing final newline in a JSON fixture); the real hooks run in CI, but they
-cannot run reliably on every developer machine, so this catches the same problems beforehand.
+Checks the content git stores for every tracked text file (not the working copy, so Windows
+autocrlf checkouts give the same answer as CI): a final newline and no extra blank lines at the
+end, no trailing whitespace, no carriage returns of any kind (CRLF, mixed, or a stray CR inside a
+line), and valid JSON/TOML/YAML syntax. These are problems that reached master before; the real
+hooks run in CI, but they cannot run reliably on every developer machine.
 
 Run from the repository root: python scripts/check_hygiene.py
 """
@@ -19,38 +20,57 @@ import tomllib
 
 SKIP_SUFFIXES = {".svg"}
 SKIP_NAMES = {"package-lock.json"}
+CR = bytes([13])
+LF = bytes([10])
 
 
-def tracked_files() -> list[tuple[str, str]]:
-    """Return (index_eol_info, path) for every tracked file, e.g. ("i/lf", "README.md")."""
+def tracked_files() -> list[str]:
+    """Paths of every tracked file."""
     out = subprocess.run(
-        ["git", "ls-files", "--eol"], capture_output=True, text=True, check=True
+        ["git", "ls-files", "-z"], capture_output=True, check=True
     ).stdout
-    files = []
-    for line in out.splitlines():
-        info, _, path = line.partition("\t")
-        files.append((info.split()[0], path))
-    return files
+    return [path for path in out.decode("utf-8").split(chr(0)) if path]
 
 
-def check_file(index_eol: str, path: str) -> list[str]:
+def index_contents(paths: list[str]) -> dict[str, bytes]:
+    """Read the staged content of each path in one `git cat-file --batch` call."""
+    request = "".join(f":{path}\n" for path in paths).encode()
+    out = subprocess.run(
+        ["git", "cat-file", "--batch"], input=request, capture_output=True, check=True
+    ).stdout
+    contents: dict[str, bytes] = {}
+    position = 0
+    for path in paths:
+        header_end = out.index(LF, position)
+        header = out[position:header_end].split()
+        position = header_end + 1
+        if len(header) < 3 or header[-1] == b"missing":
+            continue
+        size = int(header[2])
+        contents[path] = out[position : position + size]
+        position += size + 1  # content is followed by a newline
+    return contents
+
+
+def check_file(path: str, data: bytes) -> list[str]:
     problems = []
-    if index_eol in ("i/crlf", "i/mixed"):
-        problems.append(f"{path}: stored with {index_eol[2:]} line endings (use LF)")
     file_path = Path(path)
     if file_path.suffix in SKIP_SUFFIXES or file_path.name in SKIP_NAMES:
         return problems
-    if index_eol == "i/-text":
-        return problems  # binary
-    data = file_path.read_bytes()
-    if not data:
-        return problems
+    # Detect binary content by NUL bytes. Git's own i/-text label is not enough: git also labels
+    # a file with a lone carriage return as non-text, which is exactly what this should catch.
+    if not data or bytes([0]) in data:
+        return problems  # empty or binary
+    if CR + LF in data:
+        problems.append(f"{path}: stored with CRLF line endings (use LF)")
+    elif CR in data:
+        problems.append(f"{path}: contains a stray carriage return character")
     text = data.decode("utf-8", errors="replace")
     if not text.endswith("\n"):
         problems.append(f"{path}: missing final newline")
     elif text.endswith("\n\n"):
         problems.append(f"{path}: extra blank lines at the end of the file")
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in enumerate(text.split("\n"), start=1):
         if line != line.rstrip(" \t"):
             problems.append(f"{path}:{number}: trailing whitespace")
             break
@@ -72,10 +92,12 @@ def check_file(index_eol: str, path: str) -> list[str]:
 
 
 def main() -> int:
+    paths = tracked_files()
+    contents = index_contents(paths)
     problems = []
-    for index_eol, path in tracked_files():
-        if Path(path).is_file():
-            problems.extend(check_file(index_eol, path))
+    for path in paths:
+        if path in contents:
+            problems.extend(check_file(path, contents[path]))
     if problems:
         print("\n".join(problems))
         print(f"\n{len(problems)} hygiene problem(s)")
