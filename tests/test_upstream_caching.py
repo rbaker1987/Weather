@@ -1,7 +1,6 @@
 """Caching and concurrency of upstream fetches."""
 
 import threading
-import time
 from unittest.mock import Mock, patch
 
 from rest_framework.test import APIClient
@@ -19,25 +18,28 @@ def _open_meteo_response():
 
 
 def test_model_fetches_run_concurrently_and_keep_order():
-    """Three 0.2s upstream calls finish in well under 0.6s when run in parallel."""
-    threads = set()
+    """The three upstream calls overlap: each waits until all three are in flight at once.
 
-    def slow_get(*_args, **_kwargs):
+    A barrier proves the overlap without depending on wall-clock time, so it cannot be flaky on a
+    slow or busy machine. If the calls ran one after another the barrier would time out and the
+    affected models would come back with an error.
+    """
+    threads = set()
+    barrier = threading.Barrier(3, timeout=10)
+
+    def overlapping_get(*_args, **_kwargs):
         threads.add(threading.get_ident())
-        time.sleep(0.2)
+        barrier.wait()
         return _open_meteo_response()
 
-    with patch("requests.get", side_effect=slow_get):
-        started = time.monotonic()
+    with patch("requests.get", side_effect=overlapping_get):
         results = ModelComparisonAPIView().fetch_all_models(
             ["GFS", "ICON", "ECMWF"], 35.0, -97.0, 3
         )
-        elapsed = time.monotonic() - started
 
     assert [r["name"] for r in results] == ["GFS", "ICON", "ECMWF"]
     assert all(r["error"] is None for r in results)
     assert len(threads) == 3
-    assert elapsed < 0.55
 
 
 def test_fetch_all_models_with_no_models_returns_empty_list():

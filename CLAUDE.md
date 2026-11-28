@@ -25,6 +25,8 @@ PYTHONPATH=weather_app DJANGO_SETTINGS_MODULE=config.settings .venv/Scripts/pyth
 # Lint / format
 .venv/Scripts/ruff.exe check .        # also run `ruff format .` (repo-wide clean; CI checks it)
 npm run lint:js                       # JS in weather_app/static/weather/js
+# Full pre-PR check (commit first): ruff, eslint, prettier, file hygiene, commit messages, Django checks, tests + 90% coverage, diff coverage >= 80%
+bash scripts/lint_all.sh
 # Django checks CI runs
 cd weather_app && python manage.py check --deploy && python manage.py makemigrations --check --dry-run
 # Dev server (VS Code task "Django Runserver"), port 8000
@@ -36,7 +38,7 @@ cd weather_app && python manage.py runserver 8000
 ## CI gates (all must be green before merge)
 
 - Overall coverage **>= 90%** (`--cov=weather --cov-fail-under=90`) and **>= 80% diff coverage** (`diff-cover`).
-- Ruff, pre-commit (run on the base..HEAD diff for PRs; auto-fixing hooks can exit 1 on the first run, rerun once), CodeQL, PR description check.
+- CI lints the **whole repo** on every PR and every push to master: ruff (check + format), ESLint and Prettier for static assets, and pre-commit run once over all files (it covers Prettier for all js/json/css/md, whitespace and final-newline fixes, line endings, YAML/JSON/TOML syntax, detect-secrets, django-upgrade), plus CodeQL and the PR description check. A failing auto-fixing hook is the signal: the diff in the CI log is the fix to commit (for detect-secrets, a shifted line number means commit the updated `.secrets.baseline`). Run `bash scripts/lint_all.sh` before opening a PR; it does not run detect-secrets, django-upgrade, the large-file/merge-conflict/case-conflict hooks, CodeQL or the PR description check (detect-secrets and django-upgrade hang on the maintainer's Windows machine).
 - **commitlint**: Conventional Commits, body lines <= 200 chars, applied to every commit in the PR.
 
 ## Git workflow
